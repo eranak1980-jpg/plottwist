@@ -13,8 +13,8 @@ def ensure(c,t,n,d):
 def init_db():
  DB_PATH.parent.mkdir(parents=True,exist_ok=True)
  with db() as c:
-  c.execute('PRAGMA journal_mode=WAL');c.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host_token TEXT,theme TEXT,tone TEXT,duration INTEGER,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,killer_player_id INTEGER,created_at TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,role_name TEXT,secret TEXT,objective TEXT,joined_at TEXT);CREATE TABLE IF NOT EXISTS votes(id INTEGER PRIMARY KEY,game_id INTEGER,round_no INTEGER,voter_player_id INTEGER,accused_player_id INTEGER,created_at TEXT,UNIQUE(game_id,round_no,voter_player_id));CREATE TABLE IF NOT EXISTS gm_events(id INTEGER PRIMARY KEY,game_id INTEGER,round_no INTEGER,prompt TEXT,response TEXT,created_at TEXT);""")
-  for n,d in [('group_name',"TEXT DEFAULT ''"),('relationship',"TEXT DEFAULT ''"),('inside_joke',"TEXT DEFAULT ''"),('location',"TEXT DEFAULT ''"),('intensity',"TEXT DEFAULT 'balanced'"),('story_title',"TEXT DEFAULT ''"),('victim_name',"TEXT DEFAULT ''"),('rounds_json',"TEXT DEFAULT ''"),('engine',"TEXT DEFAULT 'local'"),('round_started_at',"TEXT DEFAULT ''"),('round_seconds','INTEGER DEFAULT 600'),('game_type',"TEXT DEFAULT 'murder'")]:ensure(c,'games',n,d)
+  c.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host_token TEXT,theme TEXT,tone TEXT,duration INTEGER,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,killer_player_id INTEGER,created_at TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,role_name TEXT,secret TEXT,objective TEXT,joined_at TEXT);CREATE TABLE IF NOT EXISTS votes(id INTEGER PRIMARY KEY,game_id INTEGER,round_no INTEGER,voter_player_id INTEGER,accused_player_id INTEGER,created_at TEXT,UNIQUE(game_id,round_no,voter_player_id));CREATE TABLE IF NOT EXISTS gm_events(id INTEGER PRIMARY KEY,game_id INTEGER,round_no INTEGER,prompt TEXT,response TEXT,created_at TEXT);""")
+  for n,d in [('group_name',"TEXT DEFAULT ''"),('relationship',"TEXT DEFAULT ''"),('inside_joke',"TEXT DEFAULT ''"),('location',"TEXT DEFAULT ''"),('intensity',"TEXT DEFAULT 'balanced'"),('story_title',"TEXT DEFAULT ''"),('victim_name',"TEXT DEFAULT ''"),('round_started_at',"TEXT DEFAULT ''"),('round_seconds','INTEGER DEFAULT 600'),('game_type',"TEXT DEFAULT 'murder'")]:ensure(c,'games',n,d)
   ensure(c,'players','private_hint',"TEXT DEFAULT ''")
 def make_code():
  chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -29,60 +29,60 @@ def players(gid):
 def clean(s,n=500):return re.sub(r'\s+',' ',str(s or '')).strip()[:n]
 def story(g):
  place=g['location'] or 'the living room';mode=g['game_type'] or 'murder'
- if mode=='heist':return f"The Missing Diamond at {place}",'the Midnight Diamond'
- if mode=='secrets':return f"The Secret at {place}",'the secret file'
+ if mode=='heist':return f'The Missing Diamond at {place}','the Midnight Diamond'
+ if mode=='secrets':return f'The Secret at {place}','the secret file'
  return f'The Last Glass at {place}','Alex Rosen'
 def assign(gid):
  with db() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
  ps=players(gid)
  if len(ps)<MIN_PLAYERS:raise ValueError('need_2_players')
- culprit=random.choice(ps);title,victim=story(g);place=g['location'] or 'the living room';joke=clean(g['inside_joke'],300);defs=[('The Night Photographer','You captured something in the background of a video before the blackout.','Use what you saw to test the other stories.'),('The Secret Keeper',f'{victim} told you they were about to expose someone.','Work out who had the most to lose.'),('The Detail-Obsessed Host',f'You remember exactly who entered and left {place}.','Catch a contradiction.'),('The Missing Friend','You disappeared briefly for an innocent but embarrassing reason.','Protect your alibi unless accused.'),('The Observer','You noticed a detail everyone else missed.','Wait for the right moment to reveal it.')];random.shuffle(defs)
+ culprit=random.choice(ps);title,victim=story(g);place=g['location'] or 'the living room';joke=clean(g['inside_joke'],300)
+ defs=[('The Night Photographer','You captured something in the background of a video before the blackout.','Use what you saw to test the other stories.'),('The Secret Keeper',f'{victim} told you they were about to expose someone.','Work out who had the most to lose.'),('The Detail-Obsessed Host',f'You remember exactly who entered and left {place}.','Catch a contradiction.'),('The Missing Friend','You disappeared briefly for an innocent but embarrassing reason.','Protect your alibi unless accused.'),('The Observer','You noticed a detail everyone else missed.','Wait for the right moment to reveal it.')];random.shuffle(defs)
  with db() as c:
-  c.execute("UPDATE games SET killer_player_id=?,story_title=?,victim_name=?,engine='local' WHERE id=?",(culprit['id'],title,victim,gid))
+  c.execute('UPDATE games SET killer_player_id=?,story_title=?,victim_name=? WHERE id=?',(culprit['id'],title,victim,gid))
   for i,p in enumerate(ps):
    others=[x['name'] for x in ps if x['id']!=p['id']]
    if p['id']==culprit['id']:
-    other=others[0] if others else 'the other player';role='The Killer' if g['game_type']=='murder' else 'The Culprit';secret=f'You are responsible for what happened to {victim}. {other} almost saw you returning to {place}.';obj=f'Deflect suspicion and keep your story consistent.';hint=f'Private clue: someone remembers seeing you near {place}.'
+    other=others[0] if others else 'the other player';role='The Killer' if g['game_type']=='murder' else 'The Culprit';secret=f'You are responsible for what happened to {victim}. {other} almost saw you returning to {place}.';obj='Deflect suspicion and keep your story consistent.';hint=f'Someone remembers seeing you near {place}.'
    else:
-    role,secret,obj=defs[i%len(defs)];hint=(f'Private clue: the case deliberately references this familiar memory: “{joke}”. Ask who would know it and why they used it.' if joke else 'Private clue: a small personal detail in the room matters more than it first appears.')
+    role,secret,obj=defs[i%len(defs)];hint=f'The case references a familiar group memory: “{joke}”. Ask who would know it and why.' if joke else 'A small personal detail matters more than it first appears.'
    c.execute('UPDATE players SET role_name=?,secret=?,objective=?,private_hint=? WHERE id=?',(role,secret,obj,hint,p['id']))
 def round_prompt(g,n):
- title=g['story_title'] or "Tonight's Mystery";victim=g['victim_name'] or 'the target';place=g['location'] or 'the room';joke=clean(g['inside_joke'],300);mode=g['game_type'];personal=(f'A clue contains a deliberate reference to a memory only this group should recognize: “{joke}”. Decide who could have planted that reference and why.' if joke else 'A clue contains a personal detail that only someone in this group should know. Decide who could have planted it and why.')
- if mode=='heist':arr=[f'{title}. {victim} vanished during a blackout at {place}. Introduce your character and alibi, but keep your secret hidden.',f'{personal} Your private clue is now unlocked. Challenge one timeline.',f'A new witness statement conflicts with something already said. Each player gives a one-sentence timeline and answers one direct question.',f'Final accusation. Explain who took {victim}, how they did it, and then vote in secret.']
- elif mode=='secrets':arr=[f'{title}. {victim} was leaked at {place}. Introduce your character without revealing your secret.',f'{personal} Your private clue is now unlocked. Ask one focused question.',f'A contradiction has surfaced. Each player must reveal one new fact without exposing their full secret.',f'Final accusation. Name the saboteur, explain your reasoning, then vote in secret.']
- else:arr=[f'{title}. {victim} is found dead after a blackout at {place}. Introduce your role and alibi, but keep your secret hidden.',f'{personal} Your private clue is now unlocked. Use it to challenge one person’s story.',f'A new witness statement conflicts with something already said. Each player gives a one-sentence timeline and answers one direct question.',f'Final accusation. Explain who did it and why, then vote in secret.']
+ title=g['story_title'] or "Tonight's Mystery";victim=g['victim_name'] or 'the target';place=g['location'] or 'the room';joke=clean(g['inside_joke'],300)
+ personal=f'A clue deliberately references a memory only this group should recognize: “{joke}”. Decide who could have planted it and why.' if joke else 'A clue contains a personal detail only someone in this group should know.'
+ arr=[f'{title}. {victim} is found after a blackout at {place}. Introduce your role and alibi, but keep your secret hidden.',f'{personal} Your private clue is now unlocked. Challenge one person’s story.','A new witness statement conflicts with something already said. Each player gives a one-sentence timeline and answers one direct question.','Final accusation. Explain who did it and why, then vote in secret.']
  return arr[n-1] if 1<=n<=4 else 'The game is over.'
 def remaining(g):
  if not g['round_started_at'] or g['status']!='playing':return 0
  try:return max(0,int((g['round_seconds'] or 600)-(datetime.now(timezone.utc)-datetime.fromisoformat(g['round_started_at'])).total_seconds()))
  except:return int(g['round_seconds'] or 600)
 def twist(summary):
- s=clean(summary,300);return random.choice([f'New development: the Game Master notes that {s} Everyone must now restate one part of their timeline that can be checked by another player.',f'New clue: based on what just happened — {s} — the most questioned player must answer one direct question without changing their previous timeline.',f'The Game Master interrupts: {s} Each player must now reveal one previously withheld detail, without revealing their full secret.'])
+ s=clean(summary,300);return random.choice([f'New development: {s} Everyone must restate one checkable part of their timeline.',f'New clue: based on what just happened — {s} — the most questioned player must answer one direct question.',f'The Game Master interrupts: {s} Each player must reveal one previously withheld detail without revealing their full secret.'])
 def vote_stats(g):
  with db() as c:
   rows=c.execute('SELECT p.id,p.name,COUNT(v.id) n FROM players p LEFT JOIN votes v ON v.accused_player_id=p.id AND v.game_id=? WHERE p.game_id=? GROUP BY p.id ORDER BY n DESC,p.id',(g['id'],g['id'])).fetchall();total=c.execute('SELECT COUNT(*) n FROM votes WHERE game_id=? AND round_no=4',(g['id'],)).fetchone()['n'];correct=c.execute('SELECT COUNT(*) n FROM votes WHERE game_id=? AND round_no=4 AND accused_player_id=?',(g['id'],g['killer_player_id'])).fetchone()['n']
  return [{'id':r['id'],'name':r['name'],'votes':r['n']} for r in rows],total,correct
 class H(BaseHTTPRequestHandler):
  def j(self,x,s=200):
-  b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');self.send_header('Pragma','no-cache');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+  b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def body(self):
   try:return json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
   except:return {}
  def f(self,p):
   try:b=p.read_bytes()
-  except FileNotFoundError:self.send_error(404);return
-  self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'application/octet-stream');self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+  except FileNotFoundError:return self.j({'error':'not_found'},404)
+  self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'application/octet-stream');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.j({'ok':True,'version':'qa-flow-1'})
+  if p=='/health':return self.j({'ok':True,'version':'qa-flow-2'})
   if p in ('/','/index.html'):return self.f(STATIC/'index.html')
   if p.startswith('/static/'):return self.f(STATIC/p.split('/static/',1)[1])
   if p.startswith('/api/qr/'):
-   co=p.split('/api/qr/',1)[1];g=game(co)
+   g=game(p.split('/api/qr/',1)[1])
    if not g:return self.j({'error':'not_found'},404)
    base=f"{self.headers.get('X-Forwarded-Proto','https')}://{self.headers.get('Host','localhost:5000')}";img=qrcode.make(f"{base}/?code={g['code']}");buf=io.BytesIO();img.save(buf,'PNG');b=buf.getvalue();self.send_response(200);self.send_header('Content-Type','image/png');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
   if p.startswith('/api/game/'):
-   co=p.split('/api/game/',1)[1].split('/')[0];g=game(co)
+   g=game(p.split('/api/game/',1)[1].split('/')[0])
    if not g:return self.j({'error':'not_found'},404)
    q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0]
    with db() as c:me=c.execute('SELECT * FROM players WHERE game_id=? AND token=?',(g['id'],tok)).fetchone() if tok else None;ps=c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(g['id'],)).fetchall();ev=c.execute('SELECT * FROM gm_events WHERE game_id=? ORDER BY id DESC LIMIT 1',(g['id'],)).fetchone()
@@ -120,7 +120,22 @@ class H(BaseHTTPRequestHandler):
     try:assign(g['id'])
     except ValueError:return self.j({'error':'need_2_players'},400)
     with db() as c:c.execute("UPDATE games SET status='playing',round_no=1,round_started_at=?,round_seconds=600 WHERE id=?",(now(),g['id']))
-    return self.j({'ok':True,'round_no':1})
+    return self.j({'ok':True,'round_no':1,'status':'playing'})
    if a=='next':
     if g['status']!='playing':return self.j({'error':'not_playing'},409)
-    current=int
+    current=int(g['round_no'] or 1);rn=current+1
+    if rn>4:
+     with db() as c:c.execute("UPDATE games SET status='finished',round_started_at='' WHERE id=?",(g['id'],))
+     return self.j({'ok':True,'round_no':current,'status':'finished'})
+    with db() as c:c.execute("UPDATE games SET round_no=?,round_started_at=?,round_seconds=600 WHERE id=?",(rn,now(),g['id']))
+    return self.j({'ok':True,'round_no':rn,'status':'playing'})
+   if a=='react':
+    if g['status']!='playing':return self.j({'error':'not_playing'},409)
+    summary=clean(d.get('summary'),500)
+    if not summary:return self.j({'error':'summary_required'},400)
+    response=twist(summary)
+    with db() as c:c.execute('INSERT INTO gm_events(game_id,round_no,prompt,response,created_at) VALUES(?,?,?,?,?)',(g['id'],g['round_no'],summary,response,now()))
+    return self.j({'ok':True,'response':response})
+   if a=='vote':
+    if g['status']!='playing' or int(g['round_no'])!=4:return self.j({'error':'voting_not_open'},409)
+    with db() as c:v=c.execute('SELECT * FROM players WHERE game_id=? AND token=?',(g['id'],d
