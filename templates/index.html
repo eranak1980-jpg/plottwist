@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PlotTwist — AI Party Game</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <span class="eyebrow">AI PARTY GAME</span>
+      <h1>אתם מביאים את החברים.<br>אנחנו מביאים את העלילה.</h1>
+      <p>יוצרים חדר, מזמינים חברים, וכל אחד מקבל תפקיד וסוד אחר. ה־Game Master מנהל את הערב.</p>
+    </section>
+
+    {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+    <section class="grid">
+      <form class="card" method="post" action="/create">
+        <h2>צור משחק</h2>
+        <label>השם שלך<input name="host_name" placeholder="דניאל" required /></label>
+        <label>סגנון המשחק<input name="theme" value="מסיבת מסתורין מודרנית" /></label>
+        <label>טון<input name="tone" value="מצחיק ומותח" /></label>
+        <label>אורך
+          <select name="duration"><option value="45">45 דקות</option><option value="60" selected>60 דקות</option><option value="90">90 דקות</option></select>
+        </label>
+        <button class="primary" type="submit">צור חדר</button>
+      </form>
+
+      <form class="card" method="post" action="/join">
+        <h2>הצטרף לחדר</h2>
+        <label>השם שלך<input name="name" placeholder="נועה" required /></label>
+        <label>קוד חדר<input name="code" placeholder="AB12C" maxlength="5" required /></label>
+        <button type="submit">הצטרף</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

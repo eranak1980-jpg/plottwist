@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PlotTwist — חדר {{ code }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="shell narrow">
+    <section class="room-head">
+      <div>
+        <span class="eyebrow">ROOM</span>
+        <h1 id="roomCode">{{ code }}</h1>
+      </div>
+      <div class="pill" id="statusPill">טוען…</div>
+    </section>
+
+    <section id="joinShare" class="card compact">
+      <strong>שלחו לחברים את הקוד:</strong> <span class="code">{{ code }}</span>
+      <p class="muted">כל אחד נכנס מהטלפון ומקבל תפקיד סודי משלו.</p>
+    </section>
+
+    <section class="card" id="playersCard">
+      <h2>שחקנים</h2>
+      <div id="players"></div>
+      <div id="hostControls"></div>
+    </section>
+
+    <section class="card hidden" id="roleCard">
+      <span class="eyebrow">התפקיד הסודי שלך</span>
+      <h2 id="roleName"></h2>
+      <p id="secret"></p>
+      <div class="objective"><strong>המטרה שלך:</strong><p id="objective"></p></div>
+    </section>
+
+    <section class="card hidden" id="roundCard">
+      <span class="eyebrow" id="roundLabel"></span>
+      <h2>Game Master</h2>
+      <p class="bigcopy" id="roundPrompt"></p>
+      <div id="voteBox"></div>
+    </section>
+
+    <section class="card hidden" id="finishedCard">
+      <span class="eyebrow">CASE CLOSED</span>
+      <h2 id="killerReveal"></h2>
+      <p>המשחק הסתיים. עכשיו מגיע שלב הצעקות, ההאשמות וה־“ידעתי מההתחלה”.</p>
+    </section>
+  </main>
+
+<script>
+const CODE = {{ code|tojson }};
+const TOKEN = {{ token|tojson }};
+const HOST = {{ host_token|tojson }};
+
+const qs = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(path, options={}) {
+  const r = await fetch(path, options);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'request_failed');
+  return data;
+}
+
+async function load() {
+  try {
+    const d = await api(`/api/game/${CODE}?token=${encodeURIComponent(TOKEN)}&host=${encodeURIComponent(HOST)}`);
+    render(d);
+  } catch (e) { console.error(e); }
+}
+
+function render(d) {
+  qs('#statusPill').textContent = ({lobby:'ממתינים לשחקנים',playing:'המשחק התחיל',finished:'המשחק הסתיים'})[d.status] || d.status;
+  qs('#players').innerHTML = d.players.map(p => `<div class="player"><span>${esc(p.name)}</span>${p.role_name ? `<small>${esc(p.role_name)}</small>` : ''}</div>`).join('');
+
+  qs('#hostControls').innerHTML = '';
+  if (d.is_host && d.status === 'lobby') {
+    qs('#hostControls').innerHTML = `<button class="primary" onclick="startGame()" ${d.players.length < 4 ? 'disabled' : ''}>התחל משחק</button><p class="muted">צריך לפחות 4 שחקנים. כרגע: ${d.players.length}</p>`;
+  }
+  if (d.is_host && d.status === 'playing') {
+    qs('#hostControls').innerHTML = `<button class="primary" onclick="nextRound()">${d.round_no >= 4 ? 'חשוף את הרוצח/ת' : 'לסיבוב הבא'}</button>`;
+  }
+
+  if (d.status !== 'lobby') qs('#joinShare').classList.add('hidden');
+
+  if (d.me && d.me.role_name && d.status !== 'finished') {
+    qs('#roleCard').classList.remove('hidden');
+    qs('#roleName').textContent = d.me.role_name;
+    qs('#secret').textContent = d.me.secret;
+    qs('#objective').textContent = d.me.objective;
+  }
+
+  if (d.status === 'playing') {
+    qs('#roundCard').classList.remove('hidden');
+    qs('#roundLabel').textContent = `סיבוב ${d.round_no}`;
+    qs('#roundPrompt').textContent = d.round_prompt;
+    const voteBox = qs('#voteBox');
+    if (d.round_no >= 4 && d.me) {
+      const choices = d.players.filter(p => p.id !== d.me.id).map(p => `<button class="choice" onclick="vote(${p.id})">${esc(p.name)}</button>`).join('');
+      voteBox.innerHTML = `<hr><strong>מי הרוצח/ת?</strong><div class="choices">${choices}</div>`;
+    } else voteBox.innerHTML = '';
+  } else {
+    qs('#roundCard').classList.add('hidden');
+  }
+
+  if (d.status === 'finished') {
+    qs('#roleCard').classList.add('hidden');
+    qs('#finishedCard').classList.remove('hidden');
+    qs('#killerReveal').textContent = `הרוצח/ת היה/תה: ${d.killer ? d.killer.name : '???'}`;
+  }
+}
+
+async function startGame() {
+  try { await api(`/api/game/${CODE}/start`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:HOST})}); await load(); }
+  catch(e){ alert(e.message === 'need_4_players' ? 'צריך לפחות 4 שחקנים.' : 'לא הצלחתי להתחיל.'); }
+}
+
+async function nextRound() {
+  await api(`/api/game/${CODE}/next`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:HOST})});
+  await load();
+}
+
+async function vote(id) {
+  await api(`/api/game/${CODE}/vote`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN, accused_id:id})});
+  alert('ההצבעה נשמרה');
+}
+
+load();
+setInterval(load, 2500);
+</script>
+</body>
+</html>

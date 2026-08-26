@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PlotTwist — ערב שלא תשכחו</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="shell">
+  <section class="hero" id="hero">
+    <div class="brand"><span class="logo">P</span><span>PlotTwist</span></div>
+    <span class="eyebrow">THE AI GAME MASTER</span>
+    <h1>החברים שלכם.<br><em>עלילה שאף אחד לא מכיר.</em></h1>
+    <p>ספרו לנו מי אתם. תוך רגע נוצר משחק מסתורין אישי שבו לכל אחד יש תפקיד, סוד ומטרה — וה־Game Master מנהל הכול בזמן אמת.</p>
+    <div class="hero-badges"><span>4–10 שחקנים</span><span>45–90 דקות</span><span>טלפון לכל שחקן</span></div>
+  </section>
+
+  <section id="home" class="grid">
+    <div class="card create-card">
+      <span class="step">01</span><h2>בנו את הערב שלכם</h2>
+      <div class="form-grid">
+        <label>השם שלך<input id="hostName" placeholder="דניאל"></label>
+        <label>איזה ערב אתם רוצים?
+          <select id="gameType">
+            <option value="murder">🔪 Murder Mystery — מי עשה את זה?</option>
+            <option value="heist">💎 The Heist — מי גנב את זה?</option>
+            <option value="secrets">📁 Secret Night — מי הדליף את הסוד?</option>
+          </select>
+        </label>
+        <label>שם החבורה<input id="groupName" placeholder="החבורה מהצבא / משפחת לוי"></label>
+        <label>איפה אתם משחקים?<input id="location" placeholder="הסלון, וילה בפוקט, משרד..."></label>
+        <label>מה הקשר ביניכם?<select id="relationship"><option>חברים ותיקים</option><option>חברים מהעבודה</option><option>משפחה</option><option>זוגות חברים</option><option>חבורה חדשה</option></select></label>
+      </div>
+      <label>בדיחה / פרט פנימי שהמשחק יכול להשתמש בו <span class="optional">אופציונלי</span><input id="insideJoke" placeholder="כולם עדיין צוחקים על הפעם שיוני..."></label>
+      <div class="form-grid">
+        <label>סגנון<select id="theme"><option>מסתורין מודרני</option><option>מלון יוקרתי עם סוד</option><option>מסיבת סלבריטאים</option><option>אחוזה אפלה</option><option>חופשה שהסתבכה</option></select></label>
+        <label>טון<select id="tone"><option>מצחיק ומותח</option><option>אפל וקולנועי</option><option>כאוטי ומצחיק</option><option>דרמטי אבל קליל</option></select></label>
+        <label>אורך<select id="duration"><option value="45">45 דקות</option><option value="60" selected>60 דקות</option><option value="90">90 דקות</option></select></label>
+        <label>רמת כאוס<select id="intensity"><option value="balanced">מאוזן</option><option value="chill">רגוע</option><option value="wild">בלי רחמים</option></select></label>
+      </div>
+      <button class="primary" onclick="createGame()">צור את המשחק שלי <span>←</span></button>
+      <p class="microcopy">אין צורך להוריד אפליקציה. המשחק נפתח בדפדפן.</p>
+    </div>
+
+    <div class="card join-card">
+      <span class="step">02</span><h2>כבר יש משחק?</h2>
+      <p class="muted">הכניסו את קוד החדר שקיבלתם מהמארח.</p>
+      <label>השם שלך<input id="joinName" placeholder="נועה"></label>
+      <label>קוד החדר<input id="joinCode" class="room-input" maxlength="5" placeholder="AB12C"></label>
+      <button onclick="joinGame()">הצטרף לחדר</button>
+      <div class="privacy-note">🔒 התפקיד והסוד שלך יוצגו רק על המסך שלך.</div>
+    </div>
+  </section>
+
+  <section id="game" class="hidden narrow">
+    <div class="room-head">
+      <div><span class="eyebrow">PRIVATE GAME</span><h1 id="roomTitle">PlotTwist</h1><p class="muted" id="storySubtitle"></p></div>
+      <div class="pill" id="status"></div>
+    </div>
+
+    <div class="card compact" id="share">
+      <div class="invite-grid">
+        <div><strong>קוד החדר</strong><div class="share-row"><span class="code" id="shareCode"></span><button class="mini" onclick="copyInvite()">העתק הזמנה</button></div>
+        <p class="muted">סרקו את ה־QR או פתחו את הלינק. כל שחקן מקבל מסך פרטי.</p></div>
+        <img id="qr" class="qr" alt="QR להצטרפות">
+      </div>
+    </div>
+
+    <div class="card"><div class="card-title-row"><h2>החבורה</h2><span class="counter" id="playerCount"></span></div><div id="players"></div><div id="hostControls"></div></div>
+
+    <div class="card role-card hidden" id="roleCard">
+      <span class="eyebrow">לעיניים שלך בלבד</span><h2 id="roleName"></h2>
+      <div class="secret-panel"><span>הסוד שלך</span><p id="secret"></p></div>
+      <div class="objective"><span>המטרה שלך</span><p id="objective"></p></div>
+      <div class="secret-panel hidden" id="privateHintBox"><span>רמז פרטי חדש</span><p id="privateHint"></p></div>
+      <p class="microcopy">אל תראה/י את המסך לשחקנים האחרים.</p>
+    </div>
+
+    <div class="card gm-card hidden" id="roundCard">
+      <div class="gm-orb">GM</div>
+      <div class="round-top"><span class="eyebrow" id="roundLabel"></span><div class="timer" id="timer">--:--</div></div>
+      <h2>Game Master</h2><p class="bigcopy" id="roundPrompt"></p>
+      <div class="live-event hidden" id="liveEvent"><span>LIVE TWIST</span><p id="liveEventText"></p></div>
+      <div id="hostReact" class="host-react hidden">
+        <hr><strong>מה קרה עכשיו בחדר?</strong>
+        <p class="muted">המארח כותב משפט אחד, וה־Game Master יכול להגיב בזמן אמת.</p>
+        <div class="react-row"><input id="reactSummary" maxlength="500" placeholder="למשל: דנה תפסה את יואב בסתירה באליבי..."><button onclick="reactGM()">הפעל טוויסט</button></div>
+      </div>
+      <div id="voteBox"></div>
+    </div>
+
+    <div class="card hidden finish-card" id="finished">
+      <span class="eyebrow">CASE CLOSED</span><h2 id="killer"></h2><p id="scoreLine" class="bigcopy"></p><div id="voteResults"></div><button class="primary" onclick="newGame()">משחק חדש</button>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast hidden"></div>
+<script>
+let session=JSON.parse(localStorage.getItem('plottwist_session')||'null')||{code:null,token:null,host:null};
+let timerDeadline=0, timerHandle=null;
+let current=null, soundOn=localStorage.getItem('plottwist_sound')!=='off', audioCtx=null;
+function toggleSound(){soundOn=!soundOn;localStorage.setItem('plottwist_sound',soundOn?'on':'off');$('#soundBtn').textContent=soundOn?'🔊':'🔇';if(soundOn)playCue('tap')}
+function playCue(type='tap'){if(!soundOn)return;try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);const now=audioCtx.currentTime;const f={tap:440,start:620,round:520,reveal:760}[type]||440;o.frequency.setValueAtTime(f,now);if(type==='reveal')o.frequency.exponentialRampToValueAtTime(1040,now+.22);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.05,now+.015);g.gain.exponentialRampToValueAtTime(.0001,now+.28);o.start(now);o.stop(now+.3)}catch(e){}}
+function openHow(){$('#howModal').classList.remove('hidden')}
+function closeHow(){$('#howModal').classList.add('hidden')}
+async function startWithHow(){if(current&&current.status==='lobby'){openHow();return}await advance()}
+async function beginAfterHow(){closeHow();playCue('start');await advance()}
+const $=s=>document.querySelector(s); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function saveSession(){localStorage.setItem('plottwist_session',JSON.stringify(session))}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2200)}
+async function req(path,body){let o=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};let r=await fetch(path,o),d=await r.json();if(!r.ok)throw Error(d.error||'error');return d}
+async function createGame(){
+  if(!$('#hostName').value.trim()){toast('צריך שם כדי להתחיל');return}
+  try{let d=await req('/api/create',{name:$('#hostName').value,group_name:$('#groupName').value,location:$('#location').value,relationship:$('#relationship').value,inside_joke:$('#insideJoke').value,theme:$('#theme').value,tone:$('#tone').value,duration:+$('#duration').value,intensity:$('#intensity').value});session=d;saveSession();showGame()}catch(e){toast('משהו השתבש ביצירת המשחק')}
+}
+async function joinGame(){
+  if(!$('#joinName').value.trim()||!$('#joinCode').value.trim()){toast('צריך שם וקוד חדר');return}
+  try{let d=await req('/api/join',{name:$('#joinName').value,code:$('#joinCode').value});session={...d,host:null};saveSession();showGame()}catch(e){toast(e.message==='name_taken'?'השם הזה כבר בחדר':e.message==='already_started'?'המשחק כבר התחיל':'לא מצאתי חדר עם הקוד הזה')}
+}
+function showGame(){$('#home').classList.add('hidden');$('#hero').classList.add('hidden');$('#game').classList.remove('hidden');if(session.code)$('#qr').src=`/api/qr/${session.code}?t=${Date.now()}`;load()}
+function newGame(){localStorage.removeItem('plottwist_session');location.href='/'}
+async function copyInvite(){const text=`PlotTwist 🎭\nהצטרפו למשחק שלי עם הקוד ${session.code}\n${location.origin}`;try{await navigator.clipboard.writeText(text);toast('ההזמנה הועתקה')}catch(e){toast(`קוד החדר: ${session.code}`)}}
+async function load(){if(!session.code)return;try{let d=await req(`/api/game/${session.code}?token=${encodeURIComponent(session.token)}&host=${encodeURIComponent(session.host||'')}`);render(d)}catch(e){if(e.message==='not_found'){localStorage.removeItem('plottwist_session');location.reload()}}}
+function render(d){
+  $('#shareCode').textContent=d.code; $('#status').textContent={lobby:'ממתינים',playing:'LIVE',finished:'הסתיים'}[d.status]; $('#playerCount').textContent=`${d.players.length} שחקנים`;
+  if(d.status==='playing'){timerDeadline=Date.now()+(d.remaining_seconds||0)*1000;startTimer()}else stopTimer();
+  $('#roomTitle').textContent=d.story_title||d.group_name||'המשחק שלכם'; $('#storySubtitle').textContent=d.story_title?`${d.group_name||'החבורה'} · ${d.location||''}`:'העלילה תיווצר ברגע שהמשחק מתחיל';
+  $('#players').innerHTML=d.players.map((p,i)=>`<div class="player"><span class="avatar">${i+1}</span><span>${esc(p.name)}</span>${p.role_name?`<small>${esc(p.role_name)}</small>`:'<small>ממתין/ה</small>'}</div>`).join(''); $('#hostControls').innerHTML='';
+  if(d.is_host&&d.status==='lobby') $('#hostControls').innerHTML=`<button class="primary" onclick="start()" ${d.players.length<4?'disabled':''}>${d.players.length<4?'צריך לפחות 4 שחקנים':'כולם כאן — התחילו את הסיפור'}</button><p class="microcopy">מומלץ: 5–8 שחקנים. כרגע: ${d.players.length}</p>`;
+  if(d.is_host&&d.status==='playing') $('#hostControls').innerHTML=`<button class="primary" onclick="next()">${d.round_no>=4?'חשוף את האמת':'פתח את הסיבוב הבא'}</button>`;
+  $('#share').classList.toggle('hidden',d.status!=='lobby');
+  if(d.me&&d.me.role_name&&d.status!=='finished'){
+    $('#roleCard').classList.remove('hidden');$('#roleName').textContent=d.me.role_name;$('#secret').textContent=d.me.secret;$('#objective').textContent=d.me.objective;
+    if(d.me.private_hint){$('#privateHintBox').classList.remove('hidden');$('#privateHint').textContent=d.me.private_hint}else $('#privateHintBox').classList.add('hidden');
+  }else $('#roleCard').classList.add('hidden');
+  if(d.status==='playing'){
+    $('#roundCard').classList.remove('hidden');$('#roundLabel').textContent=`סיבוב ${d.round_no} מתוך 4`;$('#roundPrompt').textContent=d.round_prompt;
+    $('#hostReact').classList.toggle('hidden',!d.is_host);
+    if(d.latest_gm_event && d.latest_gm_event.round_no===d.round_no){$('#liveEvent').classList.remove('hidden');$('#liveEventText').textContent=d.latest_gm_event.response}else $('#liveEvent').classList.add('hidden');
+    if(d.round_no>=4&&d.me){$('#voteBox').innerHTML='<hr><strong>ההצבעה הסודית שלך</strong><p class="muted">מי לדעתך אחראי/ת?</p><div class="choices">'+d.players.filter(p=>p.id!==d.me.id).map(p=>`<button class="choice" onclick="vote(${p.id},this)">${esc(p.name)}</button>`).join('')+'</div>'}else $('#voteBox').innerHTML=''}else $('#roundCard').classList.add('hidden');
+  if(d.status==='finished'&&d.me&&!d.feedback_done)$('#feedbackCard').classList.remove('hidden');else $('#feedbackCard').classList.add('hidden');if(d.status==='finished'){$('#finished').classList.remove('hidden');$('#killer').textContent=`${d.killer?.name||'???'} היה/תה הרוצח/ת.`;$('#scoreLine').textContent=d.total_votes?`${d.correct_votes} מתוך ${d.total_votes} הצביעו נכון.`:'אף אחד לא הספיק להצביע.';$('#voteResults').innerHTML=d.vote_summary.map(v=>`<div class="result"><span>${esc(v.name)}</span><strong>${v.votes} קולות</strong></div>`).join('')}else $('#finished').classList.add('hidden');
+}
+async function start(){try{await req(`/api/game/${session.code}/start`,{host:session.host});await load();toast('הסיפור התחיל')}catch(e){toast(e.message==='need_4_players'?'צריך לפחות 4 שחקנים':'לא הצלחתי להתחיל')}}
+async function next(){await req(`/api/game/${session.code}/next`,{host:session.host});await load()}
+async function vote(id,btn){try{await req(`/api/game/${session.code}/vote`,{token:session.token,accused_id:id});document.querySelectorAll('.choice').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');toast('ההצבעה נשמרה')}catch(e){toast('לא הצלחתי לשמור את ההצבעה')}}
+async function sendFeedback(){
+  try{
+    await req(`/api/game/${session.code}/feedback`,{
+      token:session.token,
+      fun_score:+$('#funScore').value,
+      clarity_score:+$('#clarityScore').value,
+      replay:$('#replay').checked,
+      note:$('#feedbackNote').value
+    });
+    $('#feedbackCard').classList.add('hidden');
+    toast('תודה — הפידבק נשמר');
+  }catch(e){toast('לא הצלחתי לשמור את הפידבק')}
+}
+async function reactGM(){const v=$('#reactSummary').value.trim();if(!v){toast('כתוב/י במשפט מה קרה בחדר');return}try{const d=await req(`/api/game/${session.code}/react`,{host:session.host,summary:v});$('#reactSummary').value='';toast('ה־Game Master הגיב');await load()}catch(e){toast('לא הצלחתי ליצור טוויסט')}}
+function startTimer(){if(timerHandle)return;const tick=()=>{const sec=Math.max(0,Math.floor((timerDeadline-Date.now())/1000));const m=String(Math.floor(sec/60)).padStart(2,'0'),ss=String(sec%60).padStart(2,'0');$('#timer').textContent=`${m}:${ss}`;$('#timer').classList.toggle('urgent',sec<=60)};tick();timerHandle=setInterval(tick,1000)}
+function stopTimer(){if(timerHandle){clearInterval(timerHandle);timerHandle=null}if($('#timer'))$('#timer').textContent='--:--'}
+const codeFromUrl=new URLSearchParams(location.search).get('code');if(codeFromUrl)$('#joinCode').value=codeFromUrl.toUpperCase();if(session.code)showGame();setInterval(load,2500);
+</script>
+</body></html>
