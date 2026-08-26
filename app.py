@@ -42,13 +42,15 @@ def assign(gid):
    others=[x['name'] for x in ps if x['id']!=p['id']]
    if p['id']==culprit['id']:
     other=others[0] if others else 'the other player';role='The Killer' if g['game_type']=='murder' else 'The Culprit';secret=f'You are responsible for what happened to {victim}. {other} almost saw you returning to {place}.';obj=f'Deflect suspicion and make {other} doubt their theory.';hint=f'Private clue: someone remembers seeing you near {place}.'
-   else:role,secret,obj=defs[i%len(defs)];hint=f'Private clue: something connected to “{joke[:30]}” matters more than it looks.'
+   else:
+    role,secret,obj=defs[i%len(defs)];hint=(f'Private clue: the case unexpectedly connects to a familiar group memory — “{joke}”. Think about why someone would deliberately reference it.' if g['inside_joke'] else 'Private clue: a small personal detail in the room matters more than it first appears.')
    c.execute('UPDATE players SET role_name=?,secret=?,objective=?,private_hint=? WHERE id=?',(role,secret,obj,hint,p['id']))
 def round_prompt(g,n):
- title=g['story_title'] or "Tonight's Mystery";victim=g['victim_name'] or 'the target';place=g['location'] or 'the room';joke=g['inside_joke'] or 'an inside detail';mode=g['game_type']
- if mode=='heist':arr=[f'🚨 {title}. {victim} vanished during a blackout at {place}. Introduce your character but keep your secret hidden.',f'🔎 A clue connects to “{joke[:45]}”. Your private clue is unlocked. Challenge the other timeline.','⚡ Repeat your exact timeline, then answer one sharp follow-up question.','🗳️ Give your final argument, then vote in secret.']
- elif mode=='secrets':arr=[f'📁 {title}. {victim} was leaked at {place}. Introduce your character without revealing your secret.',f'🔎 The first clue links the leak to “{joke[:45]}”. Ask one focused question.','⚡ Each player must state one fact not revealed yet.','🗳️ Who is the saboteur? Give your final defense, then vote.']
- else:arr=[f'🥂 {title}. {victim} is found dead after a blackout at {place}. Introduce your role and alibi but keep your secret hidden.',f'🔎 A torn note reads “{joke[:45]}”. Your private clue is unlocked. Challenge the other story.','⚡ Repeat your alibi in one sentence, then answer one sharp follow-up question.','🗳️ Who did it, and why? Give your final argument, then vote in secret.']
+ title=g['story_title'] or "Tonight's Mystery";victim=g['victim_name'] or 'the target';place=g['location'] or 'the room';joke=g['inside_joke'] or '';mode=g['game_type']
+ personal=(f'A torn note contains a strangely specific reference to a memory your group knows well: “{joke}”.' if joke else 'A torn note contains a strangely personal clue that clearly means something to this group.')
+ if mode=='heist':arr=[f'🚨 {title}. {victim} vanished during a blackout at {place}. Introduce your character but keep your secret hidden.',f'🔎 {personal} Your private clue is unlocked. Challenge the other timeline.','⚡ Repeat your exact timeline, then answer one sharp follow-up question.','🗳️ Give your final argument, then vote in secret.']
+ elif mode=='secrets':arr=[f'📁 {title}. {victim} was leaked at {place}. Introduce your character without revealing your secret.',f'🔎 {personal} Ask one focused question about why that detail matters.','⚡ Each player must state one fact not revealed yet.','🗳️ Who is the saboteur? Give your final defense, then vote.']
+ else:arr=[f'🥂 {title}. {victim} is found dead after a blackout at {place}. Introduce your role and alibi but keep your secret hidden.',f'🔎 {personal} Your private clue is unlocked. Use the detail as part of the investigation instead of treating it as a random quote.','⚡ Repeat your alibi in one sentence, then answer one sharp follow-up question.','🗳️ Who did it, and why? Give your final argument, then vote in secret.']
  return arr[n-1] if 1<=n<=4 else 'The game is over.'
 def remaining(g):
  if not g['round_started_at'] or g['status']!='playing':return 0
@@ -57,14 +59,14 @@ def remaining(g):
 def twist(summary):
  return random.choice([f'LIVE TWIST — {summary[:150]} Now everyone must repeat their alibi in one sentence. No interruptions.',f'NEW CLUE — {summary[:150]} The person under the most suspicion gets one direct question. They must answer immediately.',f'THE GAME MASTER INTERRUPTS — {summary[:150]} Each player must now reveal one detail they were holding back, but not their full secret.'])
 class H(BaseHTTPRequestHandler):
- def j(self,x,s=200):b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+ def j(self,x,s=200):b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');self.send_header('Pragma','no-cache');self.send_header('Expires','0');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def body(self):
   try:return json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
   except:return {}
  def f(self,p):
   try:b=p.read_bytes()
   except FileNotFoundError:self.send_error(404);return
-  self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'application/octet-stream');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+  self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'application/octet-stream');self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');self.send_header('Pragma','no-cache');self.send_header('Expires','0');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
   if p=='/health':return self.j({'ok':True})
@@ -73,7 +75,7 @@ class H(BaseHTTPRequestHandler):
   if p.startswith('/api/qr/'):
    g=game(p.split('/api/qr/',1)[1]);
    if not g:return self.j({'error':'not_found'},404)
-   base=f"{self.headers.get('X-Forwarded-Proto','https')}://{self.headers.get('Host','localhost:5000')}";img=qrcode.make(f"{base}/?code={g['code']}");buf=io.BytesIO();img.save(buf,'PNG');b=buf.getvalue();self.send_response(200);self.send_header('Content-Type','image/png');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
+   base=f"{self.headers.get('X-Forwarded-Proto','https')}://{self.headers.get('Host','localhost:5000')}";img=qrcode.make(f"{base}/?code={g['code']}");buf=io.BytesIO();img.save(buf,'PNG');b=buf.getvalue();self.send_response(200);self.send_header('Content-Type','image/png');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
   if p.startswith('/api/game/'):
    g=game(p.rsplit('/',1)[-1]);
    if not g:return self.j({'error':'not_found'},404)
