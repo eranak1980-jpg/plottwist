@@ -1,2 +1,2 @@
-# No external dependencies. Requires Python 3.10+.
 qrcode[pil]>=7.4
+openai>=1.40.0
