@@ -1,43 +1,25 @@
 import random
 
 def build_case(players, location, inside_joke='', mode='murder'):
-    names=[p['name'] for p in players]
-    culprit=random.choice(names)
-    victim='Alex Rosen' if mode=='murder' else ('the Midnight Diamond' if mode=='heist' else 'the leaked file')
-    place=location or 'the living room'
-    joke=' '.join((inside_joke or '').split())
-    innocent=[n for n in names if n!=culprit]
-    decoy=innocent[0] if innocent else names[0]
-    witness=innocent[-1] if innocent else names[0]
-    title=f'The Eight Seconds at {place}'
-    opening=(f'11:47 PM. The lights go out at {place}. Eight seconds later they return. '
-             f'{victim} is gone' if mode!='murder' else
-             f'11:47 PM. The lights go out at {place}. Eight seconds later they return. {victim} is found beside the table.')
-    opening += ' The back door is open. A glass is broken. Nobody has entered or left.'
-    evidence=[
-      {'id':'door','round':2,'title':'The Back Door','text':f'A photo timestamped 11:43 PM shows the back door was already open four minutes before the blackout. This weakens the obvious theory against {decoy}.'},
-      {'id':'timeline','round':3,'title':'The Eight-Second Gap','text':f'A device log proves someone moved through {place} during the eight-second blackout. One earlier timeline can no longer be true.'},
-    ]
-    if joke:
-      evidence.insert(1,{'id':'personal','round':2,'title':'The Personal Reference','text':f'A draft message on {victim}’s phone refers to a memory only this group should recognize: “{joke}”. It was left deliberately, not by accident.'})
+    names=[p['name'] for p in players];culprit=random.choice(names);victim='Alex Rosen' if mode=='murder' else ('the Midnight Diamond' if mode=='heist' else 'the leaked file');place=location or 'the living room';joke=' '.join((inside_joke or '').split());innocent=[n for n in names if n!=culprit];decoy=innocent[0] if innocent else names[0];witness=innocent[-1] if innocent else names[0];title=f'The Eight Seconds at {place}'
+    opening=(f'11:47 PM. The lights go out at {place}. Eight seconds later they return. '+(f'{victim} is found beside the table.' if mode=='murder' else f'{victim} is gone.'))+' The back door is open. A glass is broken. Nobody has entered or left.'
+    evidence=[{'id':'door','round':2,'title':'The Back Door','text':f'A photo timestamped 11:43 PM shows the back door was already open four minutes before the blackout. This weakens the obvious theory against {decoy}.'},{'id':'timeline','round':3,'title':'The Eight-Second Gap','text':f'A device log proves someone moved through {place} during the eight-second blackout. One earlier timeline can no longer be true.'}]
+    if joke:evidence.insert(1,{'id':'personal','round':2,'title':'The Personal Reference','text':f'A draft message on {victim}’s phone refers to a memory only this group should recognize: “{joke}”. It was left deliberately, not by accident.'})
     roles={}
-    for i,n in enumerate(names):
-      if n==culprit:
-        roles[n]={'role':'The Culprit','secret':f'You caused what happened during the eight-second blackout. The open door is a decoy you want the group to focus on.','objective':f'Keep your timeline consistent and redirect suspicion toward {decoy}.','knows':['The back door is a staged distraction.']}
-      elif n==witness:
-        roles[n]={'role':'The Witness','secret':f'Before the blackout you saw {culprit} close to {place}, but admitting exactly where you were will expose a harmless lie of your own.','objective':'Reveal enough to help solve the case without exposing your whole secret too early.','knows':[f'{culprit} was closer to the scene than they may admit.']}
-      else:
-        roles[n]={'role':'The Secret Keeper','secret':f'{victim} privately warned you that someone in the group was preparing a distraction.','objective':'Work out which clue is genuine and which was planted.','knows':['The most obvious clue may be staged.']}
+    for n in names:
+      if n==culprit:roles[n]={'role':'The Culprit','secret':f'Your public alibi: you were away from {place} when the lights failed. The truth: you caused what happened during the eight-second blackout and staged the open door as a false lead.','objective':f'Defend the same timeline every time and redirect suspicion toward {decoy}.','knows':['The back door is a staged distraction.']}
+      elif n==witness:roles[n]={'role':'The Witness','secret':f'Your public alibi: you were looking for your phone away from {place}. The truth: you briefly stepped into the hallway and saw {culprit} close to {place}.','objective':'Reveal enough to help solve the case without admitting your whole harmless lie too early.','knows':[f'{culprit} was closer to the scene than they may admit.']}
+      else:roles[n]={'role':'The Secret Keeper','secret':f'Your public alibi: you were occupied away from {place}. The truth: {victim} privately warned you that someone in the group was preparing a distraction.','objective':'Work out which clue is genuine and which was planted without revealing the warning too early.','knows':['The most obvious clue may be staged.']}
+    turns=[{'player':n,'prompt':f'{n}, give your alibi in ONE sentence. Say where you were when the lights went out. Do not reveal your private secret.'} for n in names]
     rounds=[
-      {'number':1,'name':'THE ALIBIS','public':opening+' Each player gives a one-sentence alibi. Keep private information hidden.'},
-      {'number':2,'name':'THE EVIDENCE','public':'New evidence changes the obvious theory. Read the evidence cards and challenge one player whose story no longer fits.'},
-      {'number':3,'name':'THE CONTRADICTION','public':'A new timestamp creates a contradiction. Each player must defend one exact part of their timeline.'},
-      {'number':4,'name':'THE ACCUSATION','public':'Build your final theory: who did it, what was staged, and which clue proves it? Then vote in secret.'},
+      {'number':1,'name':'THE ALIBIS','public':opening,'gm':'The Game Master will call on each player in order. Keep answers short so everyone can remember them.','turns':turns,'finish':'When every player has given one alibi, open the evidence.'},
+      {'number':2,'name':'THE EVIDENCE','public':'The first evidence changes the obvious theory.','gm':'Read the evidence aloud. Then each player points to ONE detail in another player’s alibi that now feels suspicious.','turns':[{'player':n,'prompt':f'{n}, choose one other player and challenge one specific detail in their alibi.'} for n in names],'finish':'After everyone has challenged one detail, open the contradiction.'},
+      {'number':3,'name':'THE CONTRADICTION','public':'A timestamp creates a contradiction. At least one timeline can no longer be completely true.','gm':'No speeches. Each player must defend one exact time, place, or action from their story.','turns':[{'player':n,'prompt':f'{n}, defend ONE exact detail of your timeline. You may reveal part of your secret if you need to.'} for n in names],'finish':'When every player has defended one detail, move to the accusation.'},
+      {'number':4,'name':'THE ACCUSATION','public':'The investigation is over. Build your final theory before the truth is revealed.','gm':'Everyone gets one final statement. Then vote privately on this screen.','turns':[{'player':n,'prompt':f'{n}, in one sentence say WHO you suspect and WHICH clue convinced you.'} for n in names],'finish':'When everyone has voted, reveal the truth.'},
     ]
-    reveal={'headline':f'{culprit} was the culprit.','timeline':[f'11:43 — the back door was already open.',f'11:47 — the lights went out for eight seconds.',f'During the blackout, {culprit} acted and relied on the open door as a false lead.',f'The contradiction in the timeline exposed the setup.'],'missed_clue':'The open door looked important because it was meant to look important.'}
+    reveal={'headline':f'{culprit} was the culprit.','timeline':['11:43 — the back door was already open.','11:47 — the lights went out for eight seconds.',f'During the blackout, {culprit} acted and relied on the open door as a false lead.','The contradiction in the timeline exposed the setup.'],'missed_clue':'The open door looked important because it was meant to look important.'}
     return {'title':title,'victim':victim,'culprit':culprit,'opening':opening,'roles':roles,'evidence':evidence,'rounds':rounds,'reveal':reveal}
 
 def public_round(case, number):
-    r=case['rounds'][number-1]
-    ev=[e for e in case['evidence'] if e['round']==number]
-    return {'number':number,'name':r['name'],'public':r['public'],'evidence':ev}
+    r=case['rounds'][number-1];ev=[e for e in case['evidence'] if e['round']==number]
+    return {'number':number,'name':r['name'],'public':r['public'],'gm':r.get('gm',''),'turns':r.get('turns',[]),'finish':r.get('finish',''),'evidence':ev}
