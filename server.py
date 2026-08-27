@@ -4,7 +4,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs,urlparse
 import qrcode
-from server_v2 import ensure_v2,start_case,state_v2,advance_v2,save_photo
+from server_v2 import ensure_v2,start_case,state_v2,advance_v2,save_photo,next_turn
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'party_game.db'));STATIC=BASE/'static'
 def now():return datetime.now(timezone.utc).isoformat()
 def cn():c=sqlite3.connect(DB,timeout=10);c.row_factory=sqlite3.Row;return c
@@ -22,10 +22,6 @@ def code5():
  while True:
   x=''.join(random.choice(chars) for _ in range(5))
   if not game(x):return x
-def stats(g):
- with cn() as c:
-  rows=c.execute('SELECT p.id,p.name,COUNT(v.id) n FROM players p LEFT JOIN votes v ON v.accused_player_id=p.id AND v.game_id=? AND v.round_no=4 WHERE p.game_id=? GROUP BY p.id',(g['id'],g['id'])).fetchall();total=c.execute('SELECT COUNT(*) n FROM votes WHERE game_id=? AND round_no=4',(g['id'],)).fetchone()['n'];correct=c.execute('SELECT COUNT(*) n FROM votes WHERE game_id=? AND round_no=4 AND accused_player_id=?',(g['id'],g['killer_player_id'])).fetchone()['n']
- return [{'id':r['id'],'name':r['name'],'votes':r['n']} for r in rows],total,correct
 class H(BaseHTTPRequestHandler):
  def J(self,x,s=200):
   b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -39,7 +35,7 @@ class H(BaseHTTPRequestHandler):
  def auth(self,g,d):return bool(d.get('host') and secrets.compare_digest(str(d['host']),g['host_token']))
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'version':'plottwist-2'})
+  if p=='/health':return self.J({'ok':True,'version':'plottwist-2-guided'})
   if p in ('/','/index.html'):return self.F(STATIC/'index.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/qr/'):
@@ -77,6 +73,9 @@ class H(BaseHTTPRequestHandler):
     if act=='start':
      if not self.auth(g,d):return self.J({'error':'forbidden'},403)
      start_case(g['id']);return self.J({'ok':True})
+    if act=='turn':
+     if not self.auth(g,d):return self.J({'error':'forbidden'},403)
+     return self.J(next_turn(g['id']))
     if act=='advance':
      if not self.auth(g,d):return self.J({'error':'forbidden'},403)
      return self.J(advance_v2(g['id']))
