@@ -1,10 +1,10 @@
-import json,os,sqlite3
+import base64,io,json,os,sqlite3
 from datetime import datetime,timezone
 from pathlib import Path
 from game_engine import build_case,public_round
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'party_game.db'))
 def now():return datetime.now(timezone.utc).isoformat()
-def cn():c=sqlite3.connect(DB,timeout=10);c.row_factory=sqlite3.Row;return c
+def cn():c=sqlite3.connect(DB,timeout=20);c.row_factory=sqlite3.Row;return c
 def ensure_v2():
  with cn() as c:
   cols={r['name'] for r in c.execute('PRAGMA table_info(games)')}
@@ -13,6 +13,21 @@ def ensure_v2():
   pcols={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for name,decl in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('ai_art_data',"TEXT DEFAULT ''")]:
    if name not in pcols:c.execute(f'ALTER TABLE players ADD COLUMN {name} {decl}')
+def portrait_prompt(role,mode,location):
+ mood={'The Culprit':'tense, enigmatic, morally ambiguous suspect','The Witness':'alert eyewitness who has seen something important','The Secret Keeper':'mysterious confidant protecting a dangerous secret'}.get(role,'mysterious participant')
+ genre={'murder':'modern cinematic murder mystery','heist':'stylish contemporary heist thriller','secrets':'prestige psychological mystery'}.get(mode,'cinematic mystery')
+ return f'''Transform the provided real person's photo into a premium fictional role-card portrait for a private party game. Preserve the person's recognizable identity, facial structure, age, skin tone, hairstyle and key facial features with high fidelity. They are playing {role}: {mood}. Genre: {genre}. Setting inspired by {location or 'an elegant interior'}. Photorealistic cinematic editorial portrait, dramatic practical lighting, shallow depth of field, sophisticated dark atmosphere, premium streaming-series key art, chest-up composition. Keep the face clearly visible and unobstructed. Change clothing/background/lighting to fit the role. No text, no letters, no logos, no captions, no weapons, no blood, no injury, no gore.'''
+def generate_portrait(data_url,role,mode,location):
+ key=os.getenv('OPENAI_API_KEY','').strip()
+ if not key or not data_url:return ''
+ try:
+  from openai import OpenAI
+  head,b64=data_url.split(',',1);raw=base64.b64decode(b64);ext='png' if 'png' in head else ('webp' if 'webp' in head else 'jpg');f=io.BytesIO(raw);f.name='player.'+ext
+  client=OpenAI(api_key=key,timeout=90.0);res=client.images.edit(model='gpt-image-1',image=f,prompt=portrait_prompt(role,mode,location),size='1024x1024',quality='medium',input_fidelity='high')
+  out=res.data[0].b64_json
+  return 'data:image/png;base64,'+out if out else ''
+ except Exception as e:
+  print('AI portrait generation failed:',type(e).__name__,str(e)[:300],flush=True);return ''
 def start_case(game_id):
  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(game_id,)).fetchone();players=c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(game_id,)).fetchall()
  if len(players)<2:raise ValueError('need_2_players')
@@ -21,6 +36,12 @@ def start_case(game_id):
   c.execute('DELETE FROM votes WHERE game_id=?',(game_id,));c.execute("UPDATE games SET status='playing',round_no=1,turn_index=0,killer_player_id=?,story_title=?,victim_name=?,case_json=?,phase_started_at=? WHERE id=?",(culprit['id'],case['title'],case['victim'],json.dumps(case,ensure_ascii=False),now(),game_id))
   for p in players:
    r=case['roles'][p['name']];c.execute('UPDATE players SET role_name=?,secret=?,objective=?,private_hint=? WHERE id=?',(r['role'],r['secret'],r['objective'],' '.join(r['knows']),p['id']))
+ # Generate after the game is committed. A failed/limited image API never blocks gameplay.
+ for p in players:
+  if not p['photo_data'] or not p['photo_consent']:continue
+  role=case['roles'][p['name']]['role'];art=generate_portrait(p['photo_data'],role,g['game_type'],g['location'])
+  if art:
+   with cn() as c:c.execute('UPDATE players SET ai_art_data=? WHERE id=?',(art,p['id']))
  return case
 def vote_snapshot(c,game_id,me_id=None):
  rows=c.execute('SELECT p.id,p.name,COUNT(v.id) votes FROM players p LEFT JOIN votes v ON v.game_id=? AND v.round_no=4 AND v.accused_player_id=p.id WHERE p.game_id=? GROUP BY p.id ORDER BY p.id',(game_id,game_id)).fetchall();total=c.execute('SELECT COUNT(*) n FROM votes WHERE game_id=? AND round_no=4',(game_id,)).fetchone()['n'];my=None
@@ -34,8 +55,7 @@ def state_v2(game_id,token=''):
  if me:out['me']={'id':me['id'],'name':me['name'],'has_photo':bool(me['photo_data']),'photo_data':me['photo_data'],'ai_art_data':me['ai_art_data']}
  if case and g['status']=='playing':out['round']=public_round(case,int(g['round_no']))
  if case and me:out['me'].update({'role':me['role_name'],'secret':me['secret'],'objective':me['objective'],'private_hint':me['private_hint']})
- if case and g['status']=='finished':
-  out['reveal']=case['reveal'];out['results']=results;out['correct_votes']=sum(r['votes'] for r in results if r['id']==g['killer_player_id']);out['culprit_id']=g['killer_player_id']
+ if case and g['status']=='finished':out['reveal']=case['reveal'];out['results']=results;out['correct_votes']=sum(r['votes'] for r in results if r['id']==g['killer_player_id']);out['culprit_id']=g['killer_player_id']
  return out
 def next_turn(game_id):
  with cn() as c:
