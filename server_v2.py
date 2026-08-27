@@ -12,7 +12,7 @@ def ensure_v2():
   for name,decl in [('case_json',"TEXT DEFAULT ''"),('phase_started_at',"TEXT DEFAULT ''")]:
    if name not in cols:c.execute(f'ALTER TABLE games ADD COLUMN {name} {decl}')
   pcols={r['name'] for r in c.execute('PRAGMA table_info(players)')}
-  for name,decl in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0')]:
+  for name,decl in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('ai_art_data',"TEXT DEFAULT ''")]:
    if name not in pcols:c.execute(f'ALTER TABLE players ADD COLUMN {name} {decl}')
 def start_case(game_id):
  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(game_id,)).fetchone();players=c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(game_id,)).fetchall()
@@ -27,9 +27,11 @@ def start_case(game_id):
 def state_v2(game_id,token=''):
  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(game_id,)).fetchone();players=c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(game_id,)).fetchall();me=c.execute('SELECT * FROM players WHERE game_id=? AND token=?',(game_id,token)).fetchone() if token else None
  case=json.loads(g['case_json']) if g['case_json'] else None
- out={'status':g['status'],'round_no':g['round_no'],'title':g['story_title'],'players':[{'id':p['id'],'name':p['name'],'has_photo':bool(p['photo_data'])} for p in players]}
+ out={'status':g['status'],'round_no':g['round_no'],'title':g['story_title'],'players':[{'id':p['id'],'name':p['name'],'has_photo':bool(p['photo_data']),'has_ai_art':bool(p['ai_art_data'])} for p in players]}
+ if me:
+  out['me']={'id':me['id'],'name':me['name'],'has_photo':bool(me['photo_data']),'photo_data':me['photo_data'],'ai_art_data':me['ai_art_data']}
  if case and g['status']=='playing':out['round']=public_round(case,int(g['round_no']))
- if case and me:out['me']={'role':me['role_name'],'secret':me['secret'],'objective':me['objective'],'private_hint':me['private_hint'],'photo_data':me['photo_data']}
+ if case and me:out['me'].update({'role':me['role_name'],'secret':me['secret'],'objective':me['objective'],'private_hint':me['private_hint']})
  if case and g['status']=='finished':out['reveal']=case['reveal']
  return out
 def advance_v2(game_id):
@@ -44,5 +46,5 @@ def save_photo(game_id,token,data_url,consent):
  with cn() as c:
   p=c.execute('SELECT id FROM players WHERE game_id=? AND token=?',(game_id,token)).fetchone()
   if not p:raise ValueError('player_not_found')
-  c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data_url,p['id']))
- return {'ok':True}
+  c.execute("UPDATE players SET photo_data=?,photo_consent=1,ai_art_data='' WHERE id=?",(data_url,p['id']))
+ return {'ok':True,'saved':True}
