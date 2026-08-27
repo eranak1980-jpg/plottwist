@@ -35,7 +35,7 @@ class H(BaseHTTPRequestHandler):
  def auth(self,g,d):return bool(d.get('host') and secrets.compare_digest(str(d['host']),g['host_token']))
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'version':'plottwist-2-guided'})
+  if p=='/health':return self.J({'ok':True,'version':'plottwist-2-recovery'})
   if p in ('/','/index.html'):return self.F(STATIC/'index.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/qr/'):
@@ -52,18 +52,19 @@ class H(BaseHTTPRequestHandler):
   if p=='/api/create':
    co=code5();ht=secrets.token_urlsafe(18);pt=secrets.token_urlsafe(18);name=clean(d.get('name'),40) or 'Host'
    with cn() as c:cur=c.execute('INSERT INTO games(code,host_token,group_name,location,inside_joke,game_type,created_at) VALUES(?,?,?,?,?,?,?)',(co,ht,clean(d.get('group_name'),80) or 'The group',clean(d.get('location'),80) or 'the living room',clean(d.get('inside_joke')),clean(d.get('game_type'),20) or 'murder',now()));c.execute('INSERT INTO players(game_id,name,token,joined_at) VALUES(?,?,?,?)',(cur.lastrowid,name,pt,now()))
-   return self.J({'code':co,'host':ht,'token':pt})
+   return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
    g=game(d.get('code'));name=clean(d.get('name'),40)
    if not g:return self.J({'error':'not_found'},404)
-   if g['status']!='lobby':return self.J({'error':'already_started'},400)
    if not name:return self.J({'error':'name_required'},400)
+   # Recovery: the same named player may reclaim their token even after the story starts.
+   with cn() as c:existing=c.execute('SELECT * FROM players WHERE game_id=? AND lower(name)=lower(?)',(g['id'],name)).fetchone()
+   if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
+   if g['status']!='lobby':return self.J({'error':'game_already_started_use_your_original_name'},400)
    if len(ps(g['id']))>=10:return self.J({'error':'room_full'},400)
    tok=secrets.token_urlsafe(18)
-   with cn() as c:
-    if c.execute('SELECT 1 FROM players WHERE game_id=? AND lower(name)=lower(?)',(g['id'],name)).fetchone():return self.J({'error':'name_taken'},400)
-    c.execute('INSERT INTO players(game_id,name,token,joined_at) VALUES(?,?,?,?)',(g['id'],name,tok,now()))
-   return self.J({'code':g['code'],'token':tok})
+   with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined_at) VALUES(?,?,?,?)',(g['id'],name,tok,now()))
+   return self.J({'code':g['code'],'token':tok,'name':name})
   a=p.strip('/').split('/')
   if len(a)==5 and a[:3]==['api','v2','game']:
    g=game(a[3]);act=a[4]
