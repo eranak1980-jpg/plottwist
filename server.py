@@ -58,6 +58,7 @@ def assign(g):
    if p['id']==killer['id']:r='The Killer' if g['game_type']=='murder' else 'The Culprit';s=f'You are responsible for what happened to {v}. Someone almost saw you near {place}.';o='Deflect suspicion and keep your story consistent.';h=f'Private clue: someone remembers seeing you near {place}.'
    else:r,s,o=roles[i%len(roles)];h=f'Private clue: the case references this group memory: "{j}". Ask who would know it and why.' if j else 'Private clue: a small personal detail matters more than it seems.'
    c.execute('UPDATE players SET role_name=?,secret=?,objective=?,private_hint=? WHERE id=?',(r,s,o,h,p['id']))
+ # Generate portraits after roles are committed. Failure never blocks gameplay.
  fresh=ps(g['id'])
  for p in fresh:
   if not p['photo_data'] or not p['photo_consent']:continue
@@ -89,7 +90,7 @@ class H(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'application/octet-stream');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'version':'chapter-back-fixed'})
+  if p=='/health':return self.J({'ok':True,'version':'photos-all-player-react'})
   if p in ('/','/index.html'):return self.F(STATIC/'index.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/qr/'):
@@ -126,4 +127,44 @@ class H(BaseHTTPRequestHandler):
   if len(a)!=4 or a[:2]!=['api','game']:return self.J({'error':'not_found'},404)
   g=game(a[2]);act=a[3]
   if not g:return self.J({'error':'not_found'},404)
-  if act in ('start','next','prev') and not(d.get
+  if act in ('start','next') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host_token'])):return self.J({'error':'forbidden'},403)
+  if act=='photo':
+   tok=d.get('token','');data=d.get('data_url','');consent=bool(d.get('consent'))
+   if not consent:return self.J({'error':'consent_required'},400)
+   if not isinstance(data,str) or not data.startswith('data:image/'):return self.J({'error':'invalid_image'},400)
+   if len(data)>1_500_000:return self.J({'error':'image_too_large'},400)
+   with cn() as c:
+    me=c.execute('SELECT id FROM players WHERE game_id=? AND token=?',(g['id'],tok)).fetchone()
+    if not me:return self.J({'error':'player_not_found'},400)
+    c.execute("UPDATE players SET photo_data=?,photo_consent=1,ai_art_data='' WHERE id=?",(data,me['id']))
+   return self.J({'ok':True,'saved':True})
+  if act=='start':
+   try:assign(g)
+   except ValueError:return self.J({'error':'need_2_players'},400)
+   with cn() as c:c.execute("UPDATE games SET status='playing',round_no=1,round_started_at=?,round_seconds=600 WHERE id=?",(now(),g['id']))
+   return self.J({'ok':True,'round_no':1,'status':'playing'})
+  if act=='next':
+   if g['status']!='playing':return self.J({'error':'not_playing'},409)
+   rn=int(g['round_no'])+1
+   with cn() as c:
+    if rn>4:c.execute("UPDATE games SET status='finished',round_started_at='' WHERE id=?",(g['id'],))
+    else:c.execute('UPDATE games SET round_no=?,round_started_at=?,round_seconds=600 WHERE id=?',(rn,now(),g['id']))
+   return self.J({'ok':True,'round_no':min(rn,4),'status':'finished' if rn>4 else 'playing'})
+  if act=='react':
+   s=clean(d.get('summary'),500);tok=d.get('token','')
+   if not s:return self.J({'error':'summary_required'},400)
+   with cn() as c:me=c.execute('SELECT * FROM players WHERE game_id=? AND token=?',(g['id'],tok)).fetchone()
+   if not me:return self.J({'error':'forbidden'},403)
+   r=f'{me["name"]} noticed: {s}. Everyone must now restate one checkable part of their timeline.'
+   with cn() as c:c.execute('INSERT INTO gm_events(game_id,round_no,response,created_at) VALUES(?,?,?,?)',(g['id'],g['round_no'],r,now()))
+   return self.J({'ok':True,'response':r})
+  if act=='vote':
+   if g['status']!='playing' or int(g['round_no'])!=4:return self.J({'error':'voting_not_open'},409)
+   with cn() as c:
+    v=c.execute('SELECT * FROM players WHERE game_id=? AND token=?',(g['id'],d.get('token',''))).fetchone();x=c.execute('SELECT * FROM players WHERE game_id=? AND id=?',(g['id'],int(d.get('accused_id',0)))).fetchone()
+    if not v or not x or v['id']==x['id']:return self.J({'error':'invalid_vote'},400)
+    c.execute('INSERT OR REPLACE INTO votes(game_id,round_no,voter_player_id,accused_player_id,created_at) VALUES(?,?,?,?,?)',(g['id'],4,v['id'],x['id'],now()))
+   return self.J({'ok':True})
+  return self.J({'error':'not_found'},404)
+ def log_message(self,*a):pass
+def run():init();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
