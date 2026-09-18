@@ -151,7 +151,18 @@ class H(BaseHTTPRequestHandler):
   g=game(a[1]);act=a[2]
   if not g:return self.J({'error':'not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
-  if act in ('start','next','hero','finalhero','skip') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act in ('start','next','hero','finalhero','skip','settings') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act=='settings':
+   if g['status']!='lobby':return self.J({'error':'already_started'},409)
+   ts=d.get('topics',[])
+   if not isinstance(ts,list):ts=[]
+   ts=[str(x)[:60] for x in ts[:12]]
+   ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180]
+   try:sp=max(1,min(3,int(d.get('spice',g['spice']) or 1)))
+   except:sp=int(g['spice'] or 1)
+   if sp==3 and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
+   with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,custom_questions=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,'[]',g['id']))
+   return self.J({'ok':True})
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
