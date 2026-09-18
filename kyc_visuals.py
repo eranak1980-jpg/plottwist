@@ -32,7 +32,7 @@ def generate_many(items,question,answer,focus,selected=''):
  try:
   from openai import OpenAI
   files=[_file(d,i) for i,(n,d) in enumerate(clean)]
-  r=OpenAI(api_key=key,timeout=120).images.edit(model='gpt-image-1',image=files,prompt=prompt_for(question,answer,[n for n,d in clean],focus,selected),size='1024x1024',quality='medium',input_fidelity='high')
+  r=OpenAI(api_key=key,timeout=120).images.edit(model='gpt-image-2',image=files,prompt=prompt_for(question,answer,[n for n,d in clean],focus,selected),size='1024x1024',quality='medium',input_fidelity='high')
   out=r.data[0].b64_json
   return 'data:image/png;base64,'+out if out else ''
  except Exception as e:
