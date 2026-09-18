@@ -107,9 +107,9 @@ class H(BaseHTTPRequestHandler):
    if not g:return self.J({'error':'not_found'},404)
    ps=players(g['id']);q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0];me=next((x for x in ps if x['token']==tok),None);typ,text,opts,sub=qdata(g,ps)
    with cn() as c:
-    gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
+    gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need;reveal=ready or g['status']=='finished'
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':TOTAL,'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data'])} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data'])} if sub else None,'type':typ,'question':text,'options':opts,'answer':g['answer'] if reveal else None,'answered':bool(g['answer']),'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'topics':topics(g),'spice':g['spice'],'context':g['custom_context']})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':TOTAL,'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data'])} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data'])} if sub else None,'type':typ,'question':text,'options':opts,'answer':g['answer'] if reveal else None,'answered':bool(g['answer']),'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':topics(g),'spice':g['spice'],'context':g['custom_context']})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -136,7 +136,7 @@ class H(BaseHTTPRequestHandler):
   g=game(a[1]);act=a[2]
   if not g:return self.J({'error':'not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
-  if act in ('start','next','hero','skip') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act in ('start','next','hero','finalhero','skip') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
@@ -166,6 +166,17 @@ class H(BaseHTTPRequestHandler):
    if guess not in opts:return self.J({'error':'invalid_guess'},400)
    with cn() as c:c.execute('INSERT OR REPLACE INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?)',(g['id'],g['round_no'],me['id'],guess))
    return self.J({'ok':True})
+  if act=='finalhero':
+   with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
+   if old:return self.J({'ok':True,'image':old['image_data']})
+   available=[p for p in ps if p['photo_data'] and p['photo_consent']]
+   if len(available)<2:return self.J({'error':'not_enough_photos'},409)
+   ranked=sorted(ps,key=lambda x:x['score'],reverse=True);winner=ranked[0]['name'];summary=', '.join([f"{p['name']} {p['score']} points" for p in ranked])
+   items=[(p['name'],p['photo_data']) for p in available]
+   art=generate_many(items,'Final cinematic ensemble poster for this friend group after a hilarious Know Your Crew game',f'Winner: {winner}. Scores: {summary}',winner,'')
+   if not art:return self.J({'error':'generation_failed'},502)
+   with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],99,art,now()))
+   return self.J({'ok':True,'image':art})
   if act=='hero':
    if not sub or not sub['photo_data'] or not sub['photo_consent']:return self.J({'error':'no_photo'},409)
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
