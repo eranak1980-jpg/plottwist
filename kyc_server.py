@@ -5,15 +5,16 @@ from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many
+from kyc_ai import generate_pack
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));STATIC=BASE/'static';TOTAL=12
 def now():return datetime.now(timezone.utc).isoformat()
 def cn():c=sqlite3.connect(DB,timeout=20);c.row_factory=sqlite3.Row;return c
 def init():
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
-  c.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));""")
+  c.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
-  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1')]:
+  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'")]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0')]:
@@ -38,10 +39,16 @@ def topics(g):
  for tag,keys in h.items():
   if any(k in txt for k in keys) and tag not in t:t.append(tag)
  return t
+def custom_questions(g):
+ try:
+  raw=json.loads(g['custom_questions'] or '[]')
+  return [(x[0],x[1],x[2]) for x in raw if isinstance(x,list) and len(x)==3]
+ except:return []
 def pool(g):
- x=list(GENERAL)
+ x=custom_questions(g)
  for t in topics(g):x+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:x+=SPICY
+ x+=GENERAL
  return x
 def smart_callback(g,ps,rn):
  m=mem(g)
@@ -110,6 +117,7 @@ class H(BaseHTTPRequestHandler):
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
    co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)))
+   if sp==3 and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:cur=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,created) VALUES(?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,now()));c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(cur.lastrowid,name,pt,now()))
    return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
@@ -139,8 +147,13 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True})
   if act=='start':
    if len(ps)<3:return self.J({'error':'need_3'},409)
-   with cn() as c:c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]' WHERE id=?",(g['id'],));c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
-   return self.J({'ok':True})
+   pack=custom_questions(g)
+   if not pack:
+    pack=generate_pack(topics(g),g['custom_context'],g['spice'])
+   with cn() as c:
+    c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]',custom_questions=? WHERE id=?",(json.dumps(pack,ensure_ascii=False),g['id']))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
+   return self.J({'ok':True,'tailored_questions':len(pack)})
   if act=='answer':
    me=next((x for x in ps if x['token']==d.get('token')),None);ans=str(d.get('answer',''))[:120]
    if not me or not sub or me['id']!=sub['id']:return self.J({'error':'subject_only'},403)
