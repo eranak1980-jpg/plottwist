@@ -2,7 +2,7 @@ import json,os
 def generate_pack(topics,context,spice):
  key=os.getenv('OPENAI_API_KEY','').strip()
  if not key:return []
- level={1:'Chill: playful and broadly comfortable',2:'Bold: personal, cheeky and revealing but not sexual unless the selected topics call for it',3:'No Filter: adults-only, cheeky questions may involve dating, attraction, sexuality and sex-life preferences, but never pressure anyone to disclose a specific sexual act or private history'}[int(spice)]
+ level={1:'Chill: playful and broadly comfortable',2:'Bold: personal, cheeky and revealing but not sexual unless the selected topics call for it',3:'No Filter: adults-only, bold, cheeky and genuinely spicy. Questions may involve dating apps, attraction, sexual chemistry, flirting, hookups, types, turn-ons/turn-offs and sex-life preferences, while staying non-graphic and never pressuring anyone to disclose a specific private sexual event'}[int(spice)]
  prompt=f"""You design premium social party-game questions for PlotTwist: Know Your Crew.
 All players are adults when spice=3.
 Selected topics: {', '.join(topics) if topics else 'mixed'}
@@ -18,6 +18,8 @@ For room questions the answer will be one of the other players.
 
 Editorial standard:
 - Questions should trigger laughter, surprise, debate, 'what?!', or affectionate teasing after reveal.
+- For Bold and especially No Filter, DO NOT sound polite, corporate, therapeutic or overly sanitized. Use natural contemporary Hebrew friends would actually say at a party. Answers should have attitude and personality.
+- In No Filter, prefer punchy choices such as confident/masculine energy, wild chemistry, sharp humor, irresistible flirting, spontaneous hookup energy, dating-app behavior, and playful adult dilemmas when relevant. Stay suggestive/non-graphic.
 - Use the host context when useful, but do not repeat it mechanically.
 - Concrete scenarios beat generic preferences.
 - Avoid trivia and boring favorites.
