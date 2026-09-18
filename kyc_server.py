@@ -43,14 +43,43 @@ def pool(g):
  for t in topics(g):x+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:x+=SPICY
  return x
-def qdata(g,ps):
- rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None;m=mem(g)
- if rn in (6,10) and m:
-  ev=m[-min(len(m),3)];old=ev.get('answer','משהו מפתיע');who=ev.get('subject','מישהו');text=f'PLOT TWIST: קודם {who} בחר/ה “{old}”. עכשיו זה מסתבך — מי בחבורה {sub["name"]} הכי ירצה/תרצה לידו/ה?'
+def smart_callback(g,ps,rn):
+ m=mem(g)
+ if rn not in (5,8,10) or len(m)<3:return None
+ names=[p['name'] for p in ps];room=[e for e in m if e.get('answer') in names]
+ if rn==10 and len(m)>=6:
+  for e1 in reversed(m):
+   for e2 in reversed(m):
+    if e1 is not e2 and e1.get('subject')==e2.get('subject'):
+     sub=next((p for p in ps if p['name']==e1.get('subject')),None);friend=e1.get('answer')
+     if sub and friend in names and friend!=sub['name']:
+      text=f'⚡ DOUBLE PLOT TWIST: קודם {sub["name"]} בחר/ה ב־{friend}, ובסיבוב אחר בחר/ה “{e2.get("answer")}”. עכשיו שני הדברים מתנגשים: למי בחבורה {sub["name"]} הכי סביר שיפנה/תפנה כדי להציל את המצב?'
+      return 'callback2',text,[p['name'] for p in ps if p['id']!=sub['id']],sub
+ if room:
+  e=room[-1];sub=next((p for p in ps if p['name']==e.get('subject')),None);friend=e.get('answer')
+  if sub and friend!=sub['name']:
+   text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה ב־{friend}. עכשיו התוכנית מסתבכת ברגע הכי לא מתאים. מי מהם {sub["name"]} חושב/ת שיישאר רגוע יותר?'
+   return 'callback',text,[sub['name'],friend],sub
+ e=m[-2];sub=next((p for p in ps if p['name']==e.get('subject')),None)
+ if sub:
+  text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה “{e.get("answer")}”. עכשיו זה באמת קורה. מי מהחבורה {sub["name"]} הכי ירצה/תרצה לצרף אליו/ה?'
   return 'callback',text,[p['name'] for p in ps if p['id']!=sub['id']],sub
- x=pool(g);q=x[(rn*3+len(topics(g))*2)%len(x)];typ,text,opts=q;text=text.format(s=sub['name'])
+ return None
+def qdata(g,ps):
+ rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None
+ cb=smart_callback(g,ps,rn)
+ if cb:return cb
+ focused=[]
+ for t in topics(g):focused+=TOPICS.get(t,[])
+ if int(g['spice'] or 1)>=3:focused+=SPICY
+ base=focused+GENERAL if focused else GENERAL
+ used={e.get('question','') for e in mem(g)}
+ seed=sum(ord(ch) for ch in str(g['code']))+rn*7
+ for step in range(len(base)):
+  q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
+  if formatted not in used:break
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
- return typ,text,list(opts),sub
+ return typ,formatted,list(opts),sub
 class H(BaseHTTPRequestHandler):
  def J(self,x,s=200):
   b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -86,8 +115,10 @@ class H(BaseHTTPRequestHandler):
   if p=='/api/join':
    g=game(d.get('code'));name=str(d.get('name','')).strip()[:40]
    if not g:return self.J({'error':'not_found'},404)
-   if g['status']!='lobby':return self.J({'error':'started'},409)
    if not name:return self.J({'error':'name_required'},400)
+   existing=next((x for x in players(g['id']) if x['name'].strip().lower()==name.lower()),None)
+   if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
+   if g['status']!='lobby':return self.J({'error':'started'},409)
    if len(players(g['id']))>=6:return self.J({'error':'full'},409)
    tok=secrets.token_urlsafe(16)
    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(g['id'],name,tok,now()))
@@ -97,7 +128,7 @@ class H(BaseHTTPRequestHandler):
   g=game(a[1]);act=a[2]
   if not g:return self.J({'error':'not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
-  if act in ('start','next','hero') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act in ('start','next','hero','skip') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
@@ -133,6 +164,13 @@ class H(BaseHTTPRequestHandler):
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
    return self.J({'ok':True,'image':art})
+  if act=='skip':
+   mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
+   with cn() as c:
+    c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
+    if rn>=TOTAL:c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+    else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
+   return self.J({'ok':True,'skipped':True})
   if act=='next':
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
