@@ -211,7 +211,8 @@ class H(BaseHTTPRequestHandler):
    selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
    ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
    items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
-   art=generate_many(items,text,g['answer'],sub['name'],selected)
+   visual_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer'])
+   art=generate_many(items,text,visual_answer,sub['name'],selected)
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
    return self.J({'ok':True,'image':art})
@@ -226,7 +227,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
     if not g['answer'] or len(gs)<len(ps)-1:return self.J({'error':'not_ready'},409)
-    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':g['answer'],'type':typ});rn=int(g['round_no'])+1
+    clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
     if rn>=TOTAL:c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    return self.J({'ok':True})
