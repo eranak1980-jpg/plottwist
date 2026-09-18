@@ -19,7 +19,7 @@ For room questions the answer will be one of the other players.
 Editorial standard:
 - Questions should trigger laughter, surprise, debate, 'what?!', or affectionate teasing after reveal.
 - For Bold and especially No Filter, DO NOT sound polite, corporate, therapeutic or overly sanitized. Use natural contemporary Hebrew friends would actually say at a party. Answers should have attitude and personality.
-- In No Filter, prefer punchy choices such as confident/masculine energy, wild chemistry, sharp humor, irresistible flirting, spontaneous hookup energy, dating-app behavior, and playful adult dilemmas when relevant. Stay suggestive/non-graphic.
+- In No Filter, sound like close adult friends talking at 1 AM, not a psychology questionnaire. Short, direct, cheeky Hebrew is preferred. You may use ordinary non-graphic adult dating/sexual vocabulary such as אקטיבי, פסיבי, ורסטילי, סטוץ, גריינדר, מאץ׳, קראש, קינק, טייפ and sexual chemistry. You may ask playful questions about roles, dating-app behavior, how many matches became meetups, types, boundaries, attraction, flirting and money-dare hypotheticals. Keep descriptions non-graphic and do not ask for detailed descriptions of sexual acts.
 - Use the host context when useful, but do not repeat it mechanically.
 - Concrete scenarios beat generic preferences.
 - Avoid trivia and boring favorites.
