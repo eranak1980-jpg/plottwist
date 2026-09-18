@@ -126,7 +126,10 @@ class H(BaseHTTPRequestHandler):
    if not sub or not sub['photo_data'] or not sub['photo_consent']:return self.J({'error':'no_photo'},409)
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
    if old:return self.J({'ok':True,'image':old['image_data']})
-   art=generate(sub['photo_data'],text,g['answer'],sub['name'])
+   featured=[{'name':sub['name'],'photo':sub['photo_data']}]
+   chosen=next((p for p in ps if p['name']==g['answer'] and p['id']!=sub['id'] and p['photo_data'] and p['photo_consent']),None)
+   if chosen:featured.append({'name':chosen['name'],'photo':chosen['photo_data']})
+   art=generate(featured,text,g['answer'])
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
    return self.J({'ok':True,'image':art})
