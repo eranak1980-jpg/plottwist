@@ -1,6 +1,15 @@
 import base64,io,os
 def _file(data_url,i):
  raw=base64.b64decode(data_url.split(',',1)[1]);f=io.BytesIO(raw);f.name=f'player_{i}.jpg';return f
+def _direction(q):
+ if 'אי בודד' in q:return 'Stage it on a gorgeous tropical island: featured people relaxed and smiling in the foreground; other friends can appear comically in a tiny boat offshore or reacting from the beach.'
+ if 'עסק' in q or '50%' in q:return 'Stage it as an exaggerated premium startup/business success scene: featured partners confidently together; other friends reacting playfully in the background.'
+ if 'Pride' in q or 'בר גאה' in q:return 'Stage it as a vibrant elegant LGBTQ+ nightlife or Pride travel scene with celebratory lighting and tasteful rainbow details; the whole crew can participate naturally.'
+ if 'דייט' in q or 'crush' in q or 'היכרויות' in q:return 'Stage it as a stylish romantic-comedy dating scene, with friends in the background reacting like a playful commentary squad.'
+ if '3 בלילה' in q:return 'Stage it as a funny late-night rescue situation at 3 AM, cinematic city lighting, with the trusted friend arriving to save the day and others reacting in the background.'
+ if 'טיול' in q or 'טיסה' in q or 'מדינה' in q:return 'Stage it as a polished travel-adventure comedy at an airport or striking destination, with luggage and expressive group reactions.'
+ if '50,000' in q or '100,000' in q:return 'Stage it as an extravagant but tasteful spending fantasy, with the main player enjoying the revealed choice and friends reacting around them.'
+ return 'Build a cinematic situation that makes the revealed choice immediately understandable from body language, setting, props and group reactions.'
 def prompt_for(question,answer,people,focus,selected=''):
  refs='; '.join([f'input image {i+1} = {name}' for i,name in enumerate(people)])
  composition=f'{focus} is the main character.'
@@ -13,7 +22,7 @@ Preserve each person's recognizable identity, face, approximate age and distinct
 Visually dramatize this exact game moment:
 Question: {question}
 Revealed answer: {answer}
-Make the scene coherent, witty, photorealistic, expressive, premium, and social-media-shareable. Use natural full-body or half-body composition, believable lighting and environment, and make the joke understandable visually without written text.
+Specific scene direction: {_direction(question)}\nMake the scene coherent, witty, photorealistic, expressive, premium, and social-media-shareable. Use natural full-body or half-body composition, believable lighting and environment, and make the joke understandable visually without written text.
 When the answer names a friend, clearly feature that friend with the main character. When the scenario is about the whole group, use all referenced friends. Background friends may look mock-jealous, surprised, abandoned, celebratory or amused only when that fits the reveal.
 No text, logos, nudity, sexual activity, violence, degrading humiliation, or hateful content. Dating, LGBTQ+, nightlife and adult themes must stay playful, celebratory and non-explicit."""
 def generate_many(items,question,answer,focus,selected=''):
