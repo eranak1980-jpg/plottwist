@@ -79,7 +79,7 @@ def qdata(g,ps):
  focused=[]
  for t in topics(g):focused+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:focused+=SPICY
- base=focused+GENERAL if focused else GENERAL
+ tailored=custom_questions(g);base=tailored+focused+GENERAL if (tailored or focused) else GENERAL
  used={e.get('question','') for e in mem(g)}
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
  for step in range(len(base)):
