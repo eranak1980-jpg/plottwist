@@ -18,7 +18,7 @@ When the answer names a friend, clearly feature that friend with the main charac
 No text, logos, nudity, sexual activity, violence, degrading humiliation, or hateful content. Dating, LGBTQ+, nightlife and adult themes must stay playful, celebratory and non-explicit."""
 def generate_many(items,question,answer,focus,selected=''):
  key=os.getenv('OPENAI_API_KEY','').strip()
- clean=[(n,d) for n,d in items if d][:5]
+ clean=[(n,d) for n,d in items if d][:6]
  if not key or not clean:return ''
  try:
   from openai import OpenAI
