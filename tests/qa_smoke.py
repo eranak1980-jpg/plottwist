@@ -25,7 +25,7 @@ for rn in range(8):
 
 # Memory-based PlotTwist should stay playable and produce concrete options.
 with k.cn() as c:
- c.execute("UPDATE games SET round_no=5,memory=? WHERE id=?",(json.dumps([
+ c.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
   {'round':0,'subject':'Eran','question':'עם מי Eran היה יוצא לחופשה?','answer':'Shai','type':'room'},
   {'round':1,'subject':'Shai','question':'מה Shai היה עושה בדייט?','answer':'זורם','type':'know'},
   {'round':2,'subject':'Avi','question':'מי Avi סומך עליו?','answer':'Eran','type':'room'}
