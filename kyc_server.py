@@ -194,7 +194,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
    return self.J({'ok':True})
   if act=='start':
-   if len(ps)<3:return self.J({'error':'need_3'},409)
+   if len(ps)<2:return self.J({'error':'need_2'},409)
    pack=custom_questions(g)
    if not pack:
     pack=generate_pack(topics(g),g['custom_context'],g['spice'])
