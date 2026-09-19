@@ -34,3 +34,16 @@ g=k.game('QA123');typ,text,opts,sub=k.qdata(g,ps)
 assert str(typ).startswith('callback') and len(opts)>=2
 assert k.interactive_prompt(g,typ,text,opts[0],sub) is not None
 print('QA_SMOKE_OK')
+
+# Two-player / couples mode: every round must remain guessable.
+with k.cn() as db:
+ cur=db.execute("INSERT INTO games(code,host,status,round_no,topics,custom_context,spice,custom_questions,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",('DUO12','host','playing',0,'[]','couple',1,'[]','',8,k.now()))
+ gid=cur.lastrowid
+ for name in ['Dana','Noa']:
+  db.execute("INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)",(gid,name,name.lower(),k.now()))
+duo=k.game('DUO12');dps=k.players(duo['id'])
+for rn in range(8):
+ with k.cn() as db:db.execute("UPDATE games SET round_no=? WHERE id=?",(rn,duo['id']))
+ duo=k.game('DUO12');typ,text,opts,sub=k.qdata(duo,dps)
+ assert sub is not None and text and len(opts)>=1, (rn,typ,text,opts)
+print('QA_DUO_OK')
