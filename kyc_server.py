@@ -80,15 +80,19 @@ def smart_callback(g,ps,rn):
   text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה “{old}”. עכשיו הבחירה הזאת חוזרת אליו/ה בזמן הכי לא מתאים. מה {sub["name"]} יעשה/תעשה?'
   return 'callback',text,['זורם/ת עד הסוף','מתחרט/ת ברגע האחרון','גורר/ת חבר איתו/ה','מאלתר/ת משהו אחר'],sub
  return None
-def interactive_prompt(typ,text,answer,sub):
+def interactive_prompt(g,typ,text,answer,sub):
  if not str(typ).startswith('callback') or not sub:return ''
+ names={p['name'] for p in players(g['id'])}
+ prior=next((e for e in reversed(mem(g)) if e.get('subject')==sub['name'] and e.get('answer') in names and e.get('answer')!=sub['name']),None)
+ partner=prior.get('answer') if prior else ''
+ if not partner:return ''
  q=(text or '').lower()
  if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה']):
-  return f'⚡ עכשיו באמת: {sub["name"]} ו־{answer} — יש לכם 20 שניות להסכים על יעד אחד שהייתם טסים אליו מחר. בלי לפתוח גוגל.'
+  return f'⚡ עכשיו באמת: {sub["name"]} ו־{partner} — יש לכם 20 שניות להסכים על יעד אחד שהייתם טסים אליו מחר. בלי לפתוח גוגל.'
  if 'דייט' in q:
-  return f'😈 עכשיו באמת: {sub["name"]} ו־{answer} — 15 שניות להמציא יחד את הודעת הפתיחה הכי גרועה שאפשר לשלוח בדייטינג.'
+  return f'😈 עכשיו באמת: {sub["name"]} ו־{partner} — 15 שניות להמציא יחד את הודעת הפתיחה הכי גרועה שאפשר לשלוח בדייטינג.'
  if any(k in q for k in ['50,000','כסף']):
-  return f'💸 עכשיו באמת: {sub["name"]} ו־{answer} — 20 שניות להסכים על דבר אחד שהייתם מבזבזים עליו את הכסף.'
+  return f'💸 עכשיו באמת: {sub["name"]} ו־{partner} — 20 שניות להסכים על דבר אחד שהייתם מבזבזים עליו את הכסף.'
  return ''
 def qdata(g,ps):
  rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None
@@ -142,7 +146,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need;reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':topics(g),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':topics(g),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
