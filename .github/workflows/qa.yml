@@ -1,0 +1,26 @@
+name: PlotTwist V2 QA
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python syntax
+        run: python -m py_compile kyc_server.py kyc_ai.py kyc_visuals.py kyc_questions.py
+      - name: Game engine smoke test
+        run: python tests/qa_smoke.py
+      - name: Browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('static/kyc.html').read_text()
+          js=s.split('<script>',1)[1].split('</script>',1)[0]
+          Path('/tmp/kyc.js').write_text(js)
+          PY
+          node --check /tmp/kyc.js
