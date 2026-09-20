@@ -140,9 +140,15 @@ class H(BaseHTTPRequestHandler):
     self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, max-age=3600');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
    except:return self.send_error(404)
   if p.startswith('/api/state/'):
-   g=game(p.split('/')[-1])
-   if not g:return self.J({'error':'not_found'},404)
-   ps=players(g['id']);q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0];me=next((x for x in ps if x['token']==tok),None);typ,text,opts,sub=qdata(g,ps)
+   q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0];g=game(p.split('/')[-1])
+   # Recover the canonical room from the opaque player token if the browser URL/local state
+   # carries a stale or malformed room code. This is especially important in mobile webviews.
+   if not g and tok:
+    with cn() as c:
+     row=c.execute('SELECT game_id FROM players WHERE token=?',(tok,)).fetchone()
+     if row:g=c.execute('SELECT * FROM games WHERE id=?',(row['game_id'],)).fetchone()
+   if not g:return self.J({'error':'room_not_found'},404)
+   ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None);typ,text,opts,sub=qdata(g,ps)
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need;reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
