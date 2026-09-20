@@ -6,13 +6,38 @@ from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many
 from kyc_ai import generate_pack
-BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));STATIC=BASE/'static';TOTAL=12
+BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12
 def now():return datetime.now(timezone.utc).isoformat()
-def cn():c=sqlite3.connect(DB,timeout=30);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=30000');return c
+class CompatConn:
+ def __init__(self,raw,pg=False):self.raw=raw;self.pg=pg
+ def __enter__(self):self.raw.__enter__();return self
+ def __exit__(self,*a):return self.raw.__exit__(*a)
+ def execute(self,sql,params=()):
+  if self.pg:
+   if sql.startswith('INSERT OR REPLACE INTO guesses'):
+    sql='INSERT INTO guesses(game_id,round_no,player_id,guess) VALUES(%s,%s,%s,%s) ON CONFLICT(game_id,round_no,player_id) DO UPDATE SET guess=EXCLUDED.guess'
+   elif sql.startswith('INSERT OR REPLACE INTO hero_scenes'):
+    sql='INSERT INTO hero_scenes(game_id,round_no,image_data,created) VALUES(%s,%s,%s,%s) ON CONFLICT(game_id,round_no) DO UPDATE SET image_data=EXCLUDED.image_data,created=EXCLUDED.created'
+   else:sql=sql.replace('?','%s')
+  return self.raw.execute(sql,params)
+def cn():
+ if USE_PG:
+  import psycopg
+  from psycopg.rows import dict_row
+  return CompatConn(psycopg.connect(DATABASE_URL,row_factory=dict_row,connect_timeout=10),True)
+ c=sqlite3.connect(DB,timeout=30);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=30000');return CompatConn(c,False)
 def init():
+ if USE_PG:
+  with cn() as c:
+   c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT)""")
+   c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0)""")
+   c.execute("""CREATE TABLE IF NOT EXISTS guesses(game_id BIGINT,round_no INTEGER,player_id BIGINT,guess TEXT,UNIQUE(game_id,round_no,player_id))""")
+   c.execute("""CREATE TABLE IF NOT EXISTS hero_scenes(game_id BIGINT,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no))""")
+   c.execute("""CREATE TABLE IF NOT EXISTS round_scores(game_id BIGINT,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
+  return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
-  c.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));""")
+  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
   for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
@@ -122,7 +147,7 @@ class H(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'text/plain');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals'})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','storage':'postgres' if USE_PG else 'sqlite-ephemeral'})
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/photo/'):
@@ -161,7 +186,10 @@ class H(BaseHTTPRequestHandler):
    if not name:return self.J({'error':'name_required'},400)
    co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)))
    if sp==3 and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
-   with cn() as c:cur=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now()));c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(cur.lastrowid,name,pt,now()))
+   with cn() as c:
+    if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).fetchone()['id']
+    else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).lastrowid
+    c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(gid,name,pt,now()))
    return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
    g=game(d.get('code'));name=str(d.get('name','')).strip()[:40]
