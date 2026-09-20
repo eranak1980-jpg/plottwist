@@ -8,7 +8,7 @@ from kyc_visuals import generate_many
 from kyc_ai import generate_pack
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));STATIC=BASE/'static';TOTAL=12
 def now():return datetime.now(timezone.utc).isoformat()
-def cn():c=sqlite3.connect(DB,timeout=20);c.row_factory=sqlite3.Row;return c
+def cn():c=sqlite3.connect(DB,timeout=30);c.row_factory=sqlite3.Row;c.execute('PRAGMA busy_timeout=30000');return c
 def init():
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
@@ -191,8 +191,11 @@ class H(BaseHTTPRequestHandler):
    if not d.get('consent'):return self.J({'error':'consent_required'},400)
    if not isinstance(data,str) or not data.startswith('data:image/'):return self.J({'error':'invalid_image'},400)
    if len(data)>5_600_000:return self.J({'error':'image_too_large'},400)
-   with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
-   return self.J({'ok':True})
+   try:
+    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
+   except sqlite3.Error as e:
+    print('photo save db error',type(e).__name__,str(e)[:200],flush=True);return self.J({'error':'photo_save_failed'},503)
+   return self.J({'ok':True,'bytes':len(data)})
   if act=='start':
    if len(ps)<2:return self.J({'error':'need_2'},409)
    pack=custom_questions(g)
