@@ -171,7 +171,15 @@ class H(BaseHTTPRequestHandler):
   a=p.strip('/').split('/')
   if len(a)!=3 or a[0]!='api':return self.J({'error':'not_found'},404)
   g=game(a[1]);act=a[2]
-  if not g:return self.J({'error':'not_found'},404)
+  # Player-token recovery: mobile browsers can keep an older room code in local state.
+  # For player actions, the opaque player token is the stronger session identifier.
+  if not g and act in ('photo','answer','guess'):
+   tok=str(d.get('token',''))
+   if tok:
+    with cn() as c:
+     row=c.execute('SELECT game_id FROM players WHERE token=?',(tok,)).fetchone()
+     if row:g=c.execute('SELECT * FROM games WHERE id=?',(row['game_id'],)).fetchone()
+  if not g:return self.J({'error':'room_not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
   if act in ('start','next','hero','finalhero','skip','settings') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act=='settings':
