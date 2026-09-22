@@ -18,6 +18,8 @@ For room questions the answer will be one of the other players.
 
 Editorial standard:
 - Every question must earn its place: it should trigger laughter, surprise, debate, 'what?!', affectionate teasing, or reveal something socially interesting.
+- Chill is NOT boring or formal. For family, parent/child, or low-spice groups, create funny everyday dilemmas, old memories, travel mishaps, money hypotheticals, family habits, embarrassing-but-safe moments, and “I can’t believe you picked that” choices. Keep it warm and safe, but still entertaining.
+- If the group has only two players, never create room questions. Every question must give the spotlight player 4 plausible choices so the other person has something real to predict.
 - Write like a sharp party-game writer, not a therapist, survey, HR form, or personality test. Short conversational Hebrew. Concrete scenes, awkward choices, funny stakes, and recognizable real-life moments.
 - Reject bland prompts such as generic 'what is most important to X', 'what would X prefer', or abstract self-development language unless the scenario makes it funny.
 - At least half the pack should contain a vivid setup, dilemma, social consequence, money/time pressure, travel/nightlife/date situation, or a choice involving another player.
@@ -25,7 +27,7 @@ Editorial standard:
 - In No Filter, sound like close adult friends talking at 1 AM, not a psychology questionnaire. Short, direct, cheeky Hebrew is preferred. You may use ordinary non-graphic adult dating/sexual vocabulary such as אקטיבי, פסיבי, ורסטילי, סטוץ, גריינדר, מאץ׳, קראש, קינק, טייפ and sexual chemistry. You may ask playful questions about sexual roles, adult kinks in ordinary non-graphic labels, dating-app behavior, how many matches became meetups, types, boundaries, attraction, flirting and money-dare hypotheticals. A small minority of No Filter questions should feel like a genuinely daring late-night adult friends game rather than a polite dating quiz. Keep wording short and non-graphic; never ask for detailed descriptions of an encounter.
 - Use the host context when useful, but do not repeat it mechanically.
 - Concrete scenarios beat generic preferences.
-- Avoid trivia and boring favorites.
+- Avoid trivia, boring favorites, generic personality labels, and survey-like wording. Never ask the same underlying scenario twice in one pack.
 - No politics, religion, health, trauma, illegal behavior, body/appearance ranking, outing, infidelity accusations, coercion, humiliation, or asking players to reveal a specific private sexual event.
 - LGBTQ+ and adult themes are welcome when requested. No Filter may be sexy and cheeky, but keep it consensual and game-friendly.
 - Do not invent facts about players.
