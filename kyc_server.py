@@ -136,9 +136,18 @@ def duo_callback(g,ps,rn):
  if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15) or len(m)<3:return None
  sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name']]
  if not mine:return None
- e=mine[0];old=e.get('answer')
- text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה “{old}”. עכשיו זה חוזר: מה הכי סביר שיקרה אם הבחירה הזאת פתאום הופכת לתוכנית אמיתית למחר?'
- return 'duo_callback',text,['זורם/ת מיד','מתחרט/ת ברגע האחרון','משדרג/ת את התוכנית','צריך/ה שכנוע רציני'],sub
+ used={e.get('question','') for e in m}
+ variants=[
+  ('⚡ PLOT TWIST: קודם {name} בחר/ה “{old}”. מחר הבחירה הזאת הופכת למציאות בלי אפשרות לבטל. מה הכי סביר ש־{name} יעשה/תעשה ראשון?',['זורם/ת מיד','מחפש/ת דרך לשדרג','נלחץ/ת אבל ממשיך/ה','מנסה לצרף מישהו']),
+  ('⚡ PLOT TWIST: זוכרים ש־{name} בחר/ה “{old}”? עכשיו זה קורה באמת — אבל יש טוויסט: צריך להחליט תוך 30 שניות. מה {name} עושה?',['אומר/ת כן לפני שחושב/ת','מבקש/ת עוד פרטים','משנה את הבחירה','הולך/ת על משהו אפילו יותר קיצוני']),
+  ('⚡ PLOT TWIST: הבחירה של {name} — “{old}” — חזרה אליו/ה כבומרנג. מה החלק שהכי סביר שיגרום לו/לה להגיד “רגע, לא לזה התכוונתי”?',['המחיר','הספונטניות','מי שמצטרף','זה שזה באמת קורה']),
+  ('⚡ PLOT TWIST: קודם “{old}” נשמע ל־{name} כמו רעיון טוב. עכשיו כל החבורה אומרת: יאללה, עושים את זה. מה התגובה?',['אני בפנים','רגע, צחקתי','רק אם משנים פרט אחד','מעלה את הרף עוד יותר'])
+ ]
+ seed=(rn+sum(ord(x) for x in str(g['code'])))%len(variants)
+ for off in range(len(variants)):
+  template,opts=variants[(seed+off)%len(variants)];text=template.format(name=sub['name'],old=mine[0].get('answer'))
+  if text not in used:return 'duo_callback',text,opts,sub
+ return None
 def qdata(g,ps):
  rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None
  if len(ps)==2:
