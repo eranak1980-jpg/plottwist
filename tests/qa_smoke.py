@@ -47,3 +47,19 @@ for rn in range(8):
  duo=k.game('DUO12');typ,text,opts,sub=k.qdata(duo,dps)
  assert sub is not None and text and len(opts)>=1, (rn,typ,text,opts)
 print('QA_DUO_OK')
+
+# Duo mode must never collapse into a one-option "who in the room" guess.
+duo=k.game('DUO12');dps=k.players(duo['id'])
+for rn in range(8):
+ with k.cn() as db:db.execute("UPDATE games SET round_no=? WHERE id=?",(rn,duo['id']))
+ duo=k.game('DUO12');typ,text,opts,sub=k.qdata(duo,dps)
+ assert typ!='room', (rn,typ,text,opts)
+ assert len(opts)>=3, (rn,typ,text,opts)
+print('QA_DUO_MECHANIC_OK')
+
+# Collaborative topic votes are included in the effective topic set.
+with k.cn() as db:
+ db.execute("INSERT INTO topic_votes(game_id,player_id,topic) VALUES(?,?,?)",(duo['id'],dps[1]['id'],'נסיעות'))
+duo=k.game('DUO12')
+assert 'נסיעות' in k.effective_topics(duo)
+print('QA_TOPIC_VOTES_OK')
