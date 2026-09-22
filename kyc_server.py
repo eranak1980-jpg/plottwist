@@ -34,10 +34,11 @@ def init():
    c.execute("""CREATE TABLE IF NOT EXISTS guesses(game_id BIGINT,round_no INTEGER,player_id BIGINT,guess TEXT,UNIQUE(game_id,round_no,player_id))""")
    c.execute("""CREATE TABLE IF NOT EXISTS hero_scenes(game_id BIGINT,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("""CREATE TABLE IF NOT EXISTS round_scores(game_id BIGINT,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
+   c.execute("""CREATE TABLE IF NOT EXISTS topic_votes(game_id BIGINT,player_id BIGINT,topic TEXT,UNIQUE(game_id,player_id,topic))""")
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
-  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));""")
+  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
   for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
@@ -64,6 +65,14 @@ def topics(g):
  for tag,keys in h.items():
   if any(k in txt for k in keys) and tag not in t:t.append(tag)
  return t
+def topic_vote_data(g):
+ with cn() as c:rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall()
+ return {r['topic']:r['n'] for r in rows}
+def effective_topics(g):
+ base=topics(g);votes=topic_vote_data(g)
+ for t,n in sorted(votes.items(),key=lambda x:(-x[1],x[0])):
+  if t not in base:base.append(t)
+ return base[:10]
 def custom_questions(g):
  try:
   raw=json.loads(g['custom_questions'] or '[]')
@@ -71,7 +80,7 @@ def custom_questions(g):
  except:return []
 def pool(g):
  x=custom_questions(g)
- for t in topics(g):x+=TOPICS.get(t,[])
+ for t in effective_topics(g):x+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:x+=SPICY
  x+=GENERAL
  return x
@@ -119,14 +128,29 @@ def interactive_prompt(g,typ,text,answer,sub):
  if any(k in q for k in ['50,000','כסף']):
   return f'💸 עכשיו באמת: {sub["name"]} ו־{partner} — 20 שניות להסכים על דבר אחד שהייתם מבזבזים עליו את הכסף.'
  return ''
+def duo_callback(g,ps,rn):
+ m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
+ if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15) or len(m)<3:return None
+ sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name']]
+ if not mine:return None
+ e=mine[0];old=e.get('answer')
+ text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה “{old}”. עכשיו זה חוזר: מה הכי סביר שיקרה אם הבחירה הזאת פתאום הופכת לתוכנית אמיתית למחר?'
+ return 'duo_callback',text,['זורם/ת מיד','מתחרט/ת ברגע האחרון','משדרג/ת את התוכנית','צריך/ה שכנוע רציני'],sub
 def qdata(g,ps):
  rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None
- cb=smart_callback(g,ps,rn)
- if cb:return cb
+ if len(ps)==2:
+  cb=duo_callback(g,ps,rn)
+  if cb:return cb
+ else:
+  cb=smart_callback(g,ps,rn)
+  if cb:return cb
  focused=[]
- for t in topics(g):focused+=TOPICS.get(t,[])
+ for t in effective_topics(g):focused+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:focused+=SPICY
  tailored=custom_questions(g);base=tailored+focused+GENERAL if (tailored or focused) else GENERAL
+ if len(ps)==2:
+  base=[q for q in base if q[0]!='room' and len(q[2])>=3]
+  if not base:base=[q for q in GENERAL if q[0]=='know']
  used={e.get('question','') for e in mem(g)}
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
  for step in range(len(base)):
@@ -147,7 +171,7 @@ class H(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'text/plain');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','storage':'postgres' if USE_PG else 'sqlite-ephemeral'})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/photo/'):
@@ -177,7 +201,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need;reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':topics(g),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':([r['topic'] for r in cn().__enter__().execute('SELECT topic FROM topic_votes WHERE game_id=? AND player_id=?',(g['id'],me['id'])).fetchall()] if me else []),'mode':'duo' if len(ps)==2 else 'group','spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
