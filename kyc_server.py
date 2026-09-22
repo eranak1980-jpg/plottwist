@@ -73,6 +73,9 @@ def effective_topics(g):
  for t,n in sorted(votes.items(),key=lambda x:(-x[1],x[0])):
   if t not in base:base.append(t)
  return base[:10]
+def player_topic_votes(gid,pid):
+ if not pid:return []
+ with cn() as c:return [r['topic'] for r in c.execute('SELECT topic FROM topic_votes WHERE game_id=? AND player_id=?',(gid,pid)).fetchall()]
 def custom_questions(g):
  try:
   raw=json.loads(g['custom_questions'] or '[]')
@@ -201,7 +204,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need;reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':([r['topic'] for r in cn().__enter__().execute('SELECT topic FROM topic_votes WHERE game_id=? AND player_id=?',(g['id'],me['id'])).fetchall()] if me else []),'mode':'duo' if len(ps)==2 else 'group','spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -262,11 +265,23 @@ class H(BaseHTTPRequestHandler):
    except sqlite3.Error as e:
     print('photo save db error',type(e).__name__,str(e)[:200],flush=True);return self.J({'error':'photo_save_failed'},503)
    return self.J({'ok':True,'bytes':len(data)})
+  if act=='topicvote':
+   me=next((x for x in ps if x['token']==d.get('token')),None);topic=str(d.get('topic','')).strip()[:80]
+   if not me or g['status']!='lobby':return self.J({'error':'not_allowed'},403)
+   if topic not in TOPICS:return self.J({'error':'invalid_topic'},400)
+   with cn() as c:
+    old=c.execute('SELECT 1 FROM topic_votes WHERE game_id=? AND player_id=? AND topic=?',(g['id'],me['id'],topic)).fetchone()
+    if old:c.execute('DELETE FROM topic_votes WHERE game_id=? AND player_id=? AND topic=?',(g['id'],me['id'],topic))
+    else:
+     count=c.execute('SELECT COUNT(*) AS n FROM topic_votes WHERE game_id=? AND player_id=?',(g['id'],me['id'])).fetchone()['n']
+     if count>=6:return self.J({'error':'max_topics'},409)
+     c.execute('INSERT INTO topic_votes(game_id,player_id,topic) VALUES(?,?,?)',(g['id'],me['id'],topic))
+   return self.J({'ok':True})
   if act=='start':
    if len(ps)<2:return self.J({'error':'need_2'},409)
    pack=custom_questions(g)
    if not pack:
-    pack=generate_pack(topics(g),g['custom_context'],g['spice'])
+    pack=generate_pack(effective_topics(g),g['custom_context'],g['spice'])
    with cn() as c:
     c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]',custom_questions=? WHERE id=?",(json.dumps(pack,ensure_ascii=False),g['id']))
     c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],))
