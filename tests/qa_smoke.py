@@ -63,3 +63,12 @@ with k.cn() as db:
 duo=k.game('DUO12')
 assert 'נסיעות' in k.effective_topics(duo)
 print('QA_TOPIC_VOTES_OK')
+
+# A played prompt must not repeat verbatim on the next generated round.
+g=k.game('QA123');ps=k.players(g['id'])
+typ,text,opts,sub=k.qdata(g,ps)
+with k.cn() as db:
+ db.execute("UPDATE games SET memory=? WHERE id=?",(json.dumps([{'round':0,'subject':sub['name'],'question':text,'answer':opts[0],'type':typ}],ensure_ascii=False),g['id']))
+g=k.game('QA123');typ2,text2,opts2,sub2=k.qdata(g,ps)
+assert text2!=text,(text,text2)
+print('QA_NO_REPEAT_OK')
