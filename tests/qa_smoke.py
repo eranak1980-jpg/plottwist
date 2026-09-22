@@ -72,3 +72,20 @@ with k.cn() as db:
 g=k.game('QA123');typ2,text2,opts2,sub2=k.qdata(g,ps)
 assert text2!=text,(text,text2)
 print('QA_NO_REPEAT_OK')
+
+# Duo callback prompts themselves must not repeat a previously played callback.
+duo=k.game('DUO12');dps=k.players(duo['id'])
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(4,json.dumps([
+  {'round':0,'subject':dps[0]['name'],'question':'Q0','answer':'טיסה וחופשה מטורפת','type':'know'},
+  {'round':1,'subject':dps[1]['name'],'question':'Q1','answer':'שבוע של בית ומנוחה','type':'know'},
+  {'round':2,'subject':dps[0]['name'],'question':'Q2','answer':'אי טרופי','type':'know'}
+ ],ensure_ascii=False),duo['id']))
+duo=k.game('DUO12');cb=k.duo_callback(duo,dps,4)
+if cb:
+ first=cb[1]
+ mm=k.mem(duo)+[{'round':4,'subject':cb[3]['name'],'question':first,'answer':cb[2][0],'type':'duo_callback'}]
+ with k.cn() as db:db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(6,json.dumps(mm,ensure_ascii=False),duo['id']))
+ duo=k.game('DUO12');cb2=k.duo_callback(duo,dps,6)
+ assert not cb2 or cb2[1]!=first,(first,cb2)
+print('QA_DUO_CALLBACK_NO_REPEAT_OK')
