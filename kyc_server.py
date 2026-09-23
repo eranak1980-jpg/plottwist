@@ -1,4 +1,5 @@
 import json,os,random,secrets,sqlite3,mimetypes
+from threading import Thread
 from datetime import datetime,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
@@ -181,6 +182,40 @@ def qdata(g,ps):
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
  elif typ=='know' and int(g['spice'] or 1)>=3 and '✏️ משהו אחר' not in opts:opts=list(opts)+['✏️ משהו אחר']
  return typ,formatted,list(opts),sub
+def _clean_pack(pack):
+ clean=[];seen=set()
+ for q in pack or []:
+  if not isinstance(q,(list,tuple)) or len(q)!=3:continue
+  key=str(q[1]).strip().lower()
+  if key and key not in seen:seen.add(key);clean.append(q)
+ return clean
+def prepare_pack_async(gid,ts,ctx,spice):
+ try:
+  pack=_clean_pack(generate_pack(ts,ctx,spice))
+  if not pack:return
+  with cn() as c:
+   g=c.execute('SELECT status FROM games WHERE id=?',(gid,)).fetchone()
+   if g and g['status']=='lobby':c.execute('UPDATE games SET custom_questions=? WHERE id=?',(json.dumps(pack,ensure_ascii=False),gid))
+ except Exception as e:print('async pack failed',type(e).__name__,str(e)[:200],flush=True)
+def hero_round(rn,total):
+ return rn in ([0,3,6] if total<=8 else [0,3,6,9,12,15])
+def prepare_hero_async(gid,rn):
+ try:
+  with cn() as c:
+   g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
+   if not g or int(g['round_no'])!=int(rn):return
+   old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(gid,rn)).fetchone()
+   if old:return
+  ps=players(gid);typ,text,opts,sub=qdata(g,ps)
+  if not sub or not sub['photo_data'] or not sub['photo_consent']:return
+  selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
+  ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
+  items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
+  visual_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer'])
+  art=generate_many(items,text,visual_answer,sub['name'],selected)
+  if art:
+   with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(gid,rn,art,now()))
+ except Exception as e:print('async hero failed',type(e).__name__,str(e)[:250],flush=True)
 class H(BaseHTTPRequestHandler):
  def J(self,x,s=200):
   b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -236,6 +271,7 @@ class H(BaseHTTPRequestHandler):
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).lastrowid
     c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(gid,name,pt,now()))
+   Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp),daemon=True).start()
    return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
    g=game(d.get('code'));name=str(d.get('name','')).strip()[:40]
@@ -298,16 +334,9 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True})
   if act=='start':
    if len(ps)<2:return self.J({'error':'need_2'},409)
-   pack=custom_questions(g)
-   if not pack:
-    pack=generate_pack(effective_topics(g),g['custom_context'],g['spice'])
-   # Remove duplicate question texts before a game starts.
-   clean=[];seen=set()
-   for q in pack:
-    if not isinstance(q,(list,tuple)) or len(q)!=3:continue
-    key=str(q[1]).strip().lower()
-    if key and key not in seen:seen.add(key);clean.append(q)
-   pack=clean
+   # Tailored AI questions are prepared while players are in the lobby.
+   # Starting the game must be instant; if the pack is not ready, curated questions are used.
+   pack=_clean_pack(custom_questions(g))
    with cn() as c:
     c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]',custom_questions=? WHERE id=?",(json.dumps(pack,ensure_ascii=False),g['id']))
     c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],))
@@ -321,6 +350,8 @@ class H(BaseHTTPRequestHandler):
     ans='OTHER::'+custom[:120]
    elif ans not in opts:return self.J({'error':'invalid_answer'},400)
    with cn() as c:c.execute('UPDATE games SET answer=? WHERE id=?',(ans,g['id']))
+   if os.getenv('OPENAI_API_KEY','').strip() and hero_round(int(g['round_no']),total_rounds(g)) and sub['photo_data'] and sub['photo_consent']:
+    Thread(target=prepare_hero_async,args=(g['id'],int(g['round_no'])),daemon=True).start()
    return self.J({'ok':True})
   if act=='guess':
    me=next((x for x in ps if x['token']==d.get('token')),None);guess=str(d.get('guess',''))[:120]
@@ -335,7 +366,8 @@ class H(BaseHTTPRequestHandler):
       for r in rows:
        if r['guess']==('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
       c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
-   return self.J({'ok':True})
+   fresh=players(g['id'])
+   return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='finalhero':
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
    if old:return self.J({'ok':True,'image':old['image_data']})
