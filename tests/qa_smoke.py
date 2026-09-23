@@ -89,3 +89,20 @@ if cb:
  duo=k.game('DUO12');cb2=k.duo_callback(duo,dps,6)
  assert not cb2 or cb2[1]!=first,(first,cb2)
 print('QA_DUO_CALLBACK_NO_REPEAT_OK')
+
+# Scoring must be idempotent and survive a state/reveal race.
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=0,answer='טיסה וחופשה מטורפת',memory='[]' WHERE id=?",(duo['id'],))
+ db.execute("DELETE FROM guesses WHERE game_id=?",(duo['id'],))
+ db.execute("DELETE FROM round_scores WHERE game_id=?",(duo['id'],))
+ db.execute("UPDATE players SET score=0 WHERE game_id=?",(duo['id'],))
+ # Round 0 subject is Dana, Noa predicts correctly.
+ db.execute("INSERT INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?)",(duo['id'],0,dps[1]['id'],'טיסה וחופשה מטורפת'))
+duo=k.game('DUO12');dps=k.players(duo['id'])
+changed=k.ensure_round_score(duo,dps,{dps[1]['id']:'טיסה וחופשה מטורפת'})
+assert changed
+after=k.players(duo['id'])
+assert next(p for p in after if p['id']==dps[1]['id'])['score']==1
+assert not k.ensure_round_score(duo,after,{dps[1]['id']:'טיסה וחופשה מטורפת'})
+assert next(p for p in k.players(duo['id']) if p['id']==dps[1]['id'])['score']==1
+print('QA_SCORING_OK')
