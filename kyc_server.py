@@ -198,7 +198,8 @@ def prepare_pack_async(gid,ts,ctx,spice):
    if g and g['status']=='lobby':c.execute('UPDATE games SET custom_questions=? WHERE id=?',(json.dumps(pack,ensure_ascii=False),gid))
  except Exception as e:print('async pack failed',type(e).__name__,str(e)[:200],flush=True)
 def hero_round(rn,total):
- return rn in ([0,3,6] if total<=8 else [0,3,6,9,12,15])
+ # AI Reveal is a core game mechanic: create one on every round when the spotlight player supplied a photo.
+ return 0 <= int(rn) < int(total)
 def prepare_hero_async(gid,rn):
  try:
   with cn() as c:
