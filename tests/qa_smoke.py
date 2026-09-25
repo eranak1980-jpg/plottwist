@@ -106,3 +106,36 @@ assert next(p for p in after if p['id']==dps[1]['id'])['score']==1
 assert not k.ensure_round_score(duo,after,{dps[1]['id']:'טיסה וחופשה מטורפת'})
 assert next(p for p in k.players(duo['id']) if p['id']==dps[1]['id'])['score']==1
 print('QA_SCORING_OK')
+
+
+# Canonical question keys must treat the same prompt for different crew members as a repeat.
+ps=k.players(g['id'])
+q1=k.question_key('מה Eran היה עושה אם הטיסה בוטלה?',ps)
+q2=k.question_key('מה Shai היה עושה אם הטיסה בוטלה?',ps)
+assert q1==q2,(q1,q2)
+print('QA_CANONICAL_REPEAT_KEY_OK')
+
+# Same-crew history persists across games and blocks previously used prompt keys.
+k.remember_question(ps,'מה Eran היה עושה אם הטיסה בוטלה?')
+assert q1 in k.past_question_keys(ps)
+print('QA_CREW_HISTORY_OK')
+
+# A dropped non-subject player must stop blocking round readiness without being removed mid-round.
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=0,answer=? WHERE id=?",('טיסה וחופשה מטורפת',g['id']))
+ db.execute("DELETE FROM guesses WHERE game_id=?",(g['id'],))
+ db.execute("DELETE FROM round_scores WHERE game_id=?",(g['id'],))
+ db.execute("UPDATE players SET active=1 WHERE game_id=?",(g['id'],))
+ps=k.players(g['id']);sub=ps[0];guessers=[p for p in ps if p['id']!=sub['id']]
+with k.cn() as db:
+ db.execute("UPDATE players SET active=0 WHERE id=?",(guessers[-1]['id'],))
+ db.execute("INSERT INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?)",(g['id'],0,guessers[0]['id'],'טיסה וחופשה מטורפת'))
+g2=k.game('QA123');ps2=k.players(g2['id'])
+assert len(k.live_players(g2['id']))==2
+assert k.ensure_round_score(g2,ps2,{guessers[0]['id']:'טיסה וחופשה מטורפת'})
+print('QA_DROPPED_PLAYER_DOES_NOT_BLOCK_OK')
+
+# Newly added themed categories are real server topics.
+for topic in ['מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף']:
+ assert topic in k.TOPICS and len(k.TOPICS[topic])>=6, topic
+print('QA_NEW_TOPIC_PACKS_OK')
