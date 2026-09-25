@@ -7,7 +7,7 @@ from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many
 from kyc_ai import generate_pack
-BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12
+BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
 def now():return datetime.now(timezone.utc).isoformat()
 class CompatConn:
  def __init__(self,raw,pg=False):self.raw=raw;self.pg=pg
@@ -77,6 +77,12 @@ def past_question_keys(ps):
  ck=crew_key(ps)
  if not ck:return set()
  with cn() as c:return {r['question_key'] for r in c.execute('SELECT question_key FROM question_history WHERE crew_key=?',(ck,)).fetchall()}
+def too_similar(qk,used):
+ if not qk:return True
+ try:
+  from difflib import SequenceMatcher
+  return any(qk==u or SequenceMatcher(None,qk,u).ratio()>=0.86 for u in used if u)
+ except:return qk in used
 def remember_question(ps,text):
  ck=crew_key(ps);qk=question_key(text,ps)
  if not ck or not qk:return
@@ -190,10 +196,12 @@ def qdata(g,ps):
  else:
   cb=smart_callback(g,ps,rn)
   if cb:return cb
- focused=[]
- for t in effective_topics(g):focused+=TOPICS.get(t,[])
+ selected=effective_topics(g);focused=[]
+ for t in selected:focused+=TOPICS.get(t,[])
  if int(g['spice'] or 1)>=3:focused+=SPICY
- tailored=custom_questions(g);base=tailored+focused+GENERAL if (tailored or focused) else GENERAL
+ tailored=custom_questions(g)
+ themed=len(selected)==1 and selected[0] in THEME_ONLY
+ base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
  if len(ps)==2:
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in GENERAL if q[0]=='know']
@@ -203,12 +211,12 @@ def qdata(g,ps):
  chosen=None
  for step in range(len(base)):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
-  if question_key(formatted,ps) not in used:chosen=(typ,formatted,opts);break
+  if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   fallback=[q for q in GENERAL if not (len(ps)==2 and q[0]=='room')]
   for q in fallback:
    typ,text,opts=q;formatted=text.format(s=sub['name'])
-   if question_key(formatted,ps) not in used:chosen=(typ,formatted,opts);break
+   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   # Last-resort variant keeps gameplay moving without repeating the exact prompt.
   typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
@@ -377,7 +385,7 @@ class H(BaseHTTPRequestHandler):
      if row:g=c.execute('SELECT * FROM games WHERE id=?',(row['game_id'],)).fetchone()
   if not g:return self.J({'error':'room_not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
-  if act in ('start','next','hero','finalhero','skip','settings','reopen','drop') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act in ('start','next','hero','finalhero','skip','settings','reopen','drop','replay') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act=='reopen':
    if g['status']!='playing' or int(g['round_no'])!=0 or mem(g):return self.J({'error':'too_late'},409)
    with cn() as c:
@@ -394,6 +402,15 @@ class H(BaseHTTPRequestHandler):
     if g['status']=='lobby':c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']))
     else:c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
    return self.J({'ok':True,'name':target['name']})
+  if act=='replay':
+   if g['status']!='finished':return self.J({'error':'not_finished'},409)
+   with cn() as c:
+    c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]' WHERE id=?",(g['id'],))
+    c.execute('UPDATE players SET score=0,active=1 WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],))
+   fresh=game(g['code'])
+   Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1)),daemon=True).start()
+   return self.J({'ok':True})
   if act=='settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    ts=d.get('topics',[])
