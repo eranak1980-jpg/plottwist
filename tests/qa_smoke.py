@@ -139,3 +139,10 @@ print('QA_DROPPED_PLAYER_DOES_NOT_BLOCK_OK')
 for topic in ['מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף']:
  assert topic in k.TOPICS and len(k.TOPICS[topic])>=6, topic
 print('QA_NEW_TOPIC_PACKS_OK')
+
+
+# Match Twist comparison: normalized equal answers should match; different destinations should not.
+assert k.match_equal(' Tokyo ', 'tokyo')
+assert k.match_equal('תאילנד!', 'תאילנד')
+assert not k.match_equal('טוקיו', 'פריז')
+print('QA_MATCH_TWIST_COMPARE_OK')
