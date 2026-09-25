@@ -415,7 +415,7 @@ class H(BaseHTTPRequestHandler):
   if act=='hero':
    if not sub or not sub['photo_data'] or not sub['photo_consent']:return self.J({'error':'no_photo'},409)
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
-   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no']))}
+   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no'])})
    selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
    ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
    items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
