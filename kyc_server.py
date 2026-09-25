@@ -281,12 +281,15 @@ def ensure_round_score(g,ps,guessed):
  active_guessers=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1 and (not sub or p['id']!=sub['id'])]
  if not g['answer'] or len([p for p in active_guessers if p['id'] in guessed])<len(active_guessers):return False
  with cn() as c:
-  already=c.execute('SELECT 1 FROM round_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
-  if already:return False
+  if USE_PG:
+   claimed=c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?) ON CONFLICT(game_id,round_no) DO NOTHING RETURNING round_no',(g['id'],g['round_no'],now())).fetchone()
+   if not claimed:return False
+  else:
+   cur=c.execute('INSERT OR IGNORE INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
+   if getattr(cur,'rowcount',0)!=1:return False
   actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer'])
   for pid,guess in guessed.items():
    if guess==actual:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
-  c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
  return True
 def decode_data_url(data):
  try:
@@ -494,11 +497,12 @@ class H(BaseHTTPRequestHandler):
     active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1}
     need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
     if g['answer'] and len([r for r in rows if r['player_id'] in active_ids])>=need:
-     already=c.execute('SELECT 1 FROM round_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
-     if not already:
+     if USE_PG:claimed=c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?) ON CONFLICT(game_id,round_no) DO NOTHING RETURNING round_no',(g['id'],g['round_no'],now())).fetchone()
+     else:
+      cur=c.execute('INSERT OR IGNORE INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()));claimed=True if getattr(cur,'rowcount',0)==1 else None
+     if claimed:
       for r in rows:
-       if r['guess']==('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
-      c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
+       if r['player_id'] in active_ids and r['guess']==('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
    fresh=players(g['id'])
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='matchanswer':
@@ -513,10 +517,13 @@ class H(BaseHTTPRequestHandler):
     rows=c.execute('SELECT player_id,answer FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();mp={r['player_id']:r['answer'] for r in rows}
     if all(pid in mp for pid in idata['player_ids']):
      matched=match_equal(mp[idata['player_ids'][0]],mp[idata['player_ids'][1]])
-     if matched:
+     if USE_PG:claimed=c.execute('INSERT INTO match_scores(game_id,round_no,matched,created) VALUES(?,?,?,?) ON CONFLICT(game_id,round_no) DO NOTHING RETURNING matched',(g['id'],g['round_no'],1 if matched else 0,now())).fetchone()
+     else:
+      cur=c.execute('INSERT OR IGNORE INTO match_scores(game_id,round_no,matched,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],1 if matched else 0,now()));claimed=True if getattr(cur,'rowcount',0)==1 else None
+     if claimed and matched:
       for pid in idata['player_ids']:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
-     c.execute('INSERT INTO match_scores(game_id,round_no,matched,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],1 if matched else 0,now()))
-     return self.J({'ok':True,'ready':True,'matched':matched})
+     final=c.execute('SELECT matched FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
+     return self.J({'ok':True,'ready':True,'matched':bool(final['matched']) if final else matched})
    return self.J({'ok':True,'ready':False})
   if act=='finalhero':
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
