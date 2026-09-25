@@ -164,7 +164,7 @@ def interactive_match_data(g,typ,text,sub):
  ps=players(g['id']);by_name={p['name']:p for p in ps}
  prior=next((e for e in reversed(mem(g)) if e.get('subject')==sub['name'] and e.get('answer') in by_name and e.get('answer')!=sub['name']),None)
  partner=by_name.get(prior.get('answer')) if prior else None
- if not partner:return None
+ if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1 or int(partner['active'] if partner['active'] is not None else 1)!=1:return None
  q=(text or '').lower()
  if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה']):
   prompt=f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.'
@@ -559,11 +559,13 @@ class H(BaseHTTPRequestHandler):
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    return self.J({'ok':True,'skipped':True})
   if act=='next':
+   idata=interactive_match_data(g,typ,text,sub)
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
     active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1}
     need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
     if not g['answer'] or len([r for r in gs if r['player_id'] in active_ids])<need:return self.J({'error':'not_ready'},409)
+    if idata and not c.execute('SELECT 1 FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone():return self.J({'error':'match_not_ready'},409)
     clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
