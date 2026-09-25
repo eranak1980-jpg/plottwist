@@ -506,11 +506,11 @@ class H(BaseHTTPRequestHandler):
     need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
     if not g['answer'] or len([r for r in gs if r['player_id'] in active_ids])<need:return self.J({'error':'not_ready'},409)
     clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
-    remember_question(ps,text)
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
     if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
+   remember_question(ps,text)
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
