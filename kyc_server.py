@@ -31,25 +31,58 @@ def init():
  if USE_PG:
   with cn() as c:
    c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT)""")
-   c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0)""")
+   c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0,active INTEGER DEFAULT 1,last_seen TEXT DEFAULT '')""")
+   c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1")
+   c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_seen TEXT DEFAULT ''")
    c.execute("""CREATE TABLE IF NOT EXISTS guesses(game_id BIGINT,round_no INTEGER,player_id BIGINT,guess TEXT,UNIQUE(game_id,round_no,player_id))""")
    c.execute("""CREATE TABLE IF NOT EXISTS hero_scenes(game_id BIGINT,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("""CREATE TABLE IF NOT EXISTS round_scores(game_id BIGINT,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("""CREATE TABLE IF NOT EXISTS topic_votes(game_id BIGINT,player_id BIGINT,topic TEXT,UNIQUE(game_id,player_id,topic))""")
+   c.execute("""CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key))""")
+   c.execute("DELETE FROM players a USING players b WHERE a.game_id=b.game_id AND LOWER(TRIM(a.name))=LOWER(TRIM(b.name)) AND a.id>b.id")
+   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
-  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));""")
+  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key));""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
   for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
-  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0')]:
+  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
+  c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
+  c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
 def game(code):
  with cn() as c:return c.execute('SELECT * FROM games WHERE code=?',(str(code or '').upper(),)).fetchone()
 def players(gid):
  with cn() as c:return c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(gid,)).fetchall()
+def live_players(gid):
+ return [p for p in players(gid) if int(p['active'] if p['active'] is not None else 1)==1]
+def _norm_name(x):
+ return ' '.join(str(x or '').strip().lower().split())
+def crew_key(ps):
+ import hashlib
+ names=sorted(_norm_name(p['name']) for p in ps if int(p['active'] if p['active'] is not None else 1)==1)
+ return hashlib.sha256('|'.join(names).encode()).hexdigest()[:24] if names else ''
+def question_key(text,ps):
+ import re
+ x=str(text or '').lower()
+ for p in ps:
+  n=_norm_name(p['name'])
+  if n:x=x.replace(n,'{s}')
+ x=re.sub(r'[^\w\u0590-\u05ff{}]+',' ',x,flags=re.UNICODE)
+ return ' '.join(x.split())
+def past_question_keys(ps):
+ ck=crew_key(ps)
+ if not ck:return set()
+ with cn() as c:return {r['question_key'] for r in c.execute('SELECT question_key FROM question_history WHERE crew_key=?',(ck,)).fetchall()}
+def remember_question(ps,text):
+ ck=crew_key(ps);qk=question_key(text,ps)
+ if not ck or not qk:return
+ with cn() as c:
+  if USE_PG:c.execute('INSERT INTO question_history(crew_key,question_key,question,used) VALUES(?,?,?,?) ON CONFLICT(crew_key,question_key) DO UPDATE SET used=EXCLUDED.used',(ck,qk,str(text)[:500],now()))
+  else:c.execute('INSERT OR REPLACE INTO question_history(crew_key,question_key,question,used) VALUES(?,?,?,?)',(ck,qk,str(text)[:500],now()))
 def code5():
  chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
  while True:
@@ -164,17 +197,18 @@ def qdata(g,ps):
  if len(ps)==2:
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in GENERAL if q[0]=='know']
- used={e.get('question','') for e in mem(g)}
+ used={question_key(e.get('question',''),ps) for e in mem(g)}
+ used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
  chosen=None
  for step in range(len(base)):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
-  if formatted not in used:chosen=(typ,formatted,opts);break
+  if question_key(formatted,ps) not in used:chosen=(typ,formatted,opts);break
  if chosen is None:
   fallback=[q for q in GENERAL if not (len(ps)==2 and q[0]=='room')]
   for q in fallback:
    typ,text,opts=q;formatted=text.format(s=sub['name'])
-   if formatted not in used:chosen=(typ,formatted,opts);break
+   if question_key(formatted,ps) not in used:chosen=(typ,formatted,opts);break
  if chosen is None:
   # Last-resort variant keeps gameplay moving without repeating the exact prompt.
   typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
@@ -218,7 +252,9 @@ def prepare_hero_async(gid,rn):
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(gid,rn,art,now()))
  except Exception as e:print('async hero failed',type(e).__name__,str(e)[:250],flush=True)
 def ensure_round_score(g,ps,guessed):
- if not g['answer'] or len(guessed)<max(0,len(ps)-1):return False
+ sub=ps[int(g['round_no'])%len(ps)] if ps else None
+ active_guessers=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1 and (not sub or p['id']!=sub['id'])]
+ if not g['answer'] or len([p for p in active_guessers if p['id'] in guessed])<len(active_guessers):return False
  with cn() as c:
   already=c.execute('SELECT 1 FROM round_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
   if already:return False
@@ -285,13 +321,17 @@ class H(BaseHTTPRequestHandler):
      if row:g=c.execute('SELECT * FROM games WHERE id=?',(row['game_id'],)).fetchone()
    if not g:return self.J({'error':'room_not_found'},404)
    ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None);typ,text,opts,sub=qdata(g,ps)
+   if me:
+    try:
+     with cn() as c:c.execute('UPDATE players SET last_seen=? WHERE id=?',(now(),me['id']))
+    except:pass
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
-   guessed={r['player_id']:r['guess'] for r in gs};need=max(0,len(ps)-1);ready=bool(g['answer']) and len(guessed)>=need
+   guessed={r['player_id']:r['guess'] for r in gs};active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);ready=bool(g['answer']) and len([pid for pid in guessed if pid in active_ids and (not sub or pid!=sub['id'])])>=need
    if ready and ensure_round_score(g,ps,guessed):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
    reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] not in guessed],'reveal':reveal,'hero':('/api/hero-image/'+g['code']+'/'+str(g['round_no'])) if hero and reveal else None,'final_hero':('/api/hero-image/'+g['code']+'/99') if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'hero':('/api/hero-image/'+g['code']+'/'+str(g['round_no'])) if hero and reveal else None,'final_hero':('/api/hero-image/'+g['code']+'/99') if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g)),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -310,12 +350,19 @@ class H(BaseHTTPRequestHandler):
    g=game(d.get('code'));name=str(d.get('name','')).strip()[:40]
    if not g:return self.J({'error':'not_found'},404)
    if not name:return self.J({'error':'name_required'},400)
-   existing=next((x for x in players(g['id']) if x['name'].strip().lower()==name.lower()),None)
-   if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
+   existing=next((x for x in players(g['id']) if _norm_name(x['name'])==_norm_name(name)),None)
+   if existing:
+    with cn() as c:c.execute('UPDATE players SET active=1,last_seen=? WHERE id=?',(now(),existing['id']))
+    return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
    if g['status']!='lobby':return self.J({'error':'started'},409)
-   if len(players(g['id']))>=6:return self.J({'error':'full'},409)
+   if len(live_players(g['id']))>=6:return self.J({'error':'full'},409)
    tok=secrets.token_urlsafe(16)
-   with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(g['id'],name,tok,now()))
+   try:
+    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen) VALUES(?,?,?,?,1,?)',(g['id'],name,tok,now(),now()))
+   except Exception:
+    existing=next((x for x in players(g['id']) if _norm_name(x['name'])==_norm_name(name)),None)
+    if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
+    raise
    return self.J({'code':g['code'],'token':tok,'name':name})
   a=p.strip('/').split('/')
   if len(a)!=3 or a[0]!='api':return self.J({'error':'not_found'},404)
@@ -330,7 +377,23 @@ class H(BaseHTTPRequestHandler):
      if row:g=c.execute('SELECT * FROM games WHERE id=?',(row['game_id'],)).fetchone()
   if not g:return self.J({'error':'room_not_found'},404)
   ps=players(g['id']);typ,text,opts,sub=qdata(g,ps)
-  if act in ('start','next','hero','finalhero','skip','settings') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act in ('start','next','hero','finalhero','skip','settings','reopen','drop') and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+  if act=='reopen':
+   if g['status']!='playing' or int(g['round_no'])!=0 or mem(g):return self.J({'error':'too_late'},409)
+   with cn() as c:
+    c.execute("UPDATE games SET status='lobby',round_no=0,answer='' WHERE id=?",(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
+   return self.J({'ok':True})
+  if act=='drop':
+   try:pid=int(d.get('player_id',0))
+   except:return self.J({'error':'invalid_player'},400)
+   target=next((x for x in ps if x['id']==pid),None)
+   if not target:return self.J({'error':'player_not_found'},404)
+   if len([x for x in ps if int(x['active'] if x['active'] is not None else 1)==1])<=2:return self.J({'error':'need_2'},409)
+   with cn() as c:
+    if g['status']=='lobby':c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']))
+    else:c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
+   return self.J({'ok':True,'name':target['name']})
   if act=='settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    ts=d.get('topics',[])
@@ -366,7 +429,7 @@ class H(BaseHTTPRequestHandler):
      c.execute('INSERT INTO topic_votes(game_id,player_id,topic) VALUES(?,?,?)',(g['id'],me['id'],topic))
    return self.J({'ok':True})
   if act=='start':
-   if len(ps)<2:return self.J({'error':'need_2'},409)
+   if len(live_players(g['id']))<2:return self.J({'error':'need_2'},409)
    # Tailored AI questions are prepared while players are in the lobby.
    # Starting the game must be instant; if the pack is not ready, curated questions are used.
    pack=_clean_pack(custom_questions(g))
@@ -393,7 +456,9 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     c.execute('INSERT OR REPLACE INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?)',(g['id'],g['round_no'],me['id'],guess))
     rows=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
-    if g['answer'] and len(rows)>=len(ps)-1:
+    active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1}
+    need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
+    if g['answer'] and len([r for r in rows if r['player_id'] in active_ids])>=need:
      already=c.execute('SELECT 1 FROM round_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
      if not already:
       for r in rows:
@@ -426,17 +491,25 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no'])})
   if act=='skip':
    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
+   remember_question(ps,text)
    with cn() as c:
     c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
-    if rn>=total_rounds(g):c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+    c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
+    remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
+    if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    return self.J({'ok':True,'skipped':True})
   if act=='next':
    with cn() as c:
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
-    if not g['answer'] or len(gs)<len(ps)-1:return self.J({'error':'not_ready'},409)
+    active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1}
+    need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
+    if not g['answer'] or len([r for r in gs if r['player_id'] in active_ids])<need:return self.J({'error':'not_ready'},409)
     clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
-    if rn>=total_rounds(g):c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+    remember_question(ps,text)
+    c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
+    remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
+    if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
