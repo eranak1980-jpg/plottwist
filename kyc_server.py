@@ -227,6 +227,13 @@ def ensure_round_score(g,ps,guessed):
    if guess==actual:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
   c.execute('INSERT INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
  return True
+def decode_data_url(data):
+ try:
+  import base64
+  head,payload=str(data).split(',',1)
+  mime=head.split(';')[0].split(':',1)[1]
+  return mime,base64.b64decode(payload)
+ except:return None,None
 class H(BaseHTTPRequestHandler):
  def J(self,x,s=200):
   b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -256,6 +263,18 @@ class H(BaseHTTPRequestHandler):
     head,data=pl['photo_data'].split(',',1);raw=base64.b64decode(data);mime=head.split(';')[0].split(':',1)[1]
     self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, max-age=3600');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
    except:return self.send_error(404)
+  if p.startswith('/api/hero-image/'):
+   a=p.strip('/').split('/')
+   if len(a)!=4:return self.send_error(404)
+   g=game(a[2])
+   if not g:return self.send_error(404)
+   try:rn=int(a[3])
+   except:return self.send_error(404)
+   with cn() as c:row=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],rn)).fetchone()
+   if not row or not row['image_data']:return self.send_error(404)
+   mime,raw=decode_data_url(row['image_data'])
+   if not raw:return self.send_error(404)
+   self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control','public, max-age=86400, immutable');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
   if p.startswith('/api/state/'):
    q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0];g=game(p.split('/')[-1])
    # Recover the canonical room from the opaque player token if the browser URL/local state
@@ -272,7 +291,7 @@ class H(BaseHTTPRequestHandler):
    if ready and ensure_round_score(g,ps,guessed):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
    reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] not in guessed],'reveal':reveal,'hero':hero['image_data'] if hero and reveal else None,'final_hero':finalhero['image_data'] if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':bool(host and secrets.compare_digest(host,g['host'])),'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] not in guessed],'reveal':reveal,'hero':('/api/hero-image/'+g['code']+'/'+str(g['round_no'])) if hero and reveal else None,'final_hero':('/api/hero-image/'+g['code']+'/99') if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -384,7 +403,7 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='finalhero':
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
-   if old:return self.J({'ok':True,'image':old['image_data']})
+   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/99'})
    available=[p for p in ps if p['photo_data'] and p['photo_consent']]
    if len(available)<2:return self.J({'error':'not_enough_photos'},409)
    ranked=sorted(ps,key=lambda x:x['score'],reverse=True);winner=ranked[0]['name'];summary=', '.join([f"{p['name']} {p['score']} points" for p in ranked])
@@ -392,11 +411,11 @@ class H(BaseHTTPRequestHandler):
    prize=g['prize'] or 'bragging rights as the friend who knows the crew best';art=generate_many(items,'Final cinematic ensemble poster for this friend group after a hilarious Know Your Crew game. The winner also receives this playful prize: '+prize,f'Winner: {winner}. Prize: {prize}. Scores: {summary}',winner,'')
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],99,art,now()))
-   return self.J({'ok':True,'image':art})
+   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/99'})
   if act=='hero':
    if not sub or not sub['photo_data'] or not sub['photo_consent']:return self.J({'error':'no_photo'},409)
    with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
-   if old:return self.J({'ok':True,'image':old['image_data']})
+   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no']))}
    selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
    ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
    items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
@@ -404,7 +423,7 @@ class H(BaseHTTPRequestHandler):
    art=generate_many(items,text,visual_answer,sub['name'],selected)
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
-   return self.J({'ok':True,'image':art})
+   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no']))}
   if act=='skip':
    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
    with cn() as c:
