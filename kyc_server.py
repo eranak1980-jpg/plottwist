@@ -423,7 +423,7 @@ class H(BaseHTTPRequestHandler):
    art=generate_many(items,text,visual_answer,sub['name'],selected)
    if not art:return self.J({'error':'generation_failed'},502)
    with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
-   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no']))}
+   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no'])}
   if act=='skip':
    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
    with cn() as c:
