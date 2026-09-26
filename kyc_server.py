@@ -365,9 +365,12 @@ def prepare_hero_async(gid,rn,expected_run=None):
  elif g['status']!='playing' or int(g['round_no'])!=int(rn) or not g['answer']:return 'not_ready'
  ps=players(gid)
  if not final:
+  # Start generation as soon as the spotlight player's secret answer exists.
+  # Image generation takes tens of seconds, so waiting for every prediction means
+  # the Reveal is usually over before the image is ready. Guesses are not needed
+  # to build the visual payload and remain private from the image prompt.
   sub=ps[int(rn)%len(ps)] if ps else None
-  with cn() as c:guessed={r['player_id'] for r in c.execute('SELECT player_id FROM guesses WHERE game_id=? AND round_no=?',(gid,rn)).fetchall()}
-  if any(p['id'] not in guessed for p in ps if p['active'] and sub and p['id']!=sub['id']):return 'not_ready'
+  if not sub:return 'not_ready'
  if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
  payload=image_payload(g,ps,final)
  if not payload:return 'no_photo'
