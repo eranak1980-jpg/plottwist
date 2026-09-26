@@ -82,11 +82,11 @@ class PipelineTests(unittest.TestCase):
     def post(self,action,data,expect=200):return request(f'/api/{self.code}/{action}',data,expect)
     def state(self):return request(f'/api/state/{self.code}?token={self.tokens["Alice"]}&host={self.host}')
 
-    def reveal(self, st=None):
+    def reveal(self, st=None, expect_start=True):
         st=st or self.state(); answer=st['options'][0]
         self.post('answer',{'token':self.tokens[st['subject']['name']],'answer':answer})
         # Start AI work during the prediction window so Reveal does not pay the full provider latency.
-        if st['subject']['has_photo']:
+        if expect_start and st['subject']['has_photo']:
             self.assertTrue(self.entered.wait(1), 'image generation should start after the secret answer')
         for name,token in self.tokens.items():
             if name!=st['subject']['name']:self.post('guess',{'token':token,'guess':answer})
@@ -209,7 +209,7 @@ class PipelineTests(unittest.TestCase):
     def test_queued_restart_recovery_claims_once(self):
         self.room()
         with patch.object(jobs.POOL,'submit'):
-            self.reveal()
+            self.reveal(expect_start=False)
         self.assertEqual(self.calls,[])
         self.assertEqual(self.state()['hero_status'],'queued')
         jobs.recover(k.cn,k.generate_many);jobs.recover(k.cn,k.generate_many)
@@ -219,7 +219,7 @@ class PipelineTests(unittest.TestCase):
     def test_storage_retry_retains_generated_bytes(self):
         self.room()
         with patch.object(jobs.POOL,'submit'):
-            self.reveal()
+            self.reveal(expect_start=False)
         with k.cn() as c:
             row=c.execute('SELECT * FROM image_jobs WHERE game_id=?',(self.g['id'],)).fetchone()
         original=k.cn;inserts=[]
