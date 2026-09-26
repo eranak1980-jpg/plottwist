@@ -560,7 +560,7 @@ class H(BaseHTTPRequestHandler):
    if not me or not sub or me['id']!=sub['id']:return self.J({'error':'subject_only'},403)
    if ans.startswith('OTHER::'):
     custom=ans[7:].strip()
-    if '✏️ משהו אחר' not in opts or len(custom)<1:return self.J({'error':'invalid_answer'},400)
+    if other_label(game_language(g)) not in opts or len(custom)<1:return self.J({'error':'invalid_answer'},400)
     ans='OTHER::'+custom[:120]
    elif ans not in opts:return self.J({'error':'invalid_answer'},400)
    with cn() as c:
@@ -587,7 +587,7 @@ class H(BaseHTTPRequestHandler):
       cur=c.execute('INSERT OR IGNORE INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()));claimed=True if getattr(cur,'rowcount',0)==1 else None
      if claimed:
       for r in rows:
-       if r['player_id'] in active_ids and r['guess']==('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
+       if r['player_id'] in active_ids and r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
    fresh=players(g['id'])
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='matchanswer':
