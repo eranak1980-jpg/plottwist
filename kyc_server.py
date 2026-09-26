@@ -5,7 +5,8 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
-from kyc_visuals import generate_many
+from kyc_visuals import generate_many,decode_image,MODEL
+import kyc_image_jobs as image_jobs
 from kyc_ai import generate_pack
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
@@ -55,6 +56,8 @@ def init():
    c.execute("DELETE FROM players a USING players b WHERE a.game_id=b.game_id AND LOWER(TRIM(a.name))=LOWER(TRIM(b.name)) AND a.id>b.id")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS image_run INTEGER DEFAULT 0")
+   image_jobs.init_jobs(c)
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
@@ -62,6 +65,8 @@ def init():
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
   for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'")]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
+  if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
+  image_jobs.init_jobs(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
@@ -323,23 +328,55 @@ def prepare_pack_async(gid,ts,ctx,spice,language='en'):
 def hero_round(rn,total):
  # AI Reveal is a core game mechanic: create one on every round when the spotlight player supplied a photo.
  return 0 <= int(rn) < int(total)
-def prepare_hero_async(gid,rn):
+def image_url(g,rn):
+ return '/api/hero-image/'+g['code']+'/'+str(rn)+'?run='+str(g['image_run'])
+def image_payload(g,ps,final=False):
+ if final:
+  ranked=sorted(ps,key=lambda p:p['score'],reverse=True)
+  if not ranked:return None
+  winner=ranked[0]
+  # Never invent a winner's likeness when their reference is missing.
+  if not winner['photo_data'] or not winner['photo_consent']:return None
+  available=[p for p in ranked if p['photo_data'] and p['photo_consent']]
+  if len(available)>16:return None
+  prize=g['prize'] or 'bragging rights'
+  return dict(items=[(p['name'],p['photo_data']) for p in available],
+   question='Final cinematic ensemble winner poster. Prize: '+prize,
+   answer='Winner: '+winner['name']+'. Prize: '+prize,
+   focus=winner['name'],selected='')
+ typ,text,opts,sub=qdata(g,ps)
+ if not sub or not sub['photo_data'] or not sub['photo_consent']:return None
+ answer=str(g['answer']);answer=answer[7:] if answer.startswith('OTHER::') else answer
+ # Exact selection, or an unambiguous whole-name mention in a free answer.
+ import re
+ related=[p for p in ps if p['id']!=sub['id'] and
+          (p['name']==answer or re.search(r'(?<!\w)'+re.escape(p['name'])+r'(?!\w)',answer,re.I))]
+ selected=related[0] if len(related)==1 else None
+ cast=[sub]+([selected] if selected and selected['photo_data'] and selected['photo_consent'] else [])
+ return dict(items=[(p['name'],p['photo_data']) for p in cast],question=text,answer=answer,
+             focus=sub['name'],selected=selected['name'] if selected else '')
+def prepare_hero_async(gid,rn,expected_run=None):
+ # Reserve and snapshot quickly; only the durable worker performs the slow API call.
+ with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
+ if not g or (expected_run is not None and int(g['image_run'])!=int(expected_run)):return 'stale'
+ final=int(rn)==99
+ if final:
+  if g['status']!='finished':return 'not_ready'
+ elif g['status']!='playing' or int(g['round_no'])!=int(rn) or not g['answer']:return 'not_ready'
+ ps=players(gid)
+ if not final:
+  sub=ps[int(rn)%len(ps)] if ps else None
+  with cn() as c:guessed={r['player_id'] for r in c.execute('SELECT player_id FROM guesses WHERE game_id=? AND round_no=?',(gid,rn)).fetchall()}
+  if any(p['id'] not in guessed for p in ps if p['active'] and sub and p['id']!=sub['id']):return 'not_ready'
+ if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
+ payload=image_payload(g,ps,final)
+ if not payload:return 'no_photo'
+ return image_jobs.queue(cn,g,int(rn),payload,generate_many)
+def schedule_image_after_action(gid):
  try:
-  with cn() as c:
-   g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
-   if not g or int(g['round_no'])!=int(rn):return
-   old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(gid,rn)).fetchone()
-   if old:return
-  ps=players(gid);typ,text,opts,sub=qdata(g,ps)
-  if not sub or not sub['photo_data'] or not sub['photo_consent']:return
-  selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
-  ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
-  items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
-  visual_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer'])
-  art=generate_many(items,text,visual_answer,sub['name'],selected)
-  if art:
-   with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(gid,rn,art,now()))
- except Exception as e:print('async hero failed',type(e).__name__,str(e)[:250],flush=True)
+  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
+  if g:prepare_hero_async(gid,99 if g['status']=='finished' else int(g['round_no']),g['image_run'])
+ except Exception as e:print('image scheduling failed',type(e).__name__,flush=True)
 def ensure_round_score(g,ps,guessed):
  sub=ps[int(g['round_no'])%len(ps)] if ps else None
  active_guessers=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1 and (not sub or p['id']!=sub['id'])]
@@ -374,7 +411,7 @@ class H(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'text/plain');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'durable-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/photo/'):
@@ -389,7 +426,7 @@ class H(BaseHTTPRequestHandler):
    try:
     import base64
     head,data=pl['photo_data'].split(',',1);raw=base64.b64decode(data);mime=head.split(';')[0].split(':',1)[1]
-    self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, max-age=3600');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+    self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, no-cache');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
    except:return self.send_error(404)
   if p.startswith('/api/hero-image/'):
    a=p.strip('/').split('/')
@@ -398,11 +435,13 @@ class H(BaseHTTPRequestHandler):
    if not g:return self.send_error(404)
    try:rn=int(a[3])
    except:return self.send_error(404)
-   with cn() as c:row=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],rn)).fetchone()
+   requested_run=parse_qs(u.query).get('run',[str(g['image_run'])])[0]
+   if requested_run!=str(g['image_run']):return self.send_error(404)
+   with cn() as c:row=c.execute('SELECT h.image_data FROM hero_scenes h JOIN games g ON g.id=h.game_id WHERE h.game_id=? AND h.round_no=? AND g.image_run=?',(g['id'],rn,g['image_run'])).fetchone()
    if not row or not row['image_data']:return self.send_error(404)
    mime,raw=decode_data_url(row['image_data'])
    if not raw:return self.send_error(404)
-   self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control','public, max-age=86400, immutable');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+   self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control','private, no-cache');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
   if p=='/api/meta':
    q=parse_qs(u.query);lang=normalize_language(q.get('lang',['en'])[0]);return self.J({'language':lang,'direction':direction(lang),'languages':SUPPORTED_LANGUAGES,'topics':{k:topic_labels([k],lang)[0] for k in TOPIC_LABELS},'copy':ui_copy(lang)})
   if p.startswith('/api/state/'):
@@ -425,10 +464,13 @@ class H(BaseHTTPRequestHandler):
    guessed={r['player_id']:r['guess'] for r in gs};active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);ready=bool(g['answer']) and len([pid for pid in guessed if pid in active_ids and (not sub or pid!=sub['id'])])>=need
    if ready and ensure_round_score(g,ps,guessed):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
+   with cn() as c:
+    hero_status='ready' if hero else image_jobs.status(c,g['id'],g['image_run'],g['round_no'])
+    final_hero_status='ready' if finalhero else image_jobs.status(c,g['id'],g['image_run'],99)
    reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
    idata=interactive_match_data(g,typ,text,sub) if reveal else None;matchmap={r['player_id']:r['answer'] for r in ma};matchready=bool(idata and all(pid in matchmap for pid in idata['player_ids']));matchmatched=bool(ms['matched']) if ms else (match_equal(matchmap.get(idata['player_ids'][0]),matchmap.get(idata['player_ids'][1])) if matchready else False)
    is_host=bool(host and secrets.compare_digest(host,g['host']));presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'hero':('/api/hero-image/'+g['code']+'/'+str(g['round_no'])) if hero and reveal else None,'final_hero':('/api/hero-image/'+g['code']+'/99') if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),'final_image_eligible':bool(ps and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_data'] and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_consent']),'hero_status':hero_status,'final_hero_status':final_hero_status,'hero':image_url(g,g['round_no']) if hero and reveal else None,'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -485,7 +527,7 @@ class H(BaseHTTPRequestHandler):
    if first_reveal:return self.J({'error':'too_late'},409)
    with cn() as c:
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='' WHERE id=?",(g['id'],))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
    return self.J({'ok':True})
   if act=='drop':
    try:pid=int(d.get('player_id',0))
@@ -515,7 +557,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]' WHERE id=?",(g['id'],))
     c.execute('UPDATE players SET score=0,active=1,last_seen=? WHERE game_id=?',(now(),g['id']))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    fresh=game(g['code'])
    Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1),game_language(fresh)),daemon=True).start()
    return self.J({'ok':True})
@@ -537,10 +579,12 @@ class H(BaseHTTPRequestHandler):
    if not d.get('consent'):return self.J({'error':'consent_required'},400)
    if not isinstance(data,str) or not data.startswith('data:image/'):return self.J({'error':'invalid_image'},400)
    if len(data)>5_600_000:return self.J({'error':'image_too_large'},400)
+   try:decode_image(data)
+   except Exception:return self.J({'error':'invalid_image'},400)
    try:
     with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
-   except sqlite3.Error as e:
-    print('photo save db error',type(e).__name__,str(e)[:200],flush=True);return self.J({'error':'photo_save_failed'},503)
+   except Exception as e:
+    print('photo save db error',type(e).__name__,flush=True);return self.J({'error':'photo_save_failed'},503)
    return self.J({'ok':True,'bytes':len(data)})
   if act=='topicvote':
    me=next((x for x in ps if x['token']==d.get('token')),None);topic=str(d.get('topic','')).strip()[:80]
@@ -562,7 +606,7 @@ class H(BaseHTTPRequestHandler):
    pack=_clean_pack(custom_questions(g))
    with cn() as c:
     c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]',custom_questions=? WHERE id=?",(json.dumps(pack,ensure_ascii=False),g['id']))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    return self.J({'ok':True,'tailored_questions':len(pack)})
   if act=='answer':
    me=next((x for x in ps if x['token']==d.get('token')),None);ans=str(d.get('answer',''))[:160]
@@ -577,8 +621,7 @@ class H(BaseHTTPRequestHandler):
     changed=getattr(cur,'rowcount',0)==1
     if not changed:
      old=c.execute('SELECT answer FROM games WHERE id=?',(g['id'],)).fetchone();return self.J({'ok':True,'locked':True,'answer_saved':bool(old and old['answer'])})
-   if os.getenv('OPENAI_API_KEY','').strip() and hero_round(int(g['round_no']),total_rounds(g)) and sub['photo_data'] and sub['photo_consent']:
-    Thread(target=prepare_hero_async,args=(g['id'],int(g['round_no'])),daemon=True).start()
+   schedule_image_after_action(g['id'])
    return self.J({'ok':True})
   if act=='guess':
    me=next((x for x in ps if x['token']==d.get('token')),None);guess=str(d.get('guess',''))[:120]
@@ -597,6 +640,7 @@ class H(BaseHTTPRequestHandler):
      if claimed:
       for r in rows:
        if r['player_id'] in active_ids and r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
+   schedule_image_after_action(g['id'])
    fresh=players(g['id'])
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='matchanswer':
@@ -619,29 +663,12 @@ class H(BaseHTTPRequestHandler):
      final=c.execute('SELECT matched FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
      return self.J({'ok':True,'ready':True,'matched':bool(final['matched']) if final else matched})
    return self.J({'ok':True,'ready':False})
-  if act=='finalhero':
-   with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone()
-   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/99'})
-   available=[p for p in ps if p['photo_data'] and p['photo_consent']]
-   if len(available)<2:return self.J({'error':'not_enough_photos'},409)
-   ranked=sorted(ps,key=lambda x:x['score'],reverse=True);winner=ranked[0]['name'];summary=', '.join([f"{p['name']} {p['score']} points" for p in ranked])
-   items=[(p['name'],p['photo_data']) for p in available]
-   prize=g['prize'] or 'bragging rights as the friend who knows the crew best';art=generate_many(items,'Final cinematic ensemble poster for this friend group after a hilarious Know Your Crew game. The winner also receives this playful prize: '+prize,f'Winner: {winner}. Prize: {prize}. Scores: {summary}',winner,'')
-   if not art:return self.J({'error':'generation_failed'},502)
-   with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],99,art,now()))
-   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/99'})
-  if act=='hero':
-   if not sub or not sub['photo_data'] or not sub['photo_consent']:return self.J({'error':'no_photo'},409)
-   with cn() as c:old=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
-   if old:return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no'])})
-   selected=g['answer'] if any(p['name']==g['answer'] for p in ps) else ''
-   ordered=[sub]+([p for p in ps if p['name']==selected and p['id']!=sub['id']] if selected else [])+[p for p in ps if p['id']!=sub['id'] and p['name']!=selected]
-   items=[(p['name'],p['photo_data']) for p in ordered if p['photo_data'] and p['photo_consent']]
-   visual_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer'])
-   art=generate_many(items,text,visual_answer,sub['name'],selected)
-   if not art:return self.J({'error':'generation_failed'},502)
-   with cn() as c:c.execute('INSERT OR REPLACE INTO hero_scenes(game_id,round_no,image_data,created) VALUES(?,?,?,?)',(g['id'],g['round_no'],art,now()))
-   return self.J({'ok':True,'image':'/api/hero-image/'+g['code']+'/'+str(g['round_no'])})
+  if act in ('hero','finalhero'):
+   rn=99 if act=='finalhero' else int(g['round_no'])
+   if d.get('image_run') is not None and str(d['image_run'])!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
+   if act=='hero' and d.get('round') is not None and str(d['round'])!=str(rn):return self.J({'error':'stale_round'},409)
+   result=prepare_hero_async(g['id'],rn,g['image_run'])
+   return self.J({'ok':True,'status':result,'image':image_url(g,rn) if result=='ready' else None},202 if result in ('queued','running') else 200)
   if act=='skip':
    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
    remember_question(ps,text)
@@ -651,6 +678,7 @@ class H(BaseHTTPRequestHandler):
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
     if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
+   schedule_image_after_action(g['id'])
    return self.J({'ok':True,'skipped':True})
   if act=='next':
    idata=interactive_match_data(g,typ,text,sub)
@@ -666,7 +694,9 @@ class H(BaseHTTPRequestHandler):
     if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    remember_question(ps,text)
+   schedule_image_after_action(g['id'])
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
-def run():init();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
+def run():init();image_jobs.recover(cn,generate_many);ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
+

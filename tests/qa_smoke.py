@@ -194,7 +194,7 @@ print('QA_POLL_RENDER_GUARD_OK')
 # Poll state must never contain raw AI/image base64 payloads.
 server=(Path(__file__).resolve().parents[1]/'kyc_server.py').read_text()
 state_block=server[server.index("if p.startswith('/api/state/')"):server.index("def do_POST")]
-assert "'hero':('/api/hero-image/" in state_block
+assert "'hero':image_url(g," in state_block
 assert "'photo_url':('/api/photo/" in state_block
 assert "'image_data':" not in state_block
 print('QA_STATE_PAYLOAD_REFERENCES_ONLY_OK')
@@ -266,3 +266,4 @@ core=pre.replace('🇮🇱 עברית','').split('<div class="inspire hidden">',
 assert not hebrew_re.search(core),hebrew_re.search(core).group(0) if hebrew_re.search(core) else ''
 assert 'value="ar"' not in html
 print('QA_ENGLISH_BOOT_NO_HEBREW_FLASH_OK')
+

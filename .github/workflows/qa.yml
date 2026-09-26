@@ -1,7 +1,7 @@
 name: PlotTwist V2 QA
 on:
   push:
-    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*']
+    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*', 'ai-images-*']
   workflow_dispatch:
 jobs:
   smoke:
@@ -26,3 +26,33 @@ jobs:
           Path('/tmp/kyc.js').write_text(js)
           PY
           node --check /tmp/kyc.js
+
+  image-pipeline:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: plot_test
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: plot_images
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Image flow - SQLite
+        run: python tests/image_pipeline.py
+      - name: Image flow - PostgreSQL
+        env:
+          PLOT_IMAGE_TEST_DATABASE_URL: postgresql://plot_test:test_only@localhost:5432/plot_images
+        run: python tests/image_pipeline.py
+      - name: Reveal image loading and fallback
+        run: node tests/image_ui.js
