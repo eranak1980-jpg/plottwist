@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
-from kyc_locales import SUPPORTED_LANGUAGES,language_code,other_label,localized_general,callback_text,match_prompt
+from kyc_locales import SUPPORTED_LANGUAGES,language_code,other_label,localized_general,callback_text,match_prompt,last_resort_question
 from kyc_visuals import generate_many
 from kyc_ai import generate_pack
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
@@ -38,7 +38,7 @@ def cn():
 def init():
  if USE_PG:
   with cn() as c:
-   c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,language TEXT DEFAULT 'en',created TEXT)""")
+   c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,language TEXT DEFAULT 'he',created TEXT)""")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS adults_confirmed INTEGER DEFAULT 0")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'he'")
    c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0,active INTEGER DEFAULT 1,last_seen TEXT DEFAULT '',client_id TEXT DEFAULT '')""")
@@ -281,8 +281,7 @@ def qdata(g,ps):
    if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   # Last-resort variant keeps gameplay moving without repeating the exact prompt.
-  if language_code(g)=='he':typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
-  else:typ='know';formatted=f'What would surprise people who think they know {sub["name"]} well?';opts=['A spontaneous choice','The safe choice','Something nobody expects','It depends']
+  typ='know';formatted,opts=last_resort_question(g,sub['name'])
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
  elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(g) not in opts:opts=list(opts)+[other_label(g)]
