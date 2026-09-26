@@ -261,6 +261,20 @@ class ProviderTests(unittest.TestCase):
             except Exception as e:result=e
         return result,calls,constructor
 
+    def test_reference_copy_is_small_without_changing_original(self):
+        from PIL import Image
+        import io, base64
+        buf=io.BytesIO()
+        Image.new('RGB',(1800,1200),(30,70,100)).save(buf,format='PNG')
+        original='data:image/png;base64,'+base64.b64encode(buf.getvalue()).decode()
+        _,raw,mime=visuals._file(original,0)
+        self.assertEqual(mime,'image/jpeg')
+        with Image.open(io.BytesIO(raw)) as im:self.assertEqual(im.size,(768,512))
+        # The original value still decodes at its full dimensions.
+        _,source=visuals.decode_image(original)
+        with Image.open(io.BytesIO(source)) as im:self.assertEqual(im.size,(1800,1200))
+        self.assertLess(len(raw),100_000)
+
     def test_request_parse_and_retry_policy(self):
         os.environ['OPENAI_API_KEY']='test-only'
         good=[types.SimpleNamespace(type='image_edit.partial_image',b64_json=ART.split(',')[1])]

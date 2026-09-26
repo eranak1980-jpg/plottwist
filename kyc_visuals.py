@@ -31,8 +31,40 @@ def decode_image(data_url):
     return actual, raw
 
 
+def warm_image_runtime():
+    """Load heavy SDK imports before accepting a game's first answer; no API call."""
+    if not os.getenv('OPENAI_API_KEY', '').strip():
+        return
+    started = time.monotonic()
+    try:
+        from openai import OpenAI
+        from PIL import Image
+        print(json.dumps({'event': 'image_runtime_ready',
+                          'seconds': round(time.monotonic()-started, 2)}), flush=True)
+    except Exception as exc:
+        print(json.dumps({'event': 'image_runtime_warmup_failed',
+                          'type': type(exc).__name__}), flush=True)
+
+
 def _file(data_url, i):
     mime, raw = decode_image(data_url)
+    # Only the provider's reference copy is resized. Keep the original upload
+    # unchanged for avatars/fallback. No crop: preserve the entire face and body.
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(raw)) as source:
+        if max(source.size) > 768 or len(raw) > 350_000:
+            im = ImageOps.exif_transpose(source)
+            im.thumbnail((768, 768), Image.Resampling.LANCZOS)
+            if im.mode in ('RGBA', 'LA') or 'transparency' in im.info:
+                rgba = im.convert('RGBA')
+                background = Image.new('RGB', rgba.size, 'white')
+                background.paste(rgba, mask=rgba.getchannel('A'))
+                im = background
+            else:
+                im = im.convert('RGB')
+            out = io.BytesIO()
+            im.save(out, format='JPEG', quality=90)
+            raw, mime = out.getvalue(), 'image/jpeg'
     ext = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}[mime]
     return (f'player_{i}.{ext}', raw, mime)
 
@@ -78,10 +110,15 @@ def generate_many(items, question, answer, focus, selected='', final=False):
     key = os.getenv('OPENAI_API_KEY', '').strip()
     if not key or not items:
         return ''
+    prepared_at = time.monotonic()
     files = [_file(data, i) for i, (_, data) in enumerate(items)]
     prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected, final)
     from openai import OpenAI
+    prepared_seconds = round(time.monotonic() - prepared_at, 3)
     started = time.monotonic()
+    print(json.dumps({'event': 'image_api_request', 'model': MODEL,
+                      'reference_bytes': sum(len(f[1]) for f in files),
+                      'reference_count': len(files), 'prepare_seconds': prepared_seconds}), flush=True)
     # Generation runs in the background from secret-answer save. Wait for a
     # complete image: a partial frame can contain unfinished faces and limbs.
     with OpenAI(api_key=key, timeout=60, max_retries=0) as client:
@@ -102,6 +139,7 @@ def generate_many(items, question, answer, focus, selected='', final=False):
                     'request_id': getattr(result, '_request_id', None),
                     'seconds': round(time.monotonic() - started, 2),
                     'attempts': attempt + 1,
+                    'prepare_seconds': prepared_seconds,
                     'usage': usage.model_dump() if hasattr(usage, 'model_dump') else None,
                 }), flush=True)
                 return art
