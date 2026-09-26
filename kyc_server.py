@@ -156,6 +156,27 @@ def pool(g):
 def total_rounds(g):
  try:return max(6,min(30,int(g['rounds'] or 12)))
  except:return 12
+def game_language(g):
+ try:return normalize_language(g['language'])
+ except:return 'en'
+def localized_smart_callback(g,ps,rn):
+ m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
+ if rn not in marks or len(m)<3:return None
+ names=[p['name'] for p in ps]
+ room=[e for e in reversed(m) if e.get('answer') in names and e.get('answer')!=e.get('subject')]
+ if room:
+  e=room[0];sub=next((p for p in ps if p['name']==e.get('subject')),None)
+  if sub:return callback_copy(game_language(g),'friend',sub['name'],friend=e.get('answer'))
+ e=next((x for x in reversed(m) if x.get('subject')),None)
+ if e:
+  sub=next((p for p in ps if p['name']==e.get('subject')),None)
+  if sub:return callback_copy(game_language(g),'old',sub['name'],old=e.get('answer',''))
+ return None
+def localized_duo_callback(g,ps,rn):
+ m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
+ if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15,18,21,24,27) or len(m)<3:return None
+ sub=ps[rn%2];mine=next((e for e in reversed(m) if e.get('subject')==sub['name']),None)
+ return callback_copy(game_language(g),'duo',sub['name'],old=mine.get('answer','')) if mine else None
 def smart_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
  if rn not in marks or len(m)<3:return None
