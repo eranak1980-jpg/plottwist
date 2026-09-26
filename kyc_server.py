@@ -81,9 +81,20 @@ def past_question_keys(ps):
  with cn() as c:return {r['question_key'] for r in c.execute('SELECT question_key FROM question_history WHERE crew_key=?',(ck,)).fetchall()}
 def too_similar(qk,used):
  if not qk:return True
+ # Catch both exact/near-exact repeats and the same underlying prompt with small wording changes.
+ # This is intentionally lexical and deterministic so it works without another AI call.
+ stop={'מה','מי','אם','של','עם','את','על','או','זה','הכי','כאן','היה','הייתה','היה/תה','עושה','יעשה','תעשה','יכול','יכולה','צריך','צריכה','הוא','היא','לו','לה'}
+ def toks(x):
+  return {w for w in str(x or '').split() if len(w)>1 and w not in stop and w not in ('{s}','{','s','}')}
  try:
   from difflib import SequenceMatcher
-  return any(qk==u or SequenceMatcher(None,qk,u).ratio()>=0.86 for u in used if u)
+  a=toks(qk)
+  for u in used:
+   if not u:continue
+   if qk==u or SequenceMatcher(None,qk,u).ratio()>=0.84:return True
+   b=toks(u)
+   if a and b and len(a&b)/max(1,min(len(a),len(b)))>=0.72:return True
+  return False
  except:return qk in used
 def remember_question(ps,text):
  ck=crew_key(ps);qk=question_key(text,ps)
@@ -161,18 +172,24 @@ def smart_callback(g,ps,rn):
  return None
 def interactive_match_data(g,typ,text,sub):
  if not str(typ).startswith('callback') or not sub:return None
- ps=players(g['id']);by_name={p['name']:p for p in ps}
+ ps=players(g['id']);active=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1];by_name={p['name']:p for p in active}
  prior=next((e for e in reversed(mem(g)) if e.get('subject')==sub['name'] and e.get('answer') in by_name and e.get('answer')!=sub['name']),None)
  partner=by_name.get(prior.get('answer')) if prior else None
- if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1 or int(partner['active'] if partner['active'] is not None else 1)!=1:return None
+ # Duo has no "who in the room" answers, so the other player is automatically the Match partner.
+ if not partner and len(active)==2:
+  partner=next((p for p in active if p['id']!=sub['id']),None)
+ if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1:return None
  q=(text or '').lower()
- if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה']):
+ if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה','יעד']):
   prompt=f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.'
- elif 'דייט' in q:
-  prompt=f'😈 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד פתיחת דייטינג קצרה. אם יצאתם על אותו רעיון — נקודה לשניכם.'
- elif any(k in q for k in ['50,000','כסף']):
+ elif any(k in q for k in ['דייט','קראש','היכרויות']):
+  prompt=f'😈 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מקום אחד לדייט ספונטני. אם יצאתם על אותו רעיון — נקודה לשניכם.'
+ elif any(k in q for k in ['50,000','כסף','תקציב','מיליון']):
   prompt=f'💸 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם מבזבזים עליו את הכסף. אותה תשובה — נקודה לשניכם.'
- else:return None
+ elif any(k in q for k in ['משפחה','חג','ארוחה']):
+  prompt=f'🏠 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד פעילות אחת שהייתם בוחרים ליום משפחתי מושלם. אותה תשובה — נקודה לשניכם.'
+ else:
+  prompt=f'⚡ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם בוחרים לעשות יחד בסופ״ש חופשי. אותה תשובה — נקודה לשניכם.'
  return {'prompt':prompt,'player_ids':[sub['id'],partner['id']],'names':[sub['name'],partner['name']]}
 def interactive_prompt(g,typ,text,answer,sub):
  d=interactive_match_data(g,typ,text,sub)
@@ -354,7 +371,8 @@ class H(BaseHTTPRequestHandler):
      with cn() as c:c.execute('UPDATE players SET last_seen=? WHERE id=?',(now(),me['id']))
     except:pass
    with cn() as c:
-    gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT image_data FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone();ma=c.execute('SELECT player_id,answer FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();ms=c.execute('SELECT matched FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
+    # Never pull multi-megabyte base64 image blobs on every state poll; existence is enough here.
+    gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();hero=c.execute('SELECT 1 AS present FROM hero_scenes WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone();finalhero=c.execute('SELECT 1 AS present FROM hero_scenes WHERE game_id=? AND round_no=99',(g['id'],)).fetchone();ma=c.execute('SELECT player_id,answer FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall();ms=c.execute('SELECT matched FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchone()
    guessed={r['player_id']:r['guess'] for r in gs};active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);ready=bool(g['answer']) and len([pid for pid in guessed if pid in active_ids and (not sub or pid!=sub['id'])])>=need
    if ready and ensure_round_score(g,ps,guessed):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
@@ -372,7 +390,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).lastrowid
-    c.execute('INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)',(gid,name,pt,now()))
+    c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen) VALUES(?,?,?,?,1,?)',(gid,name,pt,now(),now()))
    Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp),daemon=True).start()
    return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
@@ -427,7 +445,7 @@ class H(BaseHTTPRequestHandler):
    if g['status']!='finished':return self.J({'error':'not_finished'},409)
    with cn() as c:
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]' WHERE id=?",(g['id'],))
-    c.execute('UPDATE players SET score=0,active=1 WHERE game_id=?',(g['id'],))
+    c.execute('UPDATE players SET score=0,active=1,last_seen=? WHERE game_id=?',(now(),g['id']))
     c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    fresh=game(g['code'])
    Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1)),daemon=True).start()
