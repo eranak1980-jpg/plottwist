@@ -1,5 +1,5 @@
 """Deterministic portrait posters. No network or generative AI on this path."""
-import base64, hashlib, io, json, re, time
+import base64, hashlib, io, json, os, re, time
 from functools import lru_cache
 from pathlib import Path
 from kyc_visuals import decode_image
