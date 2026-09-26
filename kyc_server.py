@@ -170,17 +170,20 @@ def localized_smart_callback(g,ps,rn):
  room=[e for e in reversed(m) if e.get('answer') in names and e.get('answer')!=e.get('subject')]
  if room:
   e=room[0];sub=next((p for p in ps if p['name']==e.get('subject')),None)
-  if sub:return callback_copy(game_language(g),'friend',sub['name'],friend=e.get('answer'))
+  if sub:
+   cb=callback_copy(game_language(g),'friend',sub['name'],friend=e.get('answer'));return (*cb,sub) if cb else None
  e=next((x for x in reversed(m) if x.get('subject')),None)
  if e:
   sub=next((p for p in ps if p['name']==e.get('subject')),None)
-  if sub:return callback_copy(game_language(g),'old',sub['name'],old=e.get('answer',''))
+  if sub:
+   cb=callback_copy(game_language(g),'old',sub['name'],old=e.get('answer',''));return (*cb,sub) if cb else None
  return None
 def localized_duo_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
  if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15,18,21,24,27) or len(m)<3:return None
  sub=ps[rn%2];mine=next((e for e in reversed(m) if e.get('subject')==sub['name']),None)
- return callback_copy(game_language(g),'duo',sub['name'],old=mine.get('answer','')) if mine else None
+ if not mine:return None
+ cb=callback_copy(game_language(g),'duo',sub['name'],old=mine.get('answer',''));return (*cb,sub) if cb else None
 def smart_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
  if rn not in marks or len(m)<3:return None
