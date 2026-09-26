@@ -203,7 +203,7 @@ GENERAL_BY_LANGUAGE = {
  ('know','{s}の昔から好きな曲が公共の場で流れたら？',['歌う','少し踊る','笑顔になるだけ','動画を撮って誰かに送る']),
  ('know','{s}が面倒な家事を一つ永遠に消せるなら？',['掃除','書類/手続き','買い物/用事','メッセージ返信']),
  ('know','{s}が今夜だけ「結果を気にしなくていい決断」を一つできるなら？',['思い切った行動','高い買い物','先延ばしにした会話','突然の小旅行']),
- ('room','{s}が「ちょっと恥ずかしいけど harmless な秘密」を預けるなら、この中の誰？',[]),
+ ('room','{s}が「ちょっと恥ずかしいけど無害な秘密」を預けるなら、この中の誰？',[]),
  ('room','{s}が家にいたい夜でも、外に連れ出せそうなのは誰？',[]),
  ('room','夜中3時に変な事件が起きたら、{s}が最初に電話しそうなのは誰？',[]),
  ('room','サプライズを絶対にバラさず計画できると{s}が信じるのは誰？',[]),
@@ -247,3 +247,16 @@ def match_prompt(g,a,b):
   'ja':f'⚡ {a} と {b}：完全に自由な週末に2人でやりたいことを、1つずつ秘密で書いてください。同じ答えなら2人とも+1。',
  }
  return packs.get(lang,'')
+
+
+def last_resort_question(g,name):
+ lang=language_code(g)
+ packs={
+  'en':(f'What would surprise people who think they know {name} well?',['A spontaneous choice','The safe choice','Something nobody expects','It depends']),
+  'es':(f'¿Qué sorprendería a quienes creen conocer muy bien a {name}?',['Una elección espontánea','La opción segura','Algo que nadie espera','Depende de la situación']),
+  'pt-BR':(f'O que surpreenderia quem acha que conhece {name} muito bem?',['Uma escolha espontânea','A opção segura','Algo que ninguém espera','Depende da situação']),
+  'fr':(f'Qu’est-ce qui surprendrait ceux qui pensent très bien connaître {name} ?',['Un choix spontané','Le choix prudent','Quelque chose d’inattendu','Ça dépend']),
+  'ja':(f'{name}のことをよく知っていると思う人が一番驚きそうなのは？',['思い切った選択','安全な選択','誰も予想しないこと','状況次第']),
+  'he':(f'מה הכי יפתיע את מי שחושב שהוא מכיר את {name} טוב?',['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']),
+ }
+ return packs.get(lang,packs['en'])
