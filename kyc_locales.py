@@ -441,3 +441,81 @@ UI_COPY['ja'] = {
  'adult':'全員18歳以上で、このルームの大人向け内容に同意しています。','language':'言語','selected':'選択中：{topics}','add_topics':'何か追加する？','saved':'保存しました','retry':'もう一度',
  'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'点','offline':'オフライン'
 }
+
+
+GAME_UI_EXTRA = {
+'en':{
+ 'round':'Round {n} of {total}','subject_now':'This one is about you. Pick your real answer — everyone else will only see it at Reveal.','subject_done':'✓ Your answer is saved in secret. Now everyone else is guessing.',
+ 'guess_now':'What do you think {name} will choose? Correct guess = 1 point.','guess_done':'🔒 Your guess: {guess}. It will be revealed when everyone is done.',
+ 'score_duo':'🎯 Duo: one answers in secret, the other guesses. Correct guess = 1 point. You switch roles every round.','score_group':'🎯 Scoring: correct guess = 1 point. The spotlight player does not score on their own round.',
+ 'waiting_guesses':'Waiting for guesses{names}…','waiting_rest':'Waiting for the other players{names}…','waiting_answer':'Waiting for {name} to answer in secret…',
+ 'correct':'🎯 Nailed it! You guessed {guess} — +1 point','wrong':'Not this time — you guessed {guess}. The answer was {answer}','subject_reveal':'💥 Your answer was {answer}. Anyone who guessed it gets a point.',
+ 'finish_next':'Finish & winner 🏆','continue_without':'Continue without {name}','share_text':'Let’s see who really knows the crew','link_copied':'Link copied','points_short':'pts',
+ 'prize_banner':'🏆 Tonight’s prize: {prize}','no_context':'No group description added — the game will use your selected topics.','just_glory':'Bragging rights 😎',
+ 'ai_ready':'✨ AI Images are connected. When a player has a photo, the game can create a custom Reveal.','ai_missing':'⚠️ AI Images are not connected yet. The game still works normally.',
+ 'short':'Short','regular':'Regular','long':'Long','chill_desc':'Light & fun','bold_desc':'More personal & cheeky','nofilter_desc':'Adults, dating & intimacy',
+ 'prize_ph':'e.g. winner picks the next bar','context_ph':'Who are you? What do you talk about? What kind of night do you want?'
+},
+'es':{
+ 'round':'Ronda {n} de {total}','subject_now':'Esta pregunta es sobre ti. Elige tu respuesta real; los demás no la verán hasta el Reveal.','subject_done':'✓ Tu respuesta está guardada en secreto. Ahora los demás están intentando adivinar.',
+ 'guess_now':'¿Qué crees que elegirá {name}? Acierto = 1 punto.','guess_done':'🔒 Tu apuesta: {guess}. Se revelará cuando todos terminen.',
+ 'score_duo':'🎯 Dúo: uno responde en secreto y el otro adivina. Acierto = 1 punto. Cambiáis de rol cada ronda.','score_group':'🎯 Puntuación: acierto = 1 punto. Quien responde no suma en su propia ronda.',
+ 'waiting_guesses':'Esperando las apuestas{names}…','waiting_rest':'Esperando al resto{names}…','waiting_answer':'Esperando a que {name} responda en secreto…',
+ 'correct':'🎯 ¡Acertaste! Elegiste {guess} — +1 punto','wrong':'Esta vez no — elegiste {guess}. La respuesta era {answer}','subject_reveal':'💥 Tu respuesta era {answer}. Quien la haya adivinado gana un punto.',
+ 'finish_next':'Final y ganador 🏆','continue_without':'Continuar sin {name}','share_text':'A ver quién conoce de verdad al grupo','link_copied':'Enlace copiado','points_short':'pts',
+ 'prize_banner':'🏆 Premio de esta noche: {prize}','no_context':'No añadisteis descripción del grupo; el juego usará los temas elegidos.','just_glory':'Solo el honor 😎',
+ 'ai_ready':'✨ AI Images está conectado. Con una foto, el juego puede crear un Reveal personalizado.','ai_missing':'⚠️ AI Images todavía no está conectado. El juego funciona igualmente.',
+ 'short':'Corto','regular':'Normal','long':'Largo','chill_desc':'Ligero y divertido','bold_desc':'Más personal y atrevido','nofilter_desc':'Adultos, citas e intimidad',
+ 'prize_ph':'p. ej. quien gane elige el próximo bar','context_ph':'¿Quiénes sois? ¿De qué habláis? ¿Qué tipo de noche queréis?'
+},
+'pt-BR':{
+ 'round':'Rodada {n} de {total}','subject_now':'Essa pergunta é sobre você. Escolha sua resposta real — a galera só vai ver no Reveal.','subject_done':'✓ Sua resposta foi salva em segredo. Agora a galera está tentando adivinhar.',
+ 'guess_now':'O que você acha que {name} vai escolher? Acerto = 1 ponto.','guess_done':'🔒 Seu palpite: {guess}. Ele aparece quando todo mundo terminar.',
+ 'score_duo':'🎯 Duo: um responde em segredo e o outro adivinha. Acertou = 1 ponto. Vocês alternam a cada rodada.','score_group':'🎯 Pontuação: palpite certo = 1 ponto. Quem responde não pontua na própria rodada.',
+ 'waiting_guesses':'Esperando os palpites{names}…','waiting_rest':'Esperando o resto da galera{names}…','waiting_answer':'Esperando {name} responder em segredo…',
+ 'correct':'🎯 Acertou! Seu palpite foi {guess} — +1 ponto','wrong':'Dessa vez não — você marcou {guess}. A resposta era {answer}','subject_reveal':'💥 Sua resposta foi {answer}. Quem acertou ganha um ponto.',
+ 'finish_next':'Final e vencedor 🏆','continue_without':'Continuar sem {name}','share_text':'Vamos ver quem conhece a galera de verdade','link_copied':'Link copiado','points_short':'pts',
+ 'prize_banner':'🏆 Prêmio de hoje: {prize}','no_context':'Sem descrição da galera — o jogo vai usar os temas escolhidos.','just_glory':'Só a moral 😎',
+ 'ai_ready':'✨ AI Images está conectado. Com foto, o jogo pode criar um Reveal personalizado.','ai_missing':'⚠️ AI Images ainda não está conectado. O jogo continua funcionando normalmente.',
+ 'short':'Curto','regular':'Normal','long':'Longo','chill_desc':'Leve e divertido','bold_desc':'Mais pessoal e ousado','nofilter_desc':'Adultos, encontros e intimidade',
+ 'prize_ph':'ex.: quem ganhar escolhe o próximo bar','context_ph':'Quem são vocês? Sobre o que falam? Que tipo de noite querem?'
+},
+'fr':{
+ 'round':'Manche {n} sur {total}','subject_now':'Cette question est pour toi. Choisis ta vraie réponse — les autres ne la verront qu’au Reveal.','subject_done':'✓ Ta réponse est enregistrée en secret. Les autres essaient maintenant de deviner.',
+ 'guess_now':'D’après toi, que va choisir {name} ? Bonne réponse = 1 point.','guess_done':'🔒 Ton pronostic : {guess}. Il sera révélé quand tout le monde aura fini.',
+ 'score_duo':'🎯 Duo : l’un répond en secret, l’autre devine. Bonne réponse = 1 point. Vous alternez à chaque manche.','score_group':'🎯 Score : bonne réponse = 1 point. La personne mise en avant ne marque pas sur sa propre manche.',
+ 'waiting_guesses':'On attend les pronostics{names}…','waiting_rest':'On attend les autres{names}…','waiting_answer':'On attend que {name} réponde en secret…',
+ 'correct':'🎯 Bien vu ! Tu avais choisi {guess} — +1 point','wrong':'Pas cette fois — tu avais choisi {guess}. La réponse était {answer}','subject_reveal':'💥 Ta réponse était {answer}. Ceux qui l’ont trouvée gagnent un point.',
+ 'finish_next':'Finale et gagnant 🏆','continue_without':'Continuer sans {name}','share_text':'Voyons qui connaît vraiment le groupe','link_copied':'Lien copié','points_short':'pts',
+ 'prize_banner':'🏆 Prix de ce soir : {prize}','no_context':'Aucune description du groupe — le jeu utilisera les thèmes choisis.','just_glory':'La gloire seulement 😎',
+ 'ai_ready':'✨ AI Images est connecté. Avec une photo, le jeu peut créer un Reveal personnalisé.','ai_missing':'⚠️ AI Images n’est pas encore connecté. Le jeu fonctionne quand même normalement.',
+ 'short':'Court','regular':'Normal','long':'Long','chill_desc':'Léger et fun','bold_desc':'Plus personnel et culotté','nofilter_desc':'Adultes, dating et intimité',
+ 'prize_ph':'ex. le gagnant choisit le prochain bar','context_ph':'Qui êtes-vous ? De quoi parlez-vous ? Quelle ambiance voulez-vous ?'
+},
+'ja':{
+ 'round':'{n} / {total} ラウンド','subject_now':'今回はあなたの質問。自分の本当の答えを選んでください。Revealまでは他の人には見えません。','subject_done':'✓ 答えを秘密で保存しました。今、みんなが予想しています。',
+ 'guess_now':'{name}はどれを選ぶと思う？ 正解 = 1ポイント。','guess_done':'🔒 あなたの予想：{guess}。全員が終わったらRevealで公開されます。',
+ 'score_duo':'🎯 Duo：1人が秘密で答え、もう1人が予想。正解 = 1ポイント。毎ラウンド交代します。','score_group':'🎯 スコア：正解予想 = 1ポイント。回答者は自分のラウンドでは得点しません。',
+ 'waiting_guesses':'予想を待っています{names}…','waiting_rest':'ほかのプレイヤーを待っています{names}…','waiting_answer':'{name}が秘密で答えるのを待っています…',
+ 'correct':'🎯 正解！ {guess} を選んで +1ポイント','wrong':'今回はハズレ。予想は {guess}、正解は {answer}','subject_reveal':'💥 あなたの答えは {answer}。当てた人に1ポイント。',
+ 'finish_next':'結果・優勝者へ 🏆','continue_without':'{name}なしで続ける','share_text':'誰が一番みんなを知ってるか勝負しよう','link_copied':'リンクをコピーしました','points_short':'点',
+ 'prize_banner':'🏆 今日の賞品：{prize}','no_context':'グループ紹介は未入力です。選んだテーマを使ってゲームを作ります。','just_glory':'名誉だけ 😎',
+ 'ai_ready':'✨ AI Images 接続済み。写真があればカスタムRevealを作れます。','ai_missing':'⚠️ AI Images はまだ未接続です。ゲーム自体は通常どおり遊べます。',
+ 'short':'短め','regular':'ふつう','long':'長め','chill_desc':'軽く楽しく','bold_desc':'もう少し個人的で大胆','nofilter_desc':'18+・デート・親密な話',
+ 'prize_ph':'例：勝った人が次のお店を決める','context_ph':'どんなメンバー？ 普段何を話す？ 今日はどんな夜にしたい？'
+},
+'he':{
+ 'round':'סיבוב {n} מתוך {total}','subject_now':'זו השאלה שלך. בחר/י את התשובה האמיתית — האחרים לא יראו אותה עד ה־Reveal.','subject_done':'✓ התשובה שלך נשמרה בסוד. עכשיו האחרים מנחשים מה בחרת.',
+ 'guess_now':'מה לדעתך {name} יבחר/תבחר? ניחוש נכון שווה נקודה.','guess_done':'🔒 הניחוש שלך: {guess}. הוא ייחשף כשכולם יסיימו.',
+ 'score_duo':'🎯 Duo: אחד עונה בסוד, השני מנחש. ניחוש נכון = נקודה. מתחלפים בכל סיבוב.','score_group':'🎯 ניקוד: ניחוש נכון = נקודה אחת. מי שעונה על עצמו לא מקבל נקודה בסיבוב שלו.',
+ 'waiting_guesses':'מחכים לניחושים{names}…','waiting_rest':'מחכים לשאר השחקנים{names}…','waiting_answer':'מחכים ל־{name} לענות בסוד…',
+ 'correct':'🎯 קלעת! ניחשת {guess} — +1 נקודה','wrong':'לא הפעם — ניחשת {guess}. התשובה הייתה {answer}','subject_reveal':'💥 זו הייתה התשובה שלך: {answer}. האחרים מקבלים נקודה אם קלעו.',
+ 'finish_next':'לסיום ולמנצח 🏆','continue_without':'המשך בלי {name}','share_text':'בואו נראה מי באמת מכיר את החבורה','link_copied':'הלינק הועתק','points_short':'נק׳',
+ 'prize_banner':'🏆 הפרס הערב: {prize}','no_context':'לא נוסף תיאור — המשחק ישתמש בנושאים שבחרתם.','just_glory':'רק הכבוד 😎',
+ 'ai_ready':'✨ AI Images מחוברות — כשיש תמונה, המשחק יכול ליצור Reveal מותאם.','ai_missing':'⚠️ AI Images עדיין לא מחוברות. המשחק ממשיך לעבוד כרגיל.',
+ 'short':'קצר','regular':'רגיל','long':'ארוך','chill_desc':'קליל וכיפי','bold_desc':'יותר אישי וחצוף','nofilter_desc':'למבוגרים, דייטים ומיניות',
+ 'prize_ph':'למשל: המנצח בוחר את הבר הבא','context_ph':'מי אתם? על מה אתם מדברים? איזה ערב אתם רוצים?'
+}
+}
+for _lang,_extra in GAME_UI_EXTRA.items():
+    if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
