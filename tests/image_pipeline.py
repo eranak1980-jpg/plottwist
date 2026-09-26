@@ -170,6 +170,7 @@ class PipelineTests(unittest.TestCase):
         start=time.monotonic();self.post('finalhero',{'host':self.host},202)
         self.assertLess(time.monotonic()-start,1);self.assertEqual(self.state()['status'],'finished')
         self.assertTrue(self.entered.wait(1));self.assertEqual(self.calls[0]['items'][0][0],'Cara')
+        self.assertTrue(self.calls[0]['final'])
         self.assertEqual(self.calls[0]['focus'],'Cara');self.assertIn('tropical holiday',self.calls[0]['answer'])
         self.post('finalhero',{'host':self.host},202);self.assertEqual(len(self.calls),1)
         self.release.set();st=self.wait_status('ready',True)
@@ -234,6 +235,15 @@ class PipelineTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_story_prompt_does_not_inherit_final_awards(self):
+        question='Who would Alice call after sending an embarrassing message?'
+        story=visuals.prompt_for(question,'Bob',['Alice','Bob'],'Alice','Bob')
+        self.assertIn(question,story);self.assertIn('ROUND STORY SCENE',story)
+        self.assertNotIn('trophy',story);self.assertNotIn('FINAL WINNER POSTER',story)
+        poster=visuals.prompt_for('Prize: holiday','Winner: Bob',['Bob','Alice'],'Bob',final=True)
+        self.assertIn('FINAL WINNER POSTER: Bob is the winner',poster)
+        self.assertIn('trophy',poster);self.assertNotIn('ROUND STORY SCENE',poster)
+
     def call(self,outcomes):
         calls=[];constructor=[]
         class Client:

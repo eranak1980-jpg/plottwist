@@ -343,7 +343,7 @@ def image_payload(g,ps,final=False):
   return dict(items=[(p['name'],p['photo_data']) for p in available],
    question='Final cinematic ensemble winner poster. Prize: '+prize,
    answer='Winner: '+winner['name']+'. Prize: '+prize,
-   focus=winner['name'],selected='')
+   focus=winner['name'],selected='',final=True)
  typ,text,opts,sub=qdata(g,ps)
  if not sub or not sub['photo_data'] or not sub['photo_consent']:return None
  answer=str(g['answer']);answer=answer[7:] if answer.startswith('OTHER::') else answer
@@ -699,4 +699,3 @@ class H(BaseHTTPRequestHandler):
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
 def run():init();image_jobs.recover(cn,generate_many);ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
-
