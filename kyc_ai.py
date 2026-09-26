@@ -1,8 +1,9 @@
 import json,os
-def generate_pack(topics,context,spice):
+def generate_pack(topics,context,spice,language='en'):
  key=os.getenv('OPENAI_API_KEY','').strip()
  if not key:return []
  level={1:'Chill: playful and broadly comfortable',2:'Bold: personal, cheeky and revealing but not sexual unless the selected topics call for it',3:'No Filter: adults-only, bold, cheeky and genuinely spicy. Questions may involve dating apps, attraction, sexual chemistry, flirting, hookups, types, turn-ons/turn-offs and sex-life preferences, while staying non-graphic and never pressuring anyone to disclose a specific private sexual event'}[int(spice)]
+ lang_name={'en':'English','es':'Spanish','pt-BR':'Brazilian Portuguese','fr':'French','ja':'Japanese','he':'Hebrew'}.get(language,'English')
  prompt=f"""You design premium social party-game questions for PlotTwist: Know Your Crew.
 All players are adults when spice=3.
 Selected topics: {', '.join(topics) if topics else 'mixed'}
@@ -10,21 +11,22 @@ Host description of the group: {context or 'none'}
 Spice level: {level}
 
 Create exactly 10 excellent questions tailored to THIS group. The game loop: one spotlight player answers secretly; everyone else predicts their answer.
+Write every question and every answer option naturally in {lang_name}. Do not translate literally from Hebrew or English; localize the tone so it sounds like a party game written for native speakers. Keep the placeholder {{s}} exactly as {{s}}.
 Return ONLY a JSON array. Each item must be either:
-{{"type":"know","text":"Hebrew question containing {{s}} for spotlight player","options":["4 short mutually distinct Hebrew answers"]}}
+{{"type":"know","text":"question in the requested language containing {{s}} for spotlight player","options":["4 short mutually distinct answers in the requested language"]}}
 or
-{{"type":"room","text":"Hebrew question containing {{s}}","options":[]}}
+{{"type":"room","text":"question in the requested language containing {{s}}","options":[]}}
 For room questions the answer will be one of the other players.
 
 Editorial standard:
 - Every question must earn its place: it should trigger laughter, surprise, debate, 'what?!', affectionate teasing, or reveal something socially interesting.
 - Chill is NOT boring or formal. For family, parent/child, or low-spice groups, create funny everyday dilemmas, old memories, travel mishaps, money hypotheticals, family habits, embarrassing-but-safe moments, and “I can’t believe you picked that” choices. Keep it warm and safe, but still entertaining.
 - If the group has only two players, never create room questions. Every question must give the spotlight player 4 plausible choices so the other person has something real to predict.
-- Write like a sharp party-game writer, not a therapist, survey, HR form, or personality test. Short conversational Hebrew. Concrete scenes, awkward choices, funny stakes, and recognizable real-life moments.
+- Write like a sharp party-game writer, not a therapist, survey, HR form, or personality test. Use short, natural conversational language for the requested locale. Concrete scenes, awkward choices, funny stakes, and recognizable real-life moments.
 - Reject bland prompts such as generic 'what is most important to X', 'what would X prefer', or abstract self-development language unless the scenario makes it funny.
 - At least half the pack should contain a vivid setup, dilemma, social consequence, money/time pressure, travel/nightlife/date situation, or a choice involving another player.
-- For Bold and especially No Filter, DO NOT sound polite, corporate, therapeutic or overly sanitized. Use natural contemporary Hebrew friends would actually say at a party. Answers should have attitude and personality.
-- In No Filter, sound like close adult friends talking at 1 AM, not a psychology questionnaire. Short, direct, cheeky Hebrew is preferred. You may use ordinary non-graphic adult dating/sexual vocabulary such as אקטיבי, פסיבי, ורסטילי, סטוץ, גריינדר, מאץ׳, קראש, קינק, טייפ and sexual chemistry. You may ask playful questions about sexual roles, adult kinks in ordinary non-graphic labels, dating-app behavior, how many matches became meetups, types, boundaries, attraction, flirting and money-dare hypotheticals. A small minority of No Filter questions should feel like a genuinely daring late-night adult friends game rather than a polite dating quiz. Keep wording short and non-graphic; never ask for detailed descriptions of an encounter.
+- For Bold and especially No Filter, DO NOT sound polite, corporate, therapeutic or overly sanitized. Use natural contemporary language friends in the requested locale would actually say at a party. Answers should have attitude and personality.
+- In No Filter, sound like close adult friends talking at 1 AM, not a psychology questionnaire. Short, direct, cheeky language is preferred. You may use ordinary non-graphic adult dating/sexual vocabulary that is natural in the requested locale. You may ask playful questions about sexual roles, adult kinks in ordinary non-graphic labels, dating-app behavior, how many matches became meetups, types, boundaries, attraction, flirting and money-dare hypotheticals. A small minority of No Filter questions should feel like a genuinely daring late-night adult friends game rather than a polite dating quiz. Keep wording short and non-graphic; never ask for detailed descriptions of an encounter.
 - Use the host context when useful, but do not repeat it mechanically.
 - Concrete scenarios beat generic preferences.
 - Avoid trivia, boring favorites, generic personality labels, and survey-like wording. Never ask the same underlying scenario twice in one pack.
