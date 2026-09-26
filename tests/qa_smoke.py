@@ -281,3 +281,22 @@ html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
 assert "location.pathname+'?code='+encodeURIComponent(s.code)" in html
 assert "history.replaceState({},'',u)" in html
 print('QA_ROOM_URL_PERSISTENCE_OK')
+
+
+# Guided setup hierarchy keeps game mechanics, group identity and content themes separate.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+for marker in ['id="gameStyles"','id="audienceTypes"','id="audienceSubtypes"','id="contentTopics"',
+               'id="customGameStyle"','id="customAudience"','id="customAudienceSubtype"','id="customContentTopic"']:
+ assert marker in html,marker
+assert "friendsSubs:[['old','חברים ותיקים'],['childhood','חברי ילדות'],['work','חברים מהעבודה']" in html
+assert "['lgbtq','חברי הקהילה הגאה']" in html
+assert "familySubs:[['kids','משפחה עם ילדים']" in html
+assert "setupContextSummary()" in html and "structured=setupContextSummary()" in html
+# LGBTQ+ is group context in the guided create screen, not mixed into the visible content-topic list.
+const_start=html.index("CONTENT_TOPICS=[")
+const_end=html.index("TOP=[",const_start)
+assert 'גייז / LGBTQ+' not in html[const_start:const_end]
+# Choosing a family-with-kids subtype switches the setup back to Chill and removes adult intimacy.
+assert "if(id==='kids'){spice=1" in html
+assert "adult.classList.remove('on')" in html
+print('QA_GUIDED_SETUP_HIERARCHY_OK')
