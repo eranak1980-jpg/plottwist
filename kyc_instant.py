@@ -96,6 +96,7 @@ def category(question,answer,final=False):
   t=text.casefold()
   return sum(1 for w in words.split() if (w in t if not w.isascii() else re.search(r'\b'+re.escape(w)+r'\w*\b',t)))
  scores={k:score(question,v)+2*score(answer,v) for k,v in CATEGORIES.items() if v}
+ if re.search(r'[$€£₪¥]\s*[\d,]+',question+' '+answer):scores['money']+=2
  best=max(scores,key=scores.get)
  return best if scores[best] else 'general'
 
