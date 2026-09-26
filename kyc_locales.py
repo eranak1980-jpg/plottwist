@@ -615,3 +615,15 @@ LATE_UI_COPY = {
 }
 for _lang,_extra in LATE_UI_COPY.items():
     if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
+
+
+LAST_MILE_COPY = {
+'en':{'personalization_note':'✨ The game uses your topics and group description, then learns from your answers as you play.','final_hero_working':'🎬 Creating the final group poster…','language_locked':'The host sets the language for this room.'},
+'es':{'personalization_note':'✨ El juego usa vuestros temas y la descripción del grupo, y después aprende de vuestras respuestas mientras jugáis.','final_hero_working':'🎬 Creando el póster final del grupo…','language_locked':'El anfitrión fija el idioma de esta sala.'},
+'pt-BR':{'personalization_note':'✨ O jogo usa os temas e a descrição da galera, e depois aprende com as respostas de vocês enquanto jogam.','final_hero_working':'🎬 Criando o pôster final da galera…','language_locked':'O anfitrião define o idioma desta sala.'},
+'fr':{'personalization_note':'✨ Le jeu utilise vos thèmes et la description du groupe, puis apprend de vos réponses au fil de la partie.','final_hero_working':'🎬 Création du poster final du groupe…','language_locked':'L’hôte choisit la langue de cette salle.'},
+'ja':{'personalization_note':'✨ 選んだテーマとグループ紹介をもとにゲームを作り、プレイ中の回答からさらに学んでいきます。','final_hero_working':'🎬 グループの最終ポスターを作成中…','language_locked':'このルームの言語はホストが設定します。'},
+'he':{'personalization_note':'✨ המשחק ישתמש בנושאים ובתיאור שלכם, ובהמשך גם ילמד מהתשובות במהלך המשחק.','final_hero_working':'🎬 מכין פוסטר סיום של החבורה…','language_locked':'המארח קובע את שפת החדר.'}
+}
+for _lang,_extra in LAST_MILE_COPY.items():
+    if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
