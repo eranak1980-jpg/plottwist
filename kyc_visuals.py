@@ -35,12 +35,25 @@ def _file(data_url, i):
     return (f'player_{i}.{ext}', raw, mime)
 
 
-def prompt_for(question, answer, people, focus, selected=''):
+def prompt_for(question, answer, people, focus, selected='', final=False):
     refs = '; '.join(f'input image {i+1} = {name}' for i, name in enumerate(people))
     composition = f'{focus} is the central, clearly recognizable main character.'
     if selected and selected in people and selected != focus:
         composition += f' {selected} is the second featured character interacting with {focus}.'
+    if final:
+        scene = f'''FINAL WINNER POSTER: {focus} is the winner. Give them the central position,
+an obvious trophy and celebratory lighting; supporting referenced players flank them.
+Incorporate the supplied prize as a visual prop or setting. Never give another participant
+the winner's role.'''
+    else:
+        scene = '''ROUND STORY SCENE: Illustrate the actual event in the question, resolved by
+the revealed answer. The action must be understandable from the picture alone. Use the
+question's concrete setting and essential objects, with funny expressions and physical action.
+A person's name as the answer means that person performs the role asked about in the question.
+Show that relationship in action. Do not replace the story with a portrait of the selected
+person or a generic celebration of guessing correctly. The scene is about the story, not scores.'''
     return f'''Create ONE premium photorealistic cinematic comedy still for a private party game.
+{scene}
 Reference mapping: {refs}.
 EXACTLY {len(people)} distinct people in the entire scene, each referenced person exactly once.
 No other humans, duplicates, crowds, reflected people, face blending or invented likenesses.
@@ -54,20 +67,17 @@ answer faithfully using the setting, one memorable prop, expressions and a funny
 {json.dumps({'question': question, 'revealed_answer': answer}, ensure_ascii=False)}
 Do not add unrelated friends. If an answer mentions someone without a supplied reference,
 express their role using a prop or off-screen context; never invent that person's face.
-For a final winner poster, give the named winner the central position, an obvious trophy and
-celebratory lighting; supporting referenced players flank them. Incorporate a supplied prize
-as a tasteful prop when feasible. Never give another participant the winner's role.
 Believable cinematic lighting, rich but natural color, crisp faces, coherent setting, warm wit.
 No written text, logos, nudity, sexual activity, graphic violence, hateful content or degrading
 humiliation. Dating, LGBTQ+ and nightlife themes remain playful, celebratory and non-explicit.'''
 
 
-def generate_many(items, question, answer, focus, selected=''):
+def generate_many(items, question, answer, focus, selected='', final=False):
     key = os.getenv('OPENAI_API_KEY', '').strip()
     if not key or not items:
         return ''
     files = [_file(data, i) for i, (_, data) in enumerate(items)]
-    prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected)
+    prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected, final)
     from openai import OpenAI
     started = time.monotonic()
     # Disable SDK retries: a timeout may already have incurred generation cost.
