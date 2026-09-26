@@ -53,6 +53,8 @@ def _file(data_url, i):
     from PIL import Image, ImageOps
     with Image.open(io.BytesIO(raw)) as source:
         if max(source.size) > 768 or len(raw) > 350_000:
+            source.draft('RGB', (768, 768))
+            source.thumbnail((768, 768), Image.Resampling.LANCZOS)
             im = ImageOps.exif_transpose(source)
             im.thumbnail((768, 768), Image.Resampling.LANCZOS)
             if im.mode in ('RGBA', 'LA') or 'transparency' in im.info:

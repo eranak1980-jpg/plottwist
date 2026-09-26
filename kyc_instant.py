@@ -36,15 +36,16 @@ def data_url(im, fmt='JPEG'):
  return 'data:image/'+fmt.lower()+';base64,'+base64.b64encode(out.getvalue()).decode()
 
 _segmenter=None
-from threading import Lock
-_segment_lock=Lock()
+from threading import RLock
+_segment_lock=RLock()
 
 def warm():
  global _segmenter
  try:
   import onnxruntime as ort
   options=ort.SessionOptions();options.intra_op_num_threads=1;options.inter_op_num_threads=1
-  options.enable_cpu_mem_arena=False
+  options.enable_cpu_mem_arena=False;options.enable_mem_pattern=False
+  options.graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
   _segmenter=ort.InferenceSession(str(Path(__file__).parent/'models'/'u2netp.onnx'),sess_options=options,providers=['CPUExecutionProvider'])
   print(json.dumps({'event':'instant_cutout_runtime_ready','model':'u2netp'}),flush=True)
  except Exception as exc:
@@ -72,10 +73,14 @@ def cutout(im):
  return result
 
 def preprocess(data):
+ with _segment_lock:return _preprocess(data)
+
+def _preprocess(data):
  # Keep all source pixels in a contained portrait. Never synthesize/crop a face.
  from PIL import Image, ImageOps
  started=time.monotonic();_,raw=decode_image(data)
  with Image.open(io.BytesIO(raw)) as source:
+  source.draft('RGB',(560,700));source.thumbnail((700,700),Image.Resampling.LANCZOS)
   im=ImageOps.exif_transpose(source).convert('RGB');im.thumbnail((560,700),Image.Resampling.LANCZOS)
   try:im=cutout(im)
   except Exception as exc:print(json.dumps({'event':'instant_cutout_fallback','type':type(exc).__name__}),flush=True)
@@ -100,7 +105,7 @@ def category(question,answer,final=False):
  best=max(scores,key=scores.get)
  return best if scores[best] else 'general'
 
-@lru_cache(maxsize=15)
+@lru_cache(maxsize=3)
 def background(cat):
  from PIL import Image, ImageDraw, ImageFilter
  root=Path(__file__).parent/'static'/'visual-scenes'
@@ -135,10 +140,14 @@ def compose(portraits,cat):
   fade=Image.new('L',(w,h),255);fd=ImageDraw.Draw(fade)
   for yy in range(max(0,h-55),h):fd.line((0,yy,w,yy),fill=int(255*(h-yy)/55))
   mask=chops.multiply(mask,fade)
-  layer=Image.new('RGBA',canvas.size);layer.paste((*accent,180),(x,y,x+w,y+h),mask)
-  canvas=Image.alpha_composite(canvas,layer.filter(ImageFilter.GaussianBlur(16)))
-  shadow=Image.new('RGBA',canvas.size);shadow.paste((0,0,0,210),(x+9,y+12,x+w+9,y+h+12),mask)
-  canvas=Image.alpha_composite(canvas,shadow.filter(ImageFilter.GaussianBlur(13)))
+  # Blur a small single-channel mask, not four full-size RGBA canvases.
+  # This also keeps two-player composition inside the small Render CPU budget.
+  from PIL import ImageOps
+  padded=ImageOps.expand(mask,border=30,fill=0)
+  glow=padded.filter(ImageFilter.GaussianBlur(12)).point(lambda value:int(value*.40))
+  canvas.paste((*accent,255),(x-30,y-30,x+w+30,y+h+30),glow)
+  shadow=padded.filter(ImageFilter.GaussianBlur(9)).point(lambda value:int(value*.65))
+  canvas.paste((0,0,0,255),(x-21,y-18,x+w+39,y+h+42),shadow)
   canvas.paste(im,(x,y),mask)
  # Film-frame corner marks, no language-dependent raster text.
  d=ImageDraw.Draw(canvas)
