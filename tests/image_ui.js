@@ -5,7 +5,7 @@ const source=page.slice(page.indexOf('const visualCache='),page.indexOf('async f
 const elements={},images={};
 function element(id){return elements[id]||={dataset:{},style:{},classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,v){v?this.add(x):this.remove(x)}}}}
 class Image {set src(url){this.url=url;images[url]=this}get src(){return this.url}}
-const sandbox={Image,performance:{now:()=>100},requestAnimationFrame:fn=>fn(),imageView:'run1',heroAsked:-1,$:element,makeHero(){throw Error('unexpected generation')},makeFinalHero(){throw Error('unexpected generation')}};
+const sandbox={copy:{instant_loading:"Preparing Visual Reveal…"},Image,performance:{now:()=>100},requestAnimationFrame:fn=>fn(),imageView:'run1',heroAsked:-1,$:element,makeHero(){throw Error('unexpected generation')},makeFinalHero(){throw Error('unexpected generation')}};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const instant='/api/instant-image/TEST/0?run=1',full='/api/hero-image/TEST/0?run=1';
 const d={instant_visual:instant,hero:null,subject:{photo_url:'/photo.jpg'},hero_status:'running'};

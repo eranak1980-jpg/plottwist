@@ -158,10 +158,6 @@ def compose(portraits,cat):
   shadow=padded.filter(ImageFilter.GaussianBlur(9)).point(lambda value:int(value*.65))
   canvas.paste((0,0,0,255),(x-21,y-18,x+w+39,y+h+42),shadow)
   canvas.paste(im,(x,y),mask)
- # Film-frame corner marks, no language-dependent raster text.
- d=ImageDraw.Draw(canvas)
- for x,y,sx,sy in [(22,22,1,1),(618,22,-1,1),(22,778,1,-1),(618,778,-1,-1)]:
-  d.line((x,y,x+26*sx,y),fill=(*accent,220),width=2);d.line((x,y,x,y+26*sy),fill=(*accent,220),width=2)
  return data_url(canvas.convert('RGB'))
 
 def prepare(cn,g,rn,payload,ps):
