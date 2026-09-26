@@ -426,15 +426,15 @@ class H(BaseHTTPRequestHandler):
   if p=='/api/create':
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
-   co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120]
+   co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120];language=normalize_language(d.get('language','en'))
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:
-    if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,created) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,now())).fetchone()['id']
-    else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,created) VALUES(?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,now())).lastrowid
+    if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
+    else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
     c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id) VALUES(?,?,?,?,1,?,?)',(gid,name,pt,now(),now(),client_id))
-   Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp),daemon=True).start()
-   return self.J({'code':co,'host':ht,'token':pt,'name':name})
+   Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
+   return self.J({'code':co,'host':ht,'token':pt,'name':name,'language':language})
   if p=='/api/join':
    g=game(d.get('code'));name=str(d.get('name','')).strip()[:40];client_id=str(d.get('client_id','')).strip()[:120]
    if not g:return self.J({'error':'not_found'},404)
