@@ -82,36 +82,53 @@ def generate_many(items, question, answer, focus, selected='', final=False):
     prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected, final)
     from openai import OpenAI
     started = time.monotonic()
-    # Disable SDK retries: a timeout may already have incurred generation cost.
-    # Retry explicit temporary rejections once, never an ambiguous lost response.
-    with OpenAI(api_key=key, timeout=150, max_retries=0) as client:
+    # Party-game latency matters more than waiting for the final render. Stream one
+    # displayable partial image and use the first valid image event as the Reveal.
+    # The request starts as soon as the secret answer is saved, during guessing.
+    with OpenAI(api_key=key, timeout=12, max_retries=0) as client:
         for attempt in range(2):
+            stream = None
+            received = False
             try:
-                result = client.images.edit(model=MODEL, image=files, prompt=prompt,
-                                            size=SIZE, quality=QUALITY,
-                                            output_format='jpeg', output_compression=82, n=1)
-                data = getattr(result, 'data', None)
-                encoded = getattr(data[0], 'b64_json', None) if data else None
-                if not encoded:
-                    raise ValueError('image_response_empty')
-                art = 'data:image/jpeg;base64,' + encoded
-                decode_image(art)
-                usage = getattr(result, 'usage', None)
-                print(json.dumps({'event': 'image_api_success', 'model': MODEL,
-                                  'request_id': getattr(result, '_request_id', None),
-                                  'seconds': round(time.monotonic() - started, 2),
-                                  'attempts': attempt + 1,
-                                  'usage': usage.model_dump() if hasattr(usage, 'model_dump') else None}), flush=True)
-                return art
+                stream = client.images.edit(
+                    model=MODEL, image=files, prompt=prompt,
+                    size=SIZE, quality=QUALITY,
+                    output_format='jpeg', output_compression=82, n=1,
+                    stream=True, partial_images=1,
+                )
+                for event in stream:
+                    etype = getattr(event, 'type', '')
+                    encoded = getattr(event, 'b64_json', None)
+                    if etype not in ('image_edit.partial_image', 'image_edit.completed') or not encoded:
+                        continue
+                    received = True
+                    art = 'data:image/jpeg;base64,' + encoded
+                    decode_image(art)
+                    print(json.dumps({
+                        'event': 'image_api_first_frame',
+                        'frame_type': etype,
+                        'model': MODEL,
+                        'seconds': round(time.monotonic() - started, 2),
+                        'attempts': attempt + 1,
+                    }), flush=True)
+                    return art
+                raise ValueError('image_stream_empty')
             except Exception as exc:
                 status = getattr(exc, 'status_code', None)
                 code = getattr(exc, 'code', None)
-                retry = attempt == 0 and status in (429, 503) and code != 'insufficient_quota'
-                # Exception bodies can contain submitted data or credentials; never log them.
-                print(json.dumps({'event': 'image_api_error', 'model': MODEL,
-                                  'type': type(exc).__name__, 'status': status,
-                                  'request_id': getattr(exc, 'request_id', None), 'retry': retry}), flush=True)
+                retry = (not received and attempt == 0 and status in (429, 503)
+                         and code != 'insufficient_quota')
+                print(json.dumps({
+                    'event': 'image_api_error', 'model': MODEL,
+                    'type': type(exc).__name__, 'status': status,
+                    'request_id': getattr(exc, 'request_id', None), 'retry': retry,
+                }), flush=True)
                 if not retry:
                     raise
-                time.sleep(2)
+                time.sleep(1)
+            finally:
+                close = getattr(stream, 'close', None)
+                if callable(close):
+                    try: close()
+                    except Exception: pass
     return ''
