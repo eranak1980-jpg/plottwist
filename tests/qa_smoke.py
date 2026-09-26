@@ -198,3 +198,36 @@ assert "'hero':('/api/hero-image/" in state_block
 assert "'photo_url':('/api/photo/" in state_block
 assert "'image_data':" not in state_block
 print('QA_STATE_PAYLOAD_REFERENCES_ONLY_OK')
+
+
+# Six launch languages: English default + Spanish, Brazilian Portuguese, French, Japanese, Hebrew.
+from kyc_locales import SUPPORTED_LANGUAGES,normalize_language,direction,topic_labels,general_pack
+assert list(SUPPORTED_LANGUAGES)==['en','es','pt-BR','fr','ja','he'],SUPPORTED_LANGUAGES
+assert normalize_language('ar')=='en'
+assert normalize_language('ja-JP')=='ja'
+assert direction('he')=='rtl' and direction('ja')=='ltr' and direction('en')=='ltr'
+assert topic_labels(['משפחה','דייטים'],'ja')==['家族','デート']
+for lang in ['en','es','pt-BR','fr','ja']:
+ assert len(general_pack(lang))>=20,(lang,len(general_pack(lang)))
+print('QA_MULTILANG_CORE_OK')
+
+# Japanese rooms use native Japanese fallback questions and keep Duo mechanics valid.
+with k.cn() as db:
+ cur=db.execute("INSERT INTO games(code,host,status,round_no,topics,custom_context,spice,custom_questions,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",('JA123','host','playing',0,'[]','',1,'[]','',8,0,'ja',k.now()))
+ jgid=cur.lastrowid
+ for name in ['Aki','Yuki']:
+  db.execute("INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)",(jgid,name,name.lower(),k.now()))
+jg=k.game('JA123');jps=k.players(jg['id'])
+typ,jtext,jopts,jsub=k.qdata(jg,jps)
+assert typ!='room' and len(jopts)>=3
+assert any(('ぁ'<=ch<='ん') or ('ァ'<=ch<='ン') or ('一'<=ch<='龯') for ch in jtext),jtext
+print('QA_JAPANESE_GAMEPLAY_OK')
+
+# Browser selector exposes exactly the intended public launch set (no Arabic).
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+for code in ['en','es','pt-BR','fr','ja','he']:
+ assert f'<option value="{code}">' in html,code
+assert '<option value="ar">' not in html
+assert "language:uiLang" in html
+assert "d.language&&d.language!==uiLang" in html
+print('QA_LANGUAGE_SELECTOR_OK')
