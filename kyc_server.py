@@ -213,6 +213,8 @@ def interactive_match_data(g,typ,text,sub):
  if not partner and len(active)==2:
   partner=next((p for p in active if p['id']!=sub['id']),None)
  if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1:return None
+ lang=game_language(g)
+ if lang!='he':return {'prompt':match_prompt(lang,sub['name'],partner['name']),'player_ids':[sub['id'],partner['id']],'names':[sub['name'],partner['name']]}
  q=(text or '').lower()
  if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה','יעד']):
   prompt=f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.'
@@ -257,19 +259,23 @@ def duo_callback(g,ps,rn):
   if text not in used:return 'duo_callback',text,opts,sub
  return None
 def qdata(g,ps):
- rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None
+ rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None;lang=game_language(g)
  if len(ps)==2:
-  cb=duo_callback(g,ps,rn)
+  cb=duo_callback(g,ps,rn) if lang=='he' else localized_duo_callback(g,ps,rn)
   if cb:return cb
  else:
-  cb=smart_callback(g,ps,rn)
+  cb=smart_callback(g,ps,rn) if lang=='he' else localized_smart_callback(g,ps,rn)
   if cb:return cb
- selected=effective_topics(g);focused=[]
- for t in selected:focused+=TOPICS.get(t,[])
- if int(g['spice'] or 1)>=3:focused+=SPICY
- tailored=custom_questions(g)
- themed=len(selected)==1 and selected[0] in THEME_ONLY
- base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
+ selected=effective_topics(g);tailored=custom_questions(g)
+ if lang=='he':
+  focused=[]
+  for t in selected:focused+=TOPICS.get(t,[])
+  if int(g['spice'] or 1)>=3:focused+=SPICY
+  themed=len(selected)==1 and selected[0] in THEME_ONLY
+  base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
+ else:
+  native=general_pack(lang);spicy=spicy_pack(lang) if int(g['spice'] or 1)>=3 else []
+  base=tailored+spicy+native
  if len(ps)==2:
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in GENERAL if q[0]=='know']
@@ -281,7 +287,7 @@ def qdata(g,ps):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
-  fallback=[q for q in GENERAL if not (len(ps)==2 and q[0]=='room')]
+  fallback=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if not (len(ps)==2 and q[0]=='room')]
   for q in fallback:
    typ,text,opts=q;formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
@@ -290,7 +296,7 @@ def qdata(g,ps):
   typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
- elif typ=='know' and int(g['spice'] or 1)>=3 and '✏️ משהו אחר' not in opts:opts=list(opts)+['✏️ משהו אחר']
+ elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(lang) not in opts:opts=list(opts)+[other_label(lang)]
  return typ,formatted,list(opts),sub
 def _clean_pack(pack):
  clean=[];seen=set()
