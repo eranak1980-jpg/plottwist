@@ -231,3 +231,38 @@ assert '<option value="ar">' not in html
 assert "language:uiLang" in html
 assert "d.language&&d.language!==uiLang" in html
 print('QA_LANGUAGE_SELECTOR_OK')
+
+
+# Launch localization must never fall back to Hebrew for non-Hebrew UI states.
+from kyc_locales import ui_copy,last_resort
+import re
+hebrew_re=re.compile(r'[\u0590-\u05FF]')
+required_polish=[
+ 'all_topics_selected','max_topics','adult_topic_requires','save_failed','game_updated',
+ 'choose_image','photo_saved','name_required','joining','game_started','join_failed',
+ 'score_tied','leader_one','leader_now','photo_count','photo_ready','winner_prize',
+ 'ai_reveal_ready','ai_reveal_generating','ai_image_missing','interactive_live',
+ 'match_yes','match_no','save_secret','match_saved','match_waiting','no_previous',
+ 'back_game','previous_view','answered','previous_note','choice_received','saving_update',
+ 'back_lobby_ok','replay_loading','replay_new_questions','need_two','starting',
+ 'game_ready','skipped_no_score','wait_all_guesses','photo_button','custom_prompt',
+ 'guess_board','lobby_game','edit_game','save_changes','final_hero_generating',
+ 'language_locked','left_game'
+]
+for lang in ['en','es','pt-BR','fr','ja']:
+ c=ui_copy(lang)
+ for key in required_polish:
+  assert key in c and c[key],(lang,key)
+  assert not hebrew_re.search(c[key]),(lang,key,c[key])
+ text,opts=last_resort(lang,'Alex')
+ assert text and len(opts)==4
+ assert not hebrew_re.search(text),(lang,text)
+print('QA_LOCALIZATION_POLISH_OK')
+
+# English default markup must not flash Hebrew in core UI before locale metadata loads.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+pre=html.split('<script>',1)[0]
+core=pre.replace('🇮🇱 עברית','').split('<div class="inspire hidden">',1)[0]
+assert not hebrew_re.search(core),hebrew_re.search(core).group(0) if hebrew_re.search(core) else ''
+assert 'value="ar"' not in html
+print('QA_ENGLISH_BOOT_NO_HEBREW_FLASH_OK')
