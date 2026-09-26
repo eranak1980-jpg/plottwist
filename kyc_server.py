@@ -7,7 +7,7 @@ from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many
 from kyc_ai import generate_pack
-from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy
+from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
 def now():return datetime.now(timezone.utc).isoformat()
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
@@ -300,14 +300,7 @@ def qdata(g,ps):
    if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   # Last-resort copy stays in the room language too.
-  last={
-   'en':('What choice would surprise people who think they know {s} well?',['The spontaneous one','The safe one','The unexpected one','It depends']),
-   'es':('¿Qué elección sorprendería a quienes creen conocer bien a {s}?',['La espontánea','La segura','La inesperada','Depende']),
-   'pt-BR':('Qual escolha surpreenderia quem acha que conhece bem {s}?',['A espontânea','A segura','A inesperada','Depende']),
-   'fr':('Quel choix surprendrait ceux qui pensent bien connaître {s} ?',['Le choix spontané','Le choix sûr','Le choix inattendu','Ça dépend']),
-   'ar':('أي اختيار سيفاجئ الناس اللي يعتقدون أنهم يعرفون {s} جيداً؟',['العفوي','الآمن','غير المتوقع','حسب الموقف']),
-   'he':('מה הכי יפתיע את מי שחושב שהוא מכיר את {s} טוב?',['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב'])}[lang]
-  typ='know';formatted=last[0].format(s=sub['name']);opts=last[1]
+  typ='know';formatted,opts=last_resort(lang,sub['name'])
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
  elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(lang) not in opts:opts=list(opts)+[other_label(lang)]
