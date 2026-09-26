@@ -646,3 +646,14 @@ STATIC_UI_EXTRA = {
 }
 for _lang,_extra in STATIC_UI_EXTRA.items():
     if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
+
+LOCK_EXTRA = {
+'en':{'language_locked':'The host chose the language for this room.','left_game':'left the game'},
+'es':{'language_locked':'El anfitrión eligió el idioma de esta sala.','left_game':'salió de la partida'},
+'pt-BR':{'language_locked':'O anfitrião escolheu o idioma desta sala.','left_game':'saiu do jogo'},
+'fr':{'language_locked':'L’hôte a choisi la langue de cette salle.','left_game':'a quitté la partie'},
+'ja':{'language_locked':'このルームの言語はホストが設定しています。','left_game':'ゲーム退出'},
+'he':{'language_locked':'המארח בחר את השפה של החדר הזה.','left_game':'יצא/ה מהמשחק'}
+}
+for _lang,_extra in LOCK_EXTRA.items():
+    if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
