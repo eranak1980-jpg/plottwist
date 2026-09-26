@@ -248,6 +248,10 @@ class ProviderTests(unittest.TestCase):
 
     def call(self,outcomes):
         calls=[];constructor=[]
+        class Stream:
+            def __init__(self,events):self.events=events;self.closed=False
+            def __iter__(self):return iter(self.events)
+            def close(self):self.closed=True
         class Client:
             def __init__(self,**kw):constructor.append(kw);self.images=self
             def __enter__(self):return self
@@ -255,7 +259,7 @@ class ProviderTests(unittest.TestCase):
             def edit(self,**kw):
                 calls.append(kw);result=outcomes.pop(0)
                 if isinstance(result,Exception):raise result
-                return result
+                return Stream(result)
         with patch.dict(sys.modules,{'openai':types.SimpleNamespace(OpenAI=Client)}),patch.object(visuals.time,'sleep'):
             try:result=visuals.generate_many([('Alice',PHOTO)],'Question','Answer','Alice')
             except Exception as e:result=e
@@ -263,18 +267,20 @@ class ProviderTests(unittest.TestCase):
 
     def test_request_parse_and_retry_policy(self):
         os.environ['OPENAI_API_KEY']='test-only'
-        good=types.SimpleNamespace(data=[types.SimpleNamespace(b64_json=ART.split(',')[1])],usage=None)
+        good=[types.SimpleNamespace(type='image_edit.partial_image',b64_json=ART.split(',')[1])]
         error=RuntimeError('temporary');error.status_code=429
         result,calls,ctor=self.call([error,good]);self.assertEqual(result,ART);self.assertEqual(len(calls),2)
-        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
+        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(ctor[0]['timeout'],12);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
         self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg');self.assertEqual(calls[0]['quality'],'low');self.assertEqual(calls[0]['size'],'1024x1024')
+        self.assertTrue(calls[0]['stream']);self.assertEqual(calls[0]['partial_images'],1)
         self.assertIn('EXACTLY 1 distinct people',calls[0]['prompt']);self.assertEqual(calls[0]['n'],1)
         for err in [TimeoutError('timeout'),RuntimeError('empty')]:
             _,calls,_=self.call([err,good]);self.assertEqual(len(calls),1)
-        empty=types.SimpleNamespace(data=[])
-        result,calls,_=self.call([empty]);self.assertIsInstance(result,ValueError);self.assertEqual(len(calls),1)
+        result,calls,_=self.call([[]]);self.assertIsInstance(result,ValueError);self.assertEqual(len(calls),1)
         quota=RuntimeError('quota');quota.status_code=429;quota.code='insufficient_quota'
         _,calls,_=self.call([quota,good]);self.assertEqual(len(calls),1)
+        completed=[types.SimpleNamespace(type='image_edit.completed',b64_json=ART.split(',')[1])]
+        result,calls,_=self.call([completed]);self.assertEqual(result,ART);self.assertEqual(len(calls),1)
 
 
 if __name__=='__main__':
