@@ -172,3 +172,29 @@ print('QA_DUO_MATCH_TWIST_OK')
 for topic in ['משפחה','דייטים','זוגיות','חיי לילה','נסיעות','כסף','קריירה ועסקים','נוסטלגיה','אוכל','מוזיקה','טכנולוגיה','תרבות ופופ']:
  assert len(k.TOPICS.get(topic,[]))>=3,(topic,len(k.TOPICS.get(topic,[])))
 print('QA_CURATED_VARIETY_OK')
+
+
+# Topic-led modes need enough curated depth to avoid cycling after a few questions.
+for topic in ['מה היית עושה אם…','דילמות','מי הכי…','נוסטלגיה','סודות והרגלים','מביך אבל מצחיק']:
+ assert len(k.TOPICS.get(topic,[]))>=10,(topic,len(k.TOPICS.get(topic,[])))
+print('QA_SUBGAME_DEPTH_OK')
+
+# new=1 must clear stale room state before the browser reads it, preventing an old-room flash.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+reset=html.index("if(bootParams.get('new')==='1')")
+read=html.index("JSON.parse(localStorage.getItem('kyc')")
+assert reset<read,(reset,read)
+print('QA_NEW_GAME_BOOT_RESET_OK')
+
+# Polling must be change-aware rather than re-rendering the DOM on every interval.
+assert "if(sig!==stateSig){stateSig=sig;render(d)}" in html
+assert "if(!document.hidden)load()" in html
+print('QA_POLL_RENDER_GUARD_OK')
+
+# Poll state must never contain raw AI/image base64 payloads.
+server=(Path(__file__).resolve().parents[1]/'kyc_server.py').read_text()
+state_block=server[server.index("if p.startswith('/api/state/')"):server.index("def do_POST")]
+assert "'hero':('/api/hero-image/" in state_block
+assert "'photo_url':('/api/photo/" in state_block
+assert "'image_data':" not in state_block
+print('QA_STATE_PAYLOAD_REFERENCES_ONLY_OK')
