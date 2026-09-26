@@ -269,7 +269,7 @@ def qdata(g,ps):
   typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
- elif typ=='know' and int(g['spice'] or 1)>=3 and '✏️ משהו אחר' not in opts:opts=list(opts)+['✏️ משהו אחר']
+ elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(g) not in opts:opts=list(opts)+[other_label(g)]
  return typ,formatted,list(opts),sub
 def _clean_pack(pack):
  clean=[];seen=set()
@@ -317,7 +317,7 @@ def ensure_round_score(g,ps,guessed):
   else:
    cur=c.execute('INSERT OR IGNORE INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()))
    if getattr(cur,'rowcount',0)!=1:return False
-  actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer'])
+  actual=(other_label(g) if str(g['answer']).startswith('OTHER::') else g['answer'])
   for pid,guess in guessed.items():
    if guess==actual:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
  return True
@@ -389,7 +389,7 @@ class H(BaseHTTPRequestHandler):
    guessed={r['player_id']:r['guess'] for r in gs};active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);ready=bool(g['answer']) and len([pid for pid in guessed if pid in active_ids and (not sub or pid!=sub['id'])])>=need
    if ready and ensure_round_score(g,ps,guessed):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
-   reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
+   reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=(other_label(g) if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
    idata=interactive_match_data(g,typ,text,sub) if reveal else None;matchmap={r['player_id']:r['answer'] for r in ma};matchready=bool(idata and all(pid in matchmap for pid in idata['player_ids']));matchmatched=bool(ms['matched']) if ms else (match_equal(matchmap.get(idata['player_ids'][0]),matchmap.get(idata['player_ids'][1])) if matchready else False)
    is_host=bool(host and secrets.compare_digest(host,g['host']));presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
    return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'hero':('/api/hero-image/'+g['code']+'/'+str(g['round_no'])) if hero and reveal else None,'final_hero':('/api/hero-image/'+g['code']+'/99') if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
@@ -533,7 +533,7 @@ class H(BaseHTTPRequestHandler):
    if not me or not sub or me['id']!=sub['id']:return self.J({'error':'subject_only'},403)
    if ans.startswith('OTHER::'):
     custom=ans[7:].strip()
-    if '✏️ משהו אחר' not in opts or len(custom)<1:return self.J({'error':'invalid_answer'},400)
+    if other_label(g) not in opts or len(custom)<1:return self.J({'error':'invalid_answer'},400)
     ans='OTHER::'+custom[:120]
    elif ans not in opts:return self.J({'error':'invalid_answer'},400)
    with cn() as c:
@@ -560,7 +560,7 @@ class H(BaseHTTPRequestHandler):
       cur=c.execute('INSERT OR IGNORE INTO round_scores(game_id,round_no,created) VALUES(?,?,?)',(g['id'],g['round_no'],now()));claimed=True if getattr(cur,'rowcount',0)==1 else None
      if claimed:
       for r in rows:
-       if r['player_id'] in active_ids and r['guess']==('✏️ משהו אחר' if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
+       if r['player_id'] in active_ids and r['guess']==(other_label(g) if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
    fresh=players(g['id'])
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
   if act=='matchanswer':
