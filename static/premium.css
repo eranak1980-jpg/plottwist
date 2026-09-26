@@ -70,3 +70,19 @@ body[data-game-status="playing"] .topbar{margin-bottom:6px}
 @keyframes softShimmer{to{transform:translateX(100%)}}
 @media(max-width:480px){main{padding:12px 12px calc(96px + env(safe-area-inset-bottom))}.card{padding:15px;margin:10px 0}.hero{padding:20px 0}.hero h1{font-size:36px}.brand{font-size:20px}.langSelect{min-width:126px;font-size:13px}.spice{grid-template-columns:repeat(3,1fr)}.spice button{font-size:12px}.subjectPhoto{width:76px;height:76px}.reveal{padding:12px}.mini{font-size:13px;padding:9px 11px}.row{gap:6px}.pwho{flex-wrap:wrap}.roomHeading .row{flex-wrap:nowrap}.roomCard .code{font-size:21px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+
+/* Guided setup hierarchy: play style -> group -> content */
+.setupFlow{display:grid;gap:14px;margin:12px 0}
+.setupStep{position:relative;background:#fbf7ff;border:1px solid #e1d6ec;border-radius:20px;padding:16px}
+.setupStep>div:nth-child(2){padding-inline-start:34px}
+.setupStep h3{margin:0 0 3px;font-size:18px;color:var(--ink)}
+.setupStep .tiny{margin:0 0 10px}
+.setupStepNo{position:absolute;inset-inline-start:14px;top:15px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--purple);color:#fff;font-size:13px;font-weight:900}
+.setupChoices{gap:8px;margin:10px 0}
+.setupChoices .topic,.audienceChoice{background:#fffdfa;color:var(--ink);border:1px solid #cdbfe0;box-shadow:0 2px 0 #eadff3;width:auto;padding:10px 13px;margin:0;border-radius:999px;font-weight:800}
+.setupChoices .topic.on,.audienceChoice.on{background:var(--purple);border-color:var(--purple);color:#fff;box-shadow:0 5px 15px #7547d823}
+.subChoice{margin:12px 0 8px;padding:12px;background:#f3ecfb;border:1px solid #e0d5ed;border-radius:16px}
+.subChoice>b{display:block;margin-bottom:7px}
+.setupFreeText{margin-top:8px;background:#fff;border-style:dashed}
+#contentTopics .topic[data-extra="1"].hidden{display:none!important}
+@media(max-width:480px){.setupStep{padding:14px}.setupStep h3{font-size:17px}.setupChoices .topic,.audienceChoice{font-size:13px;padding:9px 11px}}
