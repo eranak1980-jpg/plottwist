@@ -231,3 +231,19 @@ assert '<option value="ar">' not in html
 assert "language:uiLang" in html
 assert "d.language&&d.language!==uiLang" in html
 print('QA_LANGUAGE_SELECTOR_OK')
+
+
+# Non-Hebrew rooms must not leak common Hebrew UI strings from old hardcoded runtime copy.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+js=html.split('<script>',1)[1].split('</script>',1)[0]
+for old in [
+ 'ממשיכים בעוד רגע','המשך בלי ','לא הצלחתי לשמור את תשובת ה־Match',
+ 'מכין משחק חדש','מחכים לכל הניחושים','תמונת ה־AI לא נוצרה',
+ 'פוסטר ה־AI לא נוצר','התשובה נשמרת','הבחירה נקלטה',
+ 'פוסטר AI לא זמין','יש לך תמונה מוכנה ל־Reveal'
+]:
+ assert old not in js, old
+assert '<html lang="en" dir="ltr">' in html
+assert 'id="personalizationNote"' in html
+assert 'id="scoreContinue"' in html
+print('QA_LOCALE_LEAK_GUARD_OK')
