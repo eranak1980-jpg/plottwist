@@ -305,3 +305,70 @@ def match_prompt(lang, a, b):
     if lang == 'he':
         return ''
     return CALLBACK_COPY[lang]['match'].format(a=a, b=b)
+
+
+UI_COPY = {
+'en':{
+ 'home_title':'Who really knows the crew?','home_sub':'One person answers in secret. Everyone else guesses. The game learns your group as you play.',
+ 'create':'Create game','join':'Join game','create_title':'What kind of night are you having?','name':'Your name','topics':'What do you want to play about?','topics_hint':'Pick a few topics. Open more if you want.',
+ 'more':'More topics +','less':'Fewer topics −','rounds':'How many rounds?','spice':'How bold?','prize':'Winner prize (optional)','context':'Tell PlotTwist who you are (optional)','create_room':'Create room',
+ 'join_title':'Join the crew','room_code':'Room code','join_room':'Join','waiting_host':'Waiting for the host to start','start':'Start game','share':'Share link',
+ 'answer_saved':'Your answer is saved','guess_saved':'Your guess is saved','waiting_others':'Waiting for the other players','waiting_subject':'Waiting for {name} to answer in secret','reveal':'REVEAL','next':'Next question →',
+ 'finish':'Who knows the crew best?','play_again':'Play again with the same crew','new_game':'New game','how_title':'How to play','how1':'One player answers in secret.','how2':'Everyone else predicts their answer.','how3':'Correct guess = 1 point.','how4':'Do not reveal the answer before the Reveal.','got_it':'Got it — start',
+ 'adult':'All players are 18+ and agree to adult content in this room.','language':'Language','selected':'Selected: {topics}','add_topics':'Want to add something?','saved':'Saved','retry':'Try again',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'pts','offline':'offline'
+},
+'es':{
+ 'home_title':'¿Quién conoce de verdad al grupo?','home_sub':'Una persona responde en secreto. Los demás adivinan. El juego aprende cómo sois mientras jugáis.',
+ 'create':'Crear partida','join':'Unirse','create_title':'¿Qué tipo de noche os apetece?','name':'Tu nombre','topics':'¿Sobre qué queréis jugar?','topics_hint':'Elige varios temas. Puedes abrir más cuando quieras.',
+ 'more':'Más temas +','less':'Menos temas −','rounds':'¿Cuántas rondas?','spice':'¿Qué tan atrevido?','prize':'Premio para quien gane (opcional)','context':'Cuéntale a PlotTwist quiénes sois (opcional)','create_room':'Crear sala',
+ 'join_title':'Únete al grupo','room_code':'Código de sala','join_room':'Entrar','waiting_host':'Esperando a que el anfitrión empiece','start':'Empezar','share':'Compartir enlace',
+ 'answer_saved':'Tu respuesta está guardada','guess_saved':'Tu apuesta está guardada','waiting_others':'Esperando al resto','waiting_subject':'Esperando a que {name} responda en secreto','reveal':'REVEAL','next':'Siguiente pregunta →',
+ 'finish':'¿Quién conoce mejor al grupo?','play_again':'Jugar otra vez con el mismo grupo','new_game':'Nueva partida','how_title':'¿Cómo se juega?','how1':'Una persona responde en secreto.','how2':'Los demás intentan adivinar qué eligió.','how3':'Acierto = 1 punto.','how4':'No reveléis la respuesta antes del Reveal.','got_it':'Entendido — empezar',
+ 'adult':'Todos los participantes tienen 18+ y aceptan contenido para adultos.','language':'Idioma','selected':'Elegisteis: {topics}','add_topics':'¿Queréis añadir algo?','saved':'Guardado','retry':'Intentar otra vez',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'pts','offline':'sin conexión'
+},
+'pt-BR':{
+ 'home_title':'Quem conhece a galera de verdade?','home_sub':'Uma pessoa responde em segredo. Todo mundo tenta adivinhar. O jogo aprende sobre vocês enquanto rola.',
+ 'create':'Criar jogo','join':'Entrar no jogo','create_title':'Que tipo de noite vocês querem?','name':'Seu nome','topics':'Sobre o que vocês querem jogar?','topics_hint':'Escolha alguns temas. Dá pra abrir mais quando quiser.',
+ 'more':'Mais temas +','less':'Menos temas −','rounds':'Quantas rodadas?','spice':'Qual o nível de ousadia?','prize':'Prêmio do vencedor (opcional)','context':'Conte ao PlotTwist quem vocês são (opcional)','create_room':'Criar sala',
+ 'join_title':'Entre na galera','room_code':'Código da sala','join_room':'Entrar','waiting_host':'Esperando o anfitrião começar','start':'Começar jogo','share':'Compartilhar link',
+ 'answer_saved':'Sua resposta foi salva','guess_saved':'Seu palpite foi salvo','waiting_others':'Esperando o resto da galera','waiting_subject':'Esperando {name} responder em segredo','reveal':'REVEAL','next':'Próxima pergunta →',
+ 'finish':'Quem conhece melhor a galera?','play_again':'Jogar de novo com a mesma galera','new_game':'Novo jogo','how_title':'Como jogar?','how1':'Uma pessoa responde em segredo.','how2':'Todo mundo tenta prever a resposta.','how3':'Acertou = 1 ponto.','how4':'Não revele a resposta antes do Reveal.','got_it':'Entendi — começar',
+ 'adult':'Todos os participantes têm 18+ e concordam com conteúdo adulto nesta sala.','language':'Idioma','selected':'Vocês escolheram: {topics}','add_topics':'Querem adicionar algo?','saved':'Salvo','retry':'Tentar de novo',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'pts','offline':'offline'
+},
+'fr':{
+ 'home_title':'Qui connaît vraiment le groupe ?','home_sub':'Une personne répond en secret. Les autres devinent. Le jeu apprend à vous connaître au fil des manches.',
+ 'create':'Créer une partie','join':'Rejoindre','create_title':'Vous voulez quelle ambiance ce soir ?','name':'Ton prénom','topics':'Vous voulez jouer sur quoi ?','topics_hint':'Choisissez quelques thèmes. Vous pourrez en afficher davantage.',
+ 'more':'Plus de thèmes +','less':'Moins de thèmes −','rounds':'Combien de manches ?','spice':'Quel niveau d’audace ?','prize':'Prix du gagnant (optionnel)','context':'Dites à PlotTwist qui vous êtes (optionnel)','create_room':'Créer la salle',
+ 'join_title':'Rejoins le groupe','room_code':'Code de la salle','join_room':'Rejoindre','waiting_host':'En attente du lancement par l’hôte','start':'Commencer','share':'Partager le lien',
+ 'answer_saved':'Ta réponse est enregistrée','guess_saved':'Ton pronostic est enregistré','waiting_others':'On attend les autres joueurs','waiting_subject':'On attend que {name} réponde en secret','reveal':'REVEAL','next':'Question suivante →',
+ 'finish':'Qui connaît le mieux le groupe ?','play_again':'Rejouer avec le même groupe','new_game':'Nouvelle partie','how_title':'Comment jouer ?','how1':'Une personne répond en secret.','how2':'Les autres essaient de deviner sa réponse.','how3':'Bonne réponse = 1 point.','how4':'Ne révélez rien avant le Reveal.','got_it':'Compris — on joue',
+ 'adult':'Tous les participants ont 18+ et acceptent le contenu adulte de cette salle.','language':'Langue','selected':'Vous avez choisi : {topics}','add_topics':'Vous voulez ajouter quelque chose ?','saved':'Enregistré','retry':'Réessayer',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'pts','offline':'hors ligne'
+},
+'ar':{
+ 'home_title':'مين فعلاً يعرف المجموعة؟','home_sub':'شخص واحد يجاوب بالسر، والباقي يحاولون يخمنون. اللعبة تتعلم عنكم مع كل جولة.',
+ 'create':'أنشئ لعبة','join':'انضم للعبة','create_title':'أي جو تبغونه الليلة؟','name':'اسمك','topics':'عن إيش تبغون تلعبون؟','topics_hint':'اختاروا كم موضوع، وتقدرون تفتحون مواضيع أكثر.',
+ 'more':'مواضيع أكثر +','less':'مواضيع أقل −','rounds':'كم جولة؟','spice':'قد إيش تبغونها جريئة؟','prize':'جائزة الفائز (اختياري)','context':'قولوا لـ PlotTwist مين أنتم (اختياري)','create_room':'أنشئ الغرفة',
+ 'join_title':'ادخل مع المجموعة','room_code':'رمز الغرفة','join_room':'انضم','waiting_host':'ننتظر المضيف يبدأ','start':'ابدأ اللعبة','share':'شارك الرابط',
+ 'answer_saved':'تم حفظ إجابتك','guess_saved':'تم حفظ تخمينك','waiting_others':'ننتظر باقي اللاعبين','waiting_subject':'ننتظر {name} يجاوب بالسر','reveal':'الكشف','next':'السؤال التالي ←',
+ 'finish':'مين يعرف المجموعة أكثر؟','play_again':'العبوا مرة ثانية بنفس المجموعة','new_game':'لعبة جديدة','how_title':'كيف نلعب؟','how1':'لاعب واحد يجاوب بالسر.','how2':'الباقي يحاولون يخمنون اختياره.','how3':'تخمين صحيح = نقطة.','how4':'لا تكشفون الإجابة قبل مرحلة الكشف.','got_it':'فهمت — نبدأ',
+ 'adult':'كل المشاركين أعمارهم 18+ ويوافقون على محتوى للبالغين في هذه الغرفة.','language':'اللغة','selected':'اخترتم: {topics}','add_topics':'تبغون تضيفون شيء؟','saved':'تم الحفظ','retry':'حاول مرة ثانية',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'نقطة','offline':'غير متصل'
+},
+'he':{
+ 'home_title':'מי באמת מכיר את החבורה?','home_sub':'אחד עונה בסוד. כולם מנחשים. המשחק לומד אתכם תוך כדי.',
+ 'create':'צור משחק','join':'הצטרף למשחק','create_title':'איזה ערב בא לכם?','name':'השם שלך','topics':'על מה בא לכם לשחק?','topics_hint':'בחרו כמה נושאים. אפשר לפתוח עוד.',
+ 'more':'עוד נושאים +','less':'פחות נושאים −','rounds':'כמה סיבובים?','spice':'רמת החריפות','prize':'פרס למנצח (אופציונלי)','context':'ספרו ל־PlotTwist מי אתם (אופציונלי)','create_room':'צור חדר',
+ 'join_title':'נכנסים לחבורה','room_code':'קוד חדר','join_room':'הצטרף','waiting_host':'מחכים למארח להתחיל','start':'מתחילים','share':'שתף לינק',
+ 'answer_saved':'התשובה נשמרה','guess_saved':'הניחוש נשמר','waiting_others':'מחכים לשאר השחקנים','waiting_subject':'מחכים ל־{name} לענות בסוד','reveal':'REVEAL','next':'לשאלה הבאה →',
+ 'finish':'מי מכיר את החבורה הכי טוב?','play_again':'עוד משחק עם אותה חבורה','new_game':'משחק חדש','how_title':'איך משחקים?','how1':'אחד השחקנים עונה בסוד.','how2':'האחרים מנסים לנחש מה הוא בחר.','how3':'ניחוש נכון = נקודה.','how4':'לא מגלים את התשובה לפני ה־Reveal.','got_it':'הבנתי — מתחילים',
+ 'adult':'כל המשתתפים בני 18 ומעלה ומאשרים תוכן למבוגרים בחדר הזה.','language':'שפה','selected':'בחרתם: {topics}','add_topics':'רוצים להוסיף משהו?','saved':'נשמר','retry':'נסה שוב',
+ 'family':'Family / Chill','bold':'Bold','no_filter':'No Filter','points':'נק׳','offline':'מנותק/ת'
+},
+}
+
+def ui_copy(lang):
+    return UI_COPY[normalize_language(lang)]
