@@ -17,6 +17,29 @@ function applyCopy(){
  let lb=document.querySelectorAll('.lengths button');if(lb[0])lb[0].innerHTML='⚡ '+(copy.short||'Short')+'<br><small>8</small>';if(lb[1])lb[1].innerHTML='🎉 '+(copy.regular||'Regular')+'<br><small>12</small>';if(lb[2])lb[2].innerHTML='🔥 '+(copy.long||'Long')+'<br><small>18</small>';
  let sb=document.querySelectorAll('.spice button');if(sb[0])sb[0].innerHTML='🌶️ Chill<br><small>'+(copy.chill_desc||'')+'</small>';if(sb[1])sb[1].innerHTML='🌶️🌶️ Bold<br><small>'+(copy.bold_desc||'')+'</small>';if(sb[2])sb[2].innerHTML='🌶️🌶️🌶️ No Filter<br><small>'+(copy.nofilter_desc||'')+'</small>';
  let inspire=$('#create .inspire');if(inspire)inspire.classList.toggle('hidden',uiLang!=='he');
+ $('#shareBtn').textContent=copy.share||'Share link';
+ $('#summaryTitle').textContent=copy.game_summary||'🎭 Your game';
+ $('#summaryTopicsLabel').textContent=(copy.topics_label||'Topics')+':';
+ $('#summaryRoundsLabel').textContent=(copy.length_label||'Length')+':';
+ $('#summarySpiceLabel').textContent=(copy.level_label||'Level')+':';
+ $('#summaryContextLabel').textContent=(copy.about_label||'About your group')+':';
+ $('#summaryPrizeLabel').textContent='🏆 '+(copy.prize_label||'Prize')+':';
+ $('#lobbyNote').textContent=copy.lobby_note||'';
+ $('#addMoreTitle').textContent=copy.add_more||'';
+ $('#addMoreHint').textContent=copy.add_more_hint||'';
+ $('#editSetupBtn').textContent=copy.edit_game||'✏️ Edit game';
+ $('#editTitle').textContent=copy.edit_title||'✏️ Edit before starting';
+ $('#editTopicsLabel').textContent=copy.topics_label||'Topics';
+ $('#editRoundsLabel').textContent=copy.rounds||'Rounds';
+ $('#editSpiceLabel').textContent=copy.level_label||'Level';
+ $('#editAdultText').textContent=copy.adult||'';
+ $('#editContextLabel').textContent=copy.about_label||'About your group';
+ $('#editPrizeLabel').textContent='🏆 '+(copy.prize_label||'Prize');
+ $('#saveEditBtn').textContent=copy.save_changes||'Save changes';$('#cancelEditBtn').textContent=copy.cancel||'Cancel';
+ $('#photoToggle').textContent=copy.photo_add||'📸 Add/change photo';$('#photoTitle').textContent=copy.photo_title||'📸 Your photo';$('#photoHelp').textContent=copy.photo_help||'';$('#photoConsentText').textContent=copy.photo_consent||'';$('#photoSave').textContent=copy.photo_save||'Save photo';
+ $('#customTitle').textContent=copy.custom_title||'✏️ What’s your answer?';$('#customText').placeholder=copy.custom_ph||'';$('#customSaveBtn').textContent=copy.custom_save||'Save in secret';
+ $('#reviewBtn').textContent=copy.previous||'← Previous round';$('#reopenBtn').textContent=copy.back_lobby||'↩️ Back to lobby';$('#playPhotoBtn').textContent=copy.photo_button||'📸 Photo';$('#skip').textContent=copy.too_personal||'⏭️ Skip';
+ $('#guessTitle').textContent=copy.guesses_title||'👀 What everyone guessed';$('#next').textContent=copy.next||'Next question →';$('#scoreContinue').textContent=copy.score_continue||'';
  renderCreateTopics();
 }
 async function setLanguage(lang,fromRoom=false){
