@@ -41,10 +41,10 @@ try:
     # Device-aware duplicate join: retry/reopen must recover the same Player.
     c = request('/api/create', {
         'name': 'Eran', 'topics': [], 'spice': 1, 'rounds': 6,
-        'client_id': 'device-host',
+        'client_id': 'device-host', 'gender':'male',
     })
     code, host_token, eran_token = c['code'], c['host'], c['token']
-    j1 = request('/api/join', {'code': code, 'name': 'Shai', 'client_id': 'device-shai'})
+    j1 = request('/api/join', {'code': code, 'name': 'Shai', 'client_id': 'device-shai', 'gender':'female'})
     j2 = request('/api/join', {'code': code, 'name': 'Shai', 'client_id': 'device-shai'})
     assert j2['recovered'] and j2['token'] == j1['token']
     g = k.game(code)
@@ -55,6 +55,14 @@ try:
     st = request(f"/api/state/{code}?token={j1['token']}")
     assert st['me']['name'] == 'Shai' and st['code'] == code
     print('HTTP_TOKEN_RECONNECT_OK')
+    assert st['me']['gender']=='female'  # reconnect without gender must preserve it
+    assert next(p for p in st['players'] if p['name']=='Eran')['gender']=='male'
+    request(f'/api/{code}/profile', {'token':'invalid','gender':'male'}, expected=404)
+    request(f'/api/{code}/profile', {'token':j1['token'],'gender':'invalid'}, expected=400)
+    request(f'/api/{code}/profile', {'token':j1['token'],'gender':'unspecified'})
+    assert request(f"/api/state/{code}?token={j1['token']}")['me']['gender']=='unspecified'
+    print('HTTP_OPTIONAL_GENDER_PERSISTENCE_AND_AUTH_OK')
+
 
     # Start is immediate. First secret answer / prediction is locked server-side.
     request(f'/api/{code}/start', {'host': host_token})
@@ -134,6 +142,15 @@ try:
     fresh = request(f"/api/state/{c3['code']}?token={c3['token']}&host={c3['host']}")
     assert not k.too_similar(k.question_key(fresh['question'], k.players(g3['id'])), {old_key})
     print('HTTP_PLAY_AGAIN_NEW_QUESTIONS_OK')
+    # New rounds have no generic catch-all, while legacy submitted custom rounds survive.
+    from kyc_locales import other_label
+    for lang in ['he','en','es','pt-BR','fr','ja']:
+        with k.cn() as db:
+            db.execute('UPDATE games SET language=?,spice=3,round_no=0,answer=\'\' WHERE id=?',(lang,g3['id']))
+        test_game=k.game(c3['code'])
+        assert other_label(lang) not in k.qdata(test_game,k.players(g3['id']))[2]
+    print('HTTP_NO_GENERIC_OTHER_OPTION_ALL_LANGUAGES_OK')
+
 
     # Adult intimacy is 18+ even when the room is not No Filter.
     adult = request('/api/create', {

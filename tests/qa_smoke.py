@@ -179,12 +179,10 @@ for topic in ['מה היית עושה אם…','דילמות','מי הכי…','
  assert len(k.TOPICS.get(topic,[]))>=10,(topic,len(k.TOPICS.get(topic,[])))
 print('QA_SUBGAME_DEPTH_OK')
 
-# new=1 must clear stale room state before the browser reads it, preventing an old-room flash.
+# Exercise actual boot behavior, including new game and durable room recovery.
+import subprocess
+subprocess.run(['node','tests/session_ui.js'],check=True)
 html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
-reset=html.index("if(bootParams.get('new')==='1')")
-read=html.index("JSON.parse(localStorage.getItem('kyc')")
-assert reset<read,(reset,read)
-print('QA_NEW_GAME_BOOT_RESET_OK')
 
 # Polling must be change-aware rather than re-rendering the DOM on every interval.
 assert "if(sig!==stateSig){stateSig=sig;render(d)}" in html

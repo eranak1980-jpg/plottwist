@@ -48,6 +48,7 @@ def init():
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_seen TEXT DEFAULT ''")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS client_id TEXT DEFAULT ''")
+   c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS gender TEXT DEFAULT 'unspecified'")
    c.execute("""CREATE TABLE IF NOT EXISTS guesses(game_id BIGINT,round_no INTEGER,player_id BIGINT,guess TEXT,UNIQUE(game_id,round_no,player_id))""")
    c.execute("""CREATE TABLE IF NOT EXISTS hero_scenes(game_id BIGINT,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("""CREATE TABLE IF NOT EXISTS round_scores(game_id BIGINT,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
@@ -70,7 +71,7 @@ def init():
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
   image_jobs.init_jobs(c);instant.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
-  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''")]:
+  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
   c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
@@ -81,6 +82,8 @@ def players(gid):
  with cn() as c:return c.execute('SELECT * FROM players WHERE game_id=? ORDER BY id',(gid,)).fetchall()
 def live_players(gid):
  return [p for p in players(gid) if int(p['active'] if p['active'] is not None else 1)==1]
+def normalize_gender(value):
+ return value if value in ('male','female','unspecified') else 'unspecified'
 def _norm_name(x):
  return ' '.join(str(x or '').strip().lower().split())
 def crew_key(ps):
@@ -310,7 +313,9 @@ def qdata(g,ps):
   typ='know';formatted,opts=last_resort(lang,sub['name'])
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
- elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(lang) not in opts:opts=list(opts)+[other_label(lang)]
+ elif typ=='know':
+  opts=[o for o in opts if str(o).strip().removeprefix('✏️').strip().casefold()!=other_label(lang).removeprefix('✏️').strip().casefold()]
+  if str(g['answer']).startswith('OTHER::'):opts=list(opts)+[other_label(lang)]
  return typ,formatted,list(opts),sub
 def _clean_pack(pack):
  clean=[];seen=set()
@@ -507,7 +512,7 @@ class H(BaseHTTPRequestHandler):
    reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
    idata=interactive_match_data(g,typ,text,sub) if reveal else None;matchmap={r['player_id']:r['answer'] for r in ma};matchready=bool(idata and all(pid in matchmap for pid in idata['player_ids']));matchmatched=bool(ms['matched']) if ms else (match_equal(matchmap.get(idata['player_ids'][0]),matchmap.get(idata['player_ids'][1])) if matchready else False)
    is_host=bool(host and secrets.compare_digest(host,g['host']));presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),'final_image_eligible':bool(ps and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_data'] and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_consent']),'instant_visual':instant_url(g['round_no']),'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),'hero_status':hero_status,'final_hero_status':final_hero_status,'hero':image_url(g,g['round_no']) if hero and reveal else None,'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'gender':me['gender'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'gender':x['gender'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'gender':sub['gender'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'gender':x['gender'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),'final_image_eligible':bool(ps and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_data'] and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_consent']),'instant_visual':instant_url(g['round_no']),'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),'hero_status':hero_status,'final_hero_status':final_hero_status,'hero':image_url(g,g['round_no']) if hero and reveal else None,'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -520,7 +525,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
-    c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id) VALUES(?,?,?,?,1,?,?)',(gid,name,pt,now(),now(),client_id))
+    c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(gid,name,pt,now(),now(),client_id,normalize_gender(d.get('gender'))))
    Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
    return self.J({'code':co,'host':ht,'token':pt,'name':name,'language':language})
   if p=='/api/join':
@@ -536,7 +541,7 @@ class H(BaseHTTPRequestHandler):
    if len(live_players(g['id']))>=6:return self.J({'error':'full'},409)
    tok=secrets.token_urlsafe(16)
    try:
-    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id) VALUES(?,?,?,?,1,?,?)',(g['id'],name,tok,now(),now(),client_id))
+    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(g['id'],name,tok,now(),now(),client_id,normalize_gender(d.get('gender'))))
    except Exception:
     existing=next((x for x in players(g['id']) if (client_id and (x['client_id'] or '')==client_id) or _norm_name(x['name'])==_norm_name(name)),None)
     if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
@@ -610,6 +615,13 @@ class H(BaseHTTPRequestHandler):
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,rounds=?,custom_questions=?,adults_confirmed=?,language=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,'[]',1 if adult else 0,language,g['id']))
    fresh=game(g['code']);Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),ctx,sp,language),daemon=True).start();return self.J({'ok':True,'language':language})
+  if act=='profile':
+   me=next((x for x in ps if x['token']==d.get('token')),None)
+   if not me:return self.J({'error':'player_not_found'},404)
+   gender=d.get('gender')
+   if gender not in ('male','female','unspecified'):return self.J({'error':'invalid_gender'},400)
+   with cn() as c:c.execute('UPDATE players SET gender=? WHERE id=?',(gender,me['id']))
+   return self.J({'ok':True})
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
