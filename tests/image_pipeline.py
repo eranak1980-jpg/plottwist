@@ -248,10 +248,6 @@ class ProviderTests(unittest.TestCase):
 
     def call(self,outcomes):
         calls=[];constructor=[]
-        class Stream:
-            def __init__(self,events):self.events=events;self.closed=False
-            def __iter__(self):return iter(self.events)
-            def close(self):self.closed=True
         class Client:
             def __init__(self,**kw):constructor.append(kw);self.images=self
             def __enter__(self):return self
@@ -259,7 +255,7 @@ class ProviderTests(unittest.TestCase):
             def edit(self,**kw):
                 calls.append(kw);result=outcomes.pop(0)
                 if isinstance(result,Exception):raise result
-                return Stream(result)
+                return types.SimpleNamespace(data=result)
         with patch.dict(sys.modules,{'openai':types.SimpleNamespace(OpenAI=Client)}),patch.object(visuals.time,'sleep'):
             try:result=visuals.generate_many([('Alice',PHOTO)],'Question','Answer','Alice')
             except Exception as e:result=e
@@ -272,7 +268,7 @@ class ProviderTests(unittest.TestCase):
         result,calls,ctor=self.call([error,good]);self.assertEqual(result,ART);self.assertEqual(len(calls),2)
         self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(ctor[0]['timeout'],60);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
         self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg');self.assertEqual(calls[0]['quality'],'low');self.assertEqual(calls[0]['size'],'832x832')
-        self.assertTrue(calls[0]['stream']);self.assertEqual(calls[0]['partial_images'],1)
+        self.assertNotIn('stream',calls[0]);self.assertNotIn('partial_images',calls[0])
         self.assertIn('EXACTLY 1 distinct people',calls[0]['prompt']);self.assertEqual(calls[0]['n'],1)
         for err in [TimeoutError('timeout'),RuntimeError('empty')]:
             _,calls,_=self.call([err,good]);self.assertEqual(len(calls),1)
