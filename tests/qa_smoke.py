@@ -146,3 +146,29 @@ assert k.match_equal(' Tokyo ', 'tokyo')
 assert k.match_equal('תאילנד!', 'תאילנד')
 assert not k.match_equal('טוקיו', 'פריז')
 print('QA_MATCH_TWIST_COMPARE_OK')
+
+
+# Repeat guard should catch a lightly reworded version of the same scenario.
+assert k.too_similar(
+ 'מקבל 100000 שקל שחייבים לבזבז בתוך 24 שעות לאן הכסף הולך',
+ {'מקבל 100000 שקל וצריך לבזבז הכל ב 24 שעות מה קונים קודם'}
+)
+print('QA_SEMANTICISH_REPEAT_GUARD_OK')
+
+# Duo callbacks now support the open-answer Match Twist too.
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(4,json.dumps([
+  {'round':0,'subject':'Dana','question':'Q0','answer':'טיסה','type':'know'},
+  {'round':1,'subject':'Noa','question':'Q1','answer':'בית','type':'know'},
+  {'round':2,'subject':'Dana','question':'Q2','answer':'ספונטני','type':'know'}
+ ],ensure_ascii=False),duo['id']))
+duo=k.game('DUO12');dps=k.players(duo['id']);cb=k.duo_callback(duo,dps,4)
+if cb:
+ md=k.interactive_match_data(duo,cb[0],cb[1],cb[3])
+ assert md and len(md['player_ids'])==2
+print('QA_DUO_MATCH_TWIST_OK')
+
+# Core topic packs have enough curated variety even if AI generation is unavailable.
+for topic in ['משפחה','דייטים','זוגיות','חיי לילה','נסיעות','כסף','קריירה ועסקים','נוסטלגיה','אוכל','מוזיקה','טכנולוגיה','תרבות ופופ']:
+ assert len(k.TOPICS.get(topic,[]))>=3,(topic,len(k.TOPICS.get(topic,[])))
+print('QA_CURATED_VARIETY_OK')
