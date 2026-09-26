@@ -7,6 +7,7 @@ from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many,decode_image,MODEL,warm_image_runtime
 import kyc_image_jobs as image_jobs
+import kyc_instant as instant
 from kyc_ai import generate_pack
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
@@ -57,7 +58,7 @@ def init():
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS image_run INTEGER DEFAULT 0")
-   image_jobs.init_jobs(c)
+   image_jobs.init_jobs(c);instant.init(c)
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
@@ -66,7 +67,7 @@ def init():
   for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'")]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
-  image_jobs.init_jobs(c)
+  image_jobs.init_jobs(c);instant.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
@@ -371,9 +372,11 @@ def prepare_hero_async(gid,rn,expected_run=None):
   # to build the visual payload and remain private from the image prompt.
   sub=ps[int(rn)%len(ps)] if ps else None
   if not sub:return 'not_ready'
- if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
  payload=image_payload(g,ps,final)
  if not payload:return 'no_photo'
+ try:instant.prepare(cn,g,int(rn),payload,ps)
+ except Exception as e:print('instant visual failed',type(e).__name__,flush=True)
+ if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
  return image_jobs.queue(cn,g,int(rn),payload,generate_many)
 def schedule_image_after_action(gid):
  try:
@@ -414,7 +417,7 @@ class H(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'text/plain');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'durable-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'hybrid-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
   if p.startswith('/api/photo/'):
@@ -431,6 +434,18 @@ class H(BaseHTTPRequestHandler):
     head,data=pl['photo_data'].split(',',1);raw=base64.b64decode(data);mime=head.split(';')[0].split(':',1)[1]
     self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, no-cache');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
    except:return self.send_error(404)
+  if p.startswith('/api/instant-image/'):
+   a=p.strip('/').split('/')
+   if len(a)!=4:return self.send_error(404)
+   g=game(a[2])
+   if not g:return self.send_error(404)
+   try:rn=int(a[3]);run=int(parse_qs(u.query).get('run',['-1'])[0])
+   except:return self.send_error(404)
+   if run!=g['image_run']:return self.send_error(404)
+   with cn() as c:row=c.execute('SELECT image_data FROM instant_scenes WHERE game_id=? AND image_run=? AND round_no=?',(g['id'],run,rn)).fetchone()
+   if not row:return self.send_error(404)
+   mime,raw=decode_data_url(row['image_data'])
+   self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','private, max-age=86400, immutable');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
   if p.startswith('/api/hero-image/'):
    a=p.strip('/').split('/')
    if len(a)!=4:return self.send_error(404)
@@ -470,10 +485,12 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     hero_status='ready' if hero else image_jobs.status(c,g['id'],g['image_run'],g['round_no'])
     final_hero_status='ready' if finalhero else image_jobs.status(c,g['id'],g['image_run'],99)
+    visuals={r['round_no']:r['category'] for r in c.execute('SELECT round_no,category FROM instant_scenes WHERE game_id=? AND image_run=?',(g['id'],g['image_run'])).fetchall()}
+   instant_url=lambda rn:'/api/instant-image/'+g['code']+'/'+str(rn)+'?run='+str(g['image_run']) if rn in visuals else None
    reveal=ready or g['status']=='finished';myguess=guessed.get(me['id']) if me else None;actual=(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']);shown=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);iscorrect=bool(reveal and myguess is not None and myguess==actual)
    idata=interactive_match_data(g,typ,text,sub) if reveal else None;matchmap={r['player_id']:r['answer'] for r in ma};matchready=bool(idata and all(pid in matchmap for pid in idata['player_ids']));matchmatched=bool(ms['matched']) if ms else (match_equal(matchmap.get(idata['player_ids'][0]),matchmap.get(idata['player_ids'][1])) if matchready else False)
    is_host=bool(host and secrets.compare_digest(host,g['host']));presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
-   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),'final_image_eligible':bool(ps and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_data'] and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_consent']),'hero_status':hero_status,'final_hero_status':final_hero_status,'hero':image_url(g,g['round_no']) if hero and reveal else None,'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
+   return self.J({'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,'me':{'id':me['id'],'name':me['name'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,'players':[{'id':x['id'],'name':x['name'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],'photo_count':sum(1 for x in ps if x['photo_data']),'subject':{'id':sub['id'],'name':sub['name'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'interactive':interactive_prompt(g,typ,text,shown,sub) if reveal else '','interactive_match':({'prompt':idata['prompt'],'participants':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),'')} for pid in idata['player_ids']],'my_submitted':bool(me and me['id'] in matchmap),'ready':matchready,'matched':matchmatched if matchready else None,'answers':[{'id':pid,'name':next((p['name'] for p in ps if p['id']==pid),''),'answer':matchmap.get(pid,'')} for pid in idata['player_ids']] if matchready else []} if idata else None),'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,'all_guesses':[{'player_id':x['id'],'name':x['name'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),'final_image_eligible':bool(ps and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_data'] and sorted(ps,key=lambda p:p['score'],reverse=True)[0]['photo_consent']),'instant_visual':instant_url(g['round_no']),'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),'hero_status':hero_status,'final_hero_status':final_hero_status,'hero':image_url(g,g['round_no']) if hero and reveal else None,'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,'topics':effective_topics(g),'topics_display':topic_labels(effective_topics(g),game_language(g)),'direction':direction(game_language(g)),'topic_votes':topic_vote_data(g),'my_topic_votes':player_topic_votes(g['id'],me['id'] if me else None),'mode':'duo' if len(ps)==2 else 'group','ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]})
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   p=urlparse(self.path).path;d=self.B()
@@ -530,7 +547,7 @@ class H(BaseHTTPRequestHandler):
    if first_reveal:return self.J({'error':'too_late'},409)
    with cn() as c:
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='' WHERE id=?",(g['id'],))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM instant_scenes WHERE game_id=?',(g['id'],))
    return self.J({'ok':True})
   if act=='drop':
    try:pid=int(d.get('player_id',0))
@@ -560,7 +577,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]' WHERE id=?",(g['id'],))
     c.execute('UPDATE players SET score=0,active=1,last_seen=? WHERE game_id=?',(now(),g['id']))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM instant_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    fresh=game(g['code'])
    Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1),game_language(fresh)),daemon=True).start()
    return self.J({'ok':True})
@@ -585,7 +602,9 @@ class H(BaseHTTPRequestHandler):
    try:decode_image(data)
    except Exception:return self.J({'error':'invalid_image'},400)
    try:
-    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
+    with cn() as c:
+     instant.save_portrait(c,me['id'],data)
+     c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
    except Exception as e:
     print('photo save db error',type(e).__name__,flush=True);return self.J({'error':'photo_save_failed'},503)
    return self.J({'ok':True,'bytes':len(data)})
@@ -609,7 +628,7 @@ class H(BaseHTTPRequestHandler):
    pack=_clean_pack(custom_questions(g))
    with cn() as c:
     c.execute("UPDATE games SET status='playing',round_no=0,answer='',memory='[]',custom_questions=? WHERE id=?",(json.dumps(pack,ensure_ascii=False),g['id']))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
+    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM instant_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    return self.J({'ok':True,'tailored_questions':len(pack)})
   if act=='answer':
    me=next((x for x in ps if x['token']==d.get('token')),None);ans=str(d.get('answer',''))[:160]
@@ -701,4 +720,4 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
-def run():init();warm_image_runtime();image_jobs.recover(cn,generate_many);ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
+def run():init();instant.warm();warm_image_runtime();image_jobs.recover(cn,generate_many);ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
