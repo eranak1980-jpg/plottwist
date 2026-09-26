@@ -270,8 +270,8 @@ class ProviderTests(unittest.TestCase):
         good=[types.SimpleNamespace(type='image_edit.partial_image',b64_json=ART.split(',')[1])]
         error=RuntimeError('temporary');error.status_code=429
         result,calls,ctor=self.call([error,good]);self.assertEqual(result,ART);self.assertEqual(len(calls),2)
-        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(ctor[0]['timeout'],12);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
-        self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg');self.assertEqual(calls[0]['quality'],'low');self.assertEqual(calls[0]['size'],'1024x1024')
+        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(ctor[0]['timeout'],5);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
+        self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg');self.assertEqual(calls[0]['quality'],'low');self.assertEqual(calls[0]['size'],'832x832')
         self.assertTrue(calls[0]['stream']);self.assertEqual(calls[0]['partial_images'],1)
         self.assertIn('EXACTLY 1 distinct people',calls[0]['prompt']);self.assertEqual(calls[0]['n'],1)
         for err in [TimeoutError('timeout'),RuntimeError('empty')]:
