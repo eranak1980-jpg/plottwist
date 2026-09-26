@@ -1,19 +1,27 @@
 import json,os
-def generate_pack(topics,context,spice):
+from kyc_locales import normalize_language,topic_labels
+
+def generate_pack(topics,context,spice,language='en'):
+ language=normalize_language(language)
  key=os.getenv('OPENAI_API_KEY','').strip()
  if not key:return []
  level={1:'Chill: playful and broadly comfortable',2:'Bold: personal, cheeky and revealing but not sexual unless the selected topics call for it',3:'No Filter: adults-only, bold, cheeky and genuinely spicy. Questions may involve dating apps, attraction, sexual chemistry, flirting, hookups, types, turn-ons/turn-offs and sex-life preferences, while staying non-graphic and never pressuring anyone to disclose a specific private sexual event'}[int(spice)]
+ names={'en':'English','es':'Spanish','pt-BR':'Brazilian Portuguese','fr':'French','ar':'Arabic','he':'Hebrew'}
+ natural={'en':'natural contemporary English used by friends at a party','es':'natural contemporary Spanish that sounds native and social, not translated','pt-BR':'natural contemporary Brazilian Portuguese, casual and social, not European Portuguese','fr':'natural contemporary French used by friends, not literal translation','ar':'natural conversational modern Arabic that is widely understandable, warm and social, not stiff MSA','he':'natural contemporary Hebrew used by friends at a party'}
+ display_topics=topic_labels(topics,language)
  prompt=f"""You design premium social party-game questions for PlotTwist: Know Your Crew.
+Write DIRECTLY in {names[language]}. Do not translate from Hebrew or English. Think and write natively in {natural[language]}.
+All player-facing question text and answer options must be in {names[language]}. Player names stay unchanged.
 All players are adults when spice=3.
-Selected topics: {', '.join(topics) if topics else 'mixed'}
+Selected topics: {', '.join(display_topics) if display_topics else 'mixed'}
 Host description of the group: {context or 'none'}
 Spice level: {level}
 
 Create exactly 10 excellent questions tailored to THIS group. The game loop: one spotlight player answers secretly; everyone else predicts their answer.
 Return ONLY a JSON array. Each item must be either:
-{{"type":"know","text":"Hebrew question containing {{s}} for spotlight player","options":["4 short mutually distinct Hebrew answers"]}}
+{{"type":"know","text":"question in the requested language containing {{s}} for spotlight player","options":["4 short mutually distinct answers in the requested language"]}}
 or
-{{"type":"room","text":"Hebrew question containing {{s}}","options":[]}}
+{{"type":"room","text":"question in the requested language containing {{s}}","options":[]}}
 For room questions the answer will be one of the other players.
 
 Editorial standard:
