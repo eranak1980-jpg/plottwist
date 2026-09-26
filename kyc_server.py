@@ -7,8 +7,15 @@ from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,TOPICS,SPICY
 from kyc_visuals import generate_many
 from kyc_ai import generate_pack
-BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
+BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
 def now():return datetime.now(timezone.utc).isoformat()
+def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
+def recently_seen(p,timeout=PRESENCE_TIMEOUT):
+ raw=(p['last_seen'] if 'last_seen' in p.keys() else '') or (p['joined'] if 'joined' in p.keys() else '')
+ if not raw:return False
+ try:
+  dt=datetime.fromisoformat(str(raw).replace('Z','+00:00'));return (datetime.now(timezone.utc)-dt).total_seconds()<=timeout
+ except:return False
 class CompatConn:
  def __init__(self,raw,pg=False):self.raw=raw;self.pg=pg
  def __enter__(self):self.raw.__enter__();return self
@@ -30,10 +37,12 @@ def cn():
 def init():
  if USE_PG:
   with cn() as c:
-   c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT)""")
-   c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0,active INTEGER DEFAULT 1,last_seen TEXT DEFAULT '')""")
+   c.execute("""CREATE TABLE IF NOT EXISTS games(id BIGSERIAL PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,created TEXT)""")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS adults_confirmed INTEGER DEFAULT 0")
+   c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0,active INTEGER DEFAULT 1,last_seen TEXT DEFAULT '',client_id TEXT DEFAULT '')""")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_seen TEXT DEFAULT ''")
+   c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS client_id TEXT DEFAULT ''")
    c.execute("""CREATE TABLE IF NOT EXISTS guesses(game_id BIGINT,round_no INTEGER,player_id BIGINT,guess TEXT,UNIQUE(game_id,round_no,player_id))""")
    c.execute("""CREATE TABLE IF NOT EXISTS hero_scenes(game_id BIGINT,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("""CREATE TABLE IF NOT EXISTS round_scores(game_id BIGINT,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
@@ -43,18 +52,20 @@ def init():
    c.execute("""CREATE TABLE IF NOT EXISTS match_scores(game_id BIGINT,round_no INTEGER,matched INTEGER,created TEXT,UNIQUE(game_id,round_no))""")
    c.execute("DELETE FROM players a USING players b WHERE a.game_id=b.game_id AND LOWER(TRIM(a.name))=LOWER(TRIM(b.name)) AND a.id>b.id")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
+   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
-  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT);CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key));CREATE TABLE IF NOT EXISTS match_answers(game_id INTEGER,round_no INTEGER,player_id INTEGER,answer TEXT,created TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS match_scores(game_id INTEGER,round_no INTEGER,matched INTEGER,created TEXT,UNIQUE(game_id,round_no));""")
+  c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,client_id TEXT DEFAULT '');CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key));CREATE TABLE IF NOT EXISTS match_answers(game_id INTEGER,round_no INTEGER,player_id INTEGER,answer TEXT,created TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS match_scores(game_id INTEGER,round_no INTEGER,matched INTEGER,created TEXT,UNIQUE(game_id,round_no));""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
-  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12')]:
+  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
-  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''")]:
+  for n,d in [('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
   c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
+  c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
 def game(code):
  with cn() as c:return c.execute('SELECT * FROM games WHERE code=?',(str(code or '').upper(),)).fetchone()
 def players(gid):
@@ -385,29 +396,31 @@ class H(BaseHTTPRequestHandler):
   if p=='/api/create':
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
-   co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)))
-   if sp==3 and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
+   co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120]
+   adult=adult_required(ts,sp)
+   if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:
-    if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).fetchone()['id']
-    else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,now())).lastrowid
-    c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen) VALUES(?,?,?,?,1,?)',(gid,name,pt,now(),now()))
+    if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,created) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,now())).fetchone()['id']
+    else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,created) VALUES(?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,now())).lastrowid
+    c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id) VALUES(?,?,?,?,1,?,?)',(gid,name,pt,now(),now(),client_id))
    Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp),daemon=True).start()
    return self.J({'code':co,'host':ht,'token':pt,'name':name})
   if p=='/api/join':
-   g=game(d.get('code'));name=str(d.get('name','')).strip()[:40]
+   g=game(d.get('code'));name=str(d.get('name','')).strip()[:40];client_id=str(d.get('client_id','')).strip()[:120]
    if not g:return self.J({'error':'not_found'},404)
    if not name:return self.J({'error':'name_required'},400)
-   existing=next((x for x in players(g['id']) if _norm_name(x['name'])==_norm_name(name)),None)
+   room_players=players(g['id']);existing=next((x for x in room_players if client_id and (x['client_id'] or '')==client_id),None) or next((x for x in room_players if _norm_name(x['name'])==_norm_name(name)),None)
    if existing:
-    with cn() as c:c.execute('UPDATE players SET active=1,last_seen=? WHERE id=?',(now(),existing['id']))
+    if g['status']!='lobby' and int(existing['active'] if existing['active'] is not None else 1)==0:return self.J({'error':'removed_from_game'},409)
+    with cn() as c:c.execute("UPDATE players SET active=1,last_seen=?,client_id=CASE WHEN client_id='' THEN ? ELSE client_id END WHERE id=?",(now(),client_id,existing['id']))
     return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
    if g['status']!='lobby':return self.J({'error':'started'},409)
    if len(live_players(g['id']))>=6:return self.J({'error':'full'},409)
    tok=secrets.token_urlsafe(16)
    try:
-    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen) VALUES(?,?,?,?,1,?)',(g['id'],name,tok,now(),now()))
+    with cn() as c:c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id) VALUES(?,?,?,?,1,?,?)',(g['id'],name,tok,now(),now(),client_id))
    except Exception:
-    existing=next((x for x in players(g['id']) if _norm_name(x['name'])==_norm_name(name)),None)
+    existing=next((x for x in players(g['id']) if (client_id and (x['client_id'] or '')==client_id) or _norm_name(x['name'])==_norm_name(name)),None)
     if existing:return self.J({'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True})
     raise
    return self.J({'code':g['code'],'token':tok,'name':name})
