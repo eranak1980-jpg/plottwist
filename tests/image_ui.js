@@ -30,3 +30,12 @@ sandbox.imageView='run2';element('#heroImg').src='new-round';late();assert.equal
 images[full].complete=true;images[full].naturalWidth=832;element('#heroImg').dataset.requested='';
 sandbox.renderRoundImage({...d,hero:full});assert.equal(element('#heroImg').src,full);
 console.log('HYBRID_PRELOAD_LATE_EARLY_FAILURE_STALE_OK');
+
+// Full ready in DB must never suppress an instant visual while its bytes download.
+sandbox.imageView='run3';element('#heroImg').dataset.loaded='';element('#heroImg').dataset.requested='';
+const coldInstant='/api/instant-image/TEST/2?run=1',coldFull='/api/hero-image/TEST/2?run=1';
+sandbox.renderRoundImage({...d,instant_visual:coldInstant,hero:coldFull});
+images[coldInstant].onload();assert.equal(element('#heroImg').src,coldInstant);
+images[coldFull].onload();assert.equal(element('#heroImg').src,coldFull);
+images[coldInstant].onload();assert.equal(element('#heroImg').src,coldFull,'late instant must not downgrade full AI');
+console.log('INSTANT_FIRST_WHILE_READY_AI_DOWNLOADS_OK');
