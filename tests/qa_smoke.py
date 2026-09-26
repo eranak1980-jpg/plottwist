@@ -267,3 +267,11 @@ assert not hebrew_re.search(core),hebrew_re.search(core).group(0) if hebrew_re.s
 assert 'value="ar"' not in html
 print('QA_ENGLISH_BOOT_NO_HEBREW_FLASH_OK')
 
+
+
+# Play Again regression: guests receive lobby through polling and must hide the stale final summary.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+guard="if(d.status!=='finished'){$('#finish').classList.add('hidden');$('#finalPrize').classList.add('hidden');$('#scores').innerHTML=''}"
+assert guard in html
+assert html.index(guard) < html.index("if(d.status==='lobby')")
+print('QA_REPLAY_GUEST_FINISH_RESET_OK')
