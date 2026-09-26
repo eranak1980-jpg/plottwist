@@ -275,3 +275,11 @@ guard="if(d.status!=='finished'){$('#finish').classList.add('hidden');$('#finalP
 assert guard in html
 assert html.index(guard) < html.index("if(d.status==='lobby')")
 print('QA_REPLAY_GUEST_FINISH_RESET_OK')
+
+
+# A player who enters a room should keep the room code in the browser URL so
+# browser history/direct reopening returns to the same room entry point.
+html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
+assert "location.pathname+'?code='+encodeURIComponent(s.code)" in html
+assert "history.replaceState({},'',u)" in html
+print('QA_ROOM_URL_PERSISTENCE_OK')
