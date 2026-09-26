@@ -5,7 +5,9 @@ import json
 import os
 import time
 
-MODEL = 'gpt-image-2'
+MODEL = os.getenv('PLOT_IMAGE_MODEL','gpt-image-2.5-flare').strip() or 'gpt-image-2.5-flare'
+QUALITY = os.getenv('PLOT_IMAGE_QUALITY','low').strip() or 'low'
+SIZE = os.getenv('PLOT_IMAGE_SIZE','1024x1024').strip() or '1024x1024'
 MAX_IMAGE_BYTES = 4_200_000
 
 
@@ -86,8 +88,8 @@ def generate_many(items, question, answer, focus, selected='', final=False):
         for attempt in range(2):
             try:
                 result = client.images.edit(model=MODEL, image=files, prompt=prompt,
-                                            size='1024x1024', quality='medium',
-                                            output_format='jpeg', output_compression=90, n=1)
+                                            size=SIZE, quality=QUALITY,
+                                            output_format='jpeg', output_compression=82, n=1)
                 data = getattr(result, 'data', None)
                 encoded = getattr(data[0], 'b64_json', None) if data else None
                 if not encoded:
