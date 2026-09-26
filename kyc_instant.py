@@ -36,15 +36,16 @@ def data_url(im, fmt='JPEG'):
  return 'data:image/'+fmt.lower()+';base64,'+base64.b64encode(out.getvalue()).decode()
 
 _segmenter=None
-from threading import Lock
-_segment_lock=Lock()
+from threading import RLock
+_segment_lock=RLock()
 
 def warm():
  global _segmenter
  try:
   import onnxruntime as ort
   options=ort.SessionOptions();options.intra_op_num_threads=1;options.inter_op_num_threads=1
-  options.enable_cpu_mem_arena=False
+  options.enable_cpu_mem_arena=False;options.enable_mem_pattern=False
+  options.graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
   _segmenter=ort.InferenceSession(str(Path(__file__).parent/'models'/'u2netp.onnx'),sess_options=options,providers=['CPUExecutionProvider'])
   print(json.dumps({'event':'instant_cutout_runtime_ready','model':'u2netp'}),flush=True)
  except Exception as exc:
@@ -72,10 +73,14 @@ def cutout(im):
  return result
 
 def preprocess(data):
+ with _segment_lock:return _preprocess(data)
+
+def _preprocess(data):
  # Keep all source pixels in a contained portrait. Never synthesize/crop a face.
  from PIL import Image, ImageOps
  started=time.monotonic();_,raw=decode_image(data)
  with Image.open(io.BytesIO(raw)) as source:
+  source.draft('RGB',(560,700));source.thumbnail((700,700),Image.Resampling.LANCZOS)
   im=ImageOps.exif_transpose(source).convert('RGB');im.thumbnail((560,700),Image.Resampling.LANCZOS)
   try:im=cutout(im)
   except Exception as exc:print(json.dumps({'event':'instant_cutout_fallback','type':type(exc).__name__}),flush=True)
@@ -100,7 +105,7 @@ def category(question,answer,final=False):
  best=max(scores,key=scores.get)
  return best if scores[best] else 'general'
 
-@lru_cache(maxsize=15)
+@lru_cache(maxsize=3)
 def background(cat):
  from PIL import Image, ImageDraw, ImageFilter
  root=Path(__file__).parent/'static'/'visual-scenes'

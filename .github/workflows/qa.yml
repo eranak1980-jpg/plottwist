@@ -48,6 +48,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
+      - name: Real cutout runtime and memory
+        run: python tests/cutout_runtime.py
       - name: Image flow - SQLite
         run: python tests/image_pipeline.py
       - name: Image flow - PostgreSQL
@@ -56,3 +58,4 @@ jobs:
         run: python tests/image_pipeline.py
       - name: Reveal image loading and fallback
         run: node tests/image_ui.js
+
