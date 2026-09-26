@@ -508,20 +508,20 @@ class H(BaseHTTPRequestHandler):
     c.execute('UPDATE players SET score=0,active=1,last_seen=? WHERE game_id=?',(now(),g['id']))
     c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_answers WHERE game_id=?',(g['id'],));c.execute('DELETE FROM match_scores WHERE game_id=?',(g['id'],))
    fresh=game(g['code'])
-   Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1)),daemon=True).start()
+   Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1),game_language(fresh)),daemon=True).start()
    return self.J({'ok':True})
   if act=='settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    ts=d.get('topics',[])
    if not isinstance(ts,list):ts=[]
    ts=[str(x)[:60] for x in ts[:12]]
-   ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',g['rounds']) or 12)))
+   ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',g['rounds']) or 12)));language=normalize_language(d.get('language',game_language(g)))
    try:sp=max(1,min(3,int(d.get('spice',g['spice']) or 1)))
    except:sp=int(g['spice'] or 1)
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
-   with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,rounds=?,custom_questions=?,adults_confirmed=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,'[]',1 if adult else 0,g['id']))
-   return self.J({'ok':True})
+   with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,rounds=?,custom_questions=?,adults_confirmed=?,language=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,'[]',1 if adult else 0,language,g['id']))
+   fresh=game(g['code']);Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),ctx,sp,language),daemon=True).start();return self.J({'ok':True,'language':language})
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
