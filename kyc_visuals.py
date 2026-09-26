@@ -7,7 +7,7 @@ import time
 
 MODEL = os.getenv('PLOT_IMAGE_MODEL','gpt-image-2.5-flare').strip() or 'gpt-image-2.5-flare'
 QUALITY = os.getenv('PLOT_IMAGE_QUALITY','low').strip() or 'low'
-SIZE = os.getenv('PLOT_IMAGE_SIZE','1024x1024').strip() or '1024x1024'
+SIZE = os.getenv('PLOT_IMAGE_SIZE','832x832').strip() or '832x832'
 MAX_IMAGE_BYTES = 4_200_000
 
 
@@ -85,7 +85,7 @@ def generate_many(items, question, answer, focus, selected='', final=False):
     # Party-game latency matters more than waiting for the final render. Stream one
     # displayable partial image and use the first valid image event as the Reveal.
     # The request starts as soon as the secret answer is saved, during guessing.
-    with OpenAI(api_key=key, timeout=12, max_retries=0) as client:
+    with OpenAI(api_key=key, timeout=5, max_retries=0) as client:
         for attempt in range(2):
             stream = None
             received = False
