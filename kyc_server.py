@@ -171,7 +171,7 @@ def smart_callback(g,ps,rn):
   return 'callback',text,['זורם/ת עד הסוף','מתחרט/ת ברגע האחרון','גורר/ת חבר איתו/ה','מאלתר/ת משהו אחר'],sub
  return None
 def interactive_match_data(g,typ,text,sub):
- if not str(typ).startswith('callback') or not sub:return None
+ if 'callback' not in str(typ) or not sub:return None
  ps=players(g['id']);active=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1];by_name={p['name']:p for p in active}
  prior=next((e for e in reversed(mem(g)) if e.get('subject')==sub['name'] and e.get('answer') in by_name and e.get('answer')!=sub['name']),None)
  partner=by_name.get(prior.get('answer')) if prior else None
