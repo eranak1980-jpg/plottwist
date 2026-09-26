@@ -85,7 +85,9 @@ class PipelineTests(unittest.TestCase):
     def reveal(self, st=None):
         st=st or self.state(); answer=st['options'][0]
         self.post('answer',{'token':self.tokens[st['subject']['name']],'answer':answer})
-        self.assertFalse(self.entered.is_set(), 'must not generate before Reveal')
+        # Start AI work during the prediction window so Reveal does not pay the full provider latency.
+        if st['subject']['has_photo']:
+            self.assertTrue(self.entered.wait(1), 'image generation should start after the secret answer')
         for name,token in self.tokens.items():
             if name!=st['subject']['name']:self.post('guess',{'token':token,'guess':answer})
         return self.state()
@@ -264,8 +266,8 @@ class ProviderTests(unittest.TestCase):
         good=types.SimpleNamespace(data=[types.SimpleNamespace(b64_json=ART.split(',')[1])],usage=None)
         error=RuntimeError('temporary');error.status_code=429
         result,calls,ctor=self.call([error,good]);self.assertEqual(result,ART);self.assertEqual(len(calls),2)
-        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(calls[0]['model'],'gpt-image-2')
-        self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg')
+        self.assertEqual(ctor[0]['max_retries'],0);self.assertEqual(calls[0]['model'],'gpt-image-2.5-flare')
+        self.assertNotIn('input_fidelity',calls[0]);self.assertEqual(calls[0]['image'][0][2],'image/jpeg');self.assertEqual(calls[0]['quality'],'low');self.assertEqual(calls[0]['size'],'1024x1024')
         self.assertIn('EXACTLY 1 distinct people',calls[0]['prompt']);self.assertEqual(calls[0]['n'],1)
         for err in [TimeoutError('timeout'),RuntimeError('empty')]:
             _,calls,_=self.call([err,good]);self.assertEqual(len(calls),1)
