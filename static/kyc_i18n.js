@@ -157,6 +157,51 @@ ja:['長年の友達','LGBTQ+の友達','シングル','カップル','仕事仲
 he:['מכירים שנים','חברים גייז','רווקים','זוגות','חברים מהעבודה','אוהבים לטייל','חיי לילה','דייטים','אפליקציות היכרויות','ציניים','תחרותיים','פתוחים לדבר על הכול','רוצים ערב מצחיק','רוצים ערב חצוף']
 };
 
+const EXAMPLES={
+en:[
+ ['🏳️‍🌈 LGBTQ+ friends','Close friends who talk openly about dating, apps, nightlife and relationships. We want a funny, cheeky night with bold questions and real friendship moments.'],
+ ['🎉 Friends','A group that knows each other well and loves teasing. We want travel, money, dating, habits and funny scenarios — personal but not heavy.'],
+ ['👨‍👩‍👧‍👦 Family','A family that loves laughing together. Keep it clean, with family habits, vacations, food, memories and “who knows who best” moments.'],
+ ['👯 Friends night','Long-time friends who want a funny, slightly cheeky night with dating, relationships, travel, friendship and light gossip.'],
+ ['💼 Work friends','Coworkers who know each other well. We want humor about work, habits, vacations and spontaneity without professionally awkward questions.']
+],
+es:[
+ ['🏳️‍🌈 Amigos LGBTQ+','Amigos cercanos que hablan abiertamente de citas, apps, vida nocturna y relaciones. Queremos una noche divertida, atrevida y con momentos de amistad real.'],
+ ['🎉 Amigos','Un grupo que se conoce muy bien y le encanta picarse. Queremos viajes, dinero, citas, hábitos y situaciones graciosas — personal sin ponerse intenso.'],
+ ['👨‍👩‍👧‍👦 Familia','Una familia que se ríe mucho junta. Preguntas limpias sobre hábitos familiares, vacaciones, comida, recuerdos y quién conoce mejor a quién.'],
+ ['👯 Noche de amigos','Amigos de hace años que quieren una noche divertida y un poco atrevida con citas, parejas, viajes, amistad y cotilleo ligero.'],
+ ['💼 Amigos del trabajo','Compañeros que se conocen bien. Humor sobre trabajo, hábitos, vacaciones y espontaneidad sin preguntas incómodas profesionalmente.']
+],
+'pt-BR':[
+ ['🏳️‍🌈 Amigos LGBTQ+','Amigos próximos que falam abertamente sobre encontros, apps, vida noturna e relacionamentos. Queremos uma noite divertida, ousada e com amizade de verdade.'],
+ ['🎉 Amigos','Uma galera que se conhece bem e adora zoar. Queremos viagens, dinheiro, encontros, hábitos e situações engraçadas — pessoal, mas sem ficar pesado.'],
+ ['👨‍👩‍👧‍👦 Família','Uma família que adora rir junta. Perguntas leves sobre hábitos, férias, comida, memórias e quem conhece melhor quem.'],
+ ['👯 Noite de amigos','Amigos de longa data querendo uma noite divertida e um pouco ousada com encontros, relacionamentos, viagens, amizade e fofoca leve.'],
+ ['💼 Amigos do trabalho','Colegas que se conhecem bem. Humor sobre trabalho, hábitos, férias e espontaneidade sem perguntas profissionalmente constrangedoras.']
+],
+fr:[
+ ['🏳️‍🌈 Amis LGBTQ+','Des amis proches qui parlent librement de dating, applis, vie nocturne et relations. On veut une soirée drôle, audacieuse et vraiment sociale.'],
+ ['🎉 Amis','Un groupe qui se connaît bien et adore se taquiner. Voyage, argent, dating, habitudes et situations drôles — personnel sans devenir lourd.'],
+ ['👨‍👩‍👧‍👦 Famille','Une famille qui aime rire ensemble. Questions clean sur les habitudes, vacances, nourriture, souvenirs et qui connaît le mieux qui.'],
+ ['👯 Soirée entre amis','Des amis de longue date pour une soirée drôle et un peu piquante autour du dating, des relations, voyages, amitié et potins légers.'],
+ ['💼 Collègues','Des collègues qui se connaissent bien. Humour sur le travail, les habitudes, vacances et spontanéité sans questions gênantes professionnellement.']
+],
+ja:[
+ ['🏳️‍🌈 LGBTQ+の友達','デート、アプリ、夜遊び、恋愛についてオープンに話す仲良しグループ。笑えて少し攻めた、本音も出る夜にしたい。'],
+ ['🎉 友達','お互いをよく知り、いじり合うのが好きなグループ。旅行、お金、デート、クセ、笑えるシチュエーションを中心に。'],
+ ['👨‍👩‍👧‍👦 家族','一緒によく笑う家族。家族のクセ、旅行、食べ物、思い出など、安心して遊べる質問にしたい。'],
+ ['👯 友達ナイト','長年の友達同士。デート、恋愛、旅行、友情、軽いゴシップで、笑えて少し攻めた夜にしたい。'],
+ ['💼 仕事仲間','よく知っている仕事仲間。仕事、クセ、旅行、行動力などを笑える形で、職場で気まずくならない内容にしたい。']
+],
+he:[
+ ['🏳️‍🌈 חברים גייז','חברים שמכירים שנים, מדברים בפתיחות על דייטים, Grindr, חיי לילה, זוגיות ומיניות. רוצים ערב מצחיק, חצוף ומפתיע, עם שאלות נועזות לצד חברות והיכרות אמיתית.'],
+ ['🎉 חברים','חבורה שמכירה טוב ואוהבת לרדת אחד על השני. רוצים שאלות על נסיעות, כסף, דייטים, הרגלים וסיטואציות מצחיקות — אישי אבל לא כבד.'],
+ ['👨‍👩‍👧‍👦 משפחה','משפחה שאוהבת לצחוק יחד. רוצים שאלות נקיות על הרגלים משפחתיים, חופשות, אוכל, זיכרונות ומי באמת מכיר את מי.'],
+ ['👯‍♀️ ערב חברות','חברות שמכירות שנים ורוצות ערב מצחיק וקצת חצוף עם דייטים, זוגיות, אקסים, נסיעות, חברות ורכילות קלילה.'],
+ ['💼 חברים מהעבודה','חברים מהעבודה שמכירים טוב. רוצים הומור על עבודה, הרגלים, חופשות, מי הכי ספונטני ומי ישרוד משבר — בלי שאלות שיכולות להביך מקצועית.']
+]
+};
+
 const originalNodes=new WeakMap(), originalAttrs=new WeakMap();
 function lang(){let x=localStorage.getItem('plot_ui_language')||'en';return LANGS.some(v=>v[0]===x)?x:'en'}
 function trStatic(src,l=lang()){let x=STATIC[src]||STATIC2[src];return x?(x[l]||x.en||src):src}
@@ -171,6 +216,7 @@ function apply(root=document,l=lang()){
 function setLanguage(l){if(!LANGS.some(v=>v[0]===l))l='en';localStorage.setItem('plot_ui_language',l);let sel=document.getElementById('languageSelect');if(sel)sel.value=l;apply(document,l)}
 function fillSelector(){let s=document.getElementById('languageSelect');if(!s)return;s.innerHTML=LANGS.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('');s.value=lang()}
 function vibes(l=lang()){return VIBES[l]||VIBES.en}
+function examples(l=lang()){return EXAMPLES[l]||EXAMPLES.en}
 function buildDescription(v,topics,spice,l=lang()){
  let vv=v.slice(0,5).join(', '),tt=topics.slice(0,6).map(x=>topic(x,l)).join(', ');
  const d={
@@ -182,5 +228,5 @@ function buildDescription(v,topics,spice,l=lang()){
  he:'אנחנו '+(vv||'חבורה שמכירה טוב')+'. רוצים שאלות על '+(tt||'חברות, הרגלים וסיטואציות מצחיקות')+'. אנחנו רוצים ערב '+(spice===3?'מצחיק, חצוף ונועז':spice===2?'מצחיק, אישי וקצת חצוף':'קליל, מצחיק ונעים לכולם')+'. תערבב צחוק והפתעה עם שאלות שבאמת בודקות כמה אנחנו מכירים אחד את השני.'
  };return d[l]||d.en
 }
-window.PT_I18N={LANGS,lang,t,topic,apply,setLanguage,fillSelector,vibes,buildDescription};
+window.PT_I18N={LANGS,lang,t,topic,apply,setLanguage,fillSelector,vibes,examples,buildDescription};
 })();
