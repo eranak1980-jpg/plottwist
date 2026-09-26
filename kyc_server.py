@@ -408,7 +408,7 @@ class H(BaseHTTPRequestHandler):
    if not raw:return self.send_error(404)
    self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control','public, max-age=86400, immutable');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
   if p=='/api/meta':
-   q=parse_qs(u.query);lang=normalize_language(q.get('lang',['en'])[0]);return self.J({'language':lang,'direction':direction(lang),'languages':SUPPORTED_LANGUAGES,'topics':{k:v.get(lang,k) for k,v in TOPIC_LABELS.items()},'copy':ui_copy(lang)})
+   q=parse_qs(u.query);lang=normalize_language(q.get('lang',['en'])[0]);return self.J({'language':lang,'direction':direction(lang),'languages':SUPPORTED_LANGUAGES,'topics':{k:topic_labels([k],lang)[0] for k in TOPIC_LABELS},'copy':ui_copy(lang)})
   if p.startswith('/api/state/'):
    q=parse_qs(u.query);tok=q.get('token',[''])[0];host=q.get('host',[''])[0];g=game(p.split('/')[-1])
    # Recover the canonical room from the opaque player token if the browser URL/local state
