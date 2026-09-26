@@ -118,7 +118,14 @@ const STATIC2={
 'למשל: שחר מכין לכולם קפה / המנצח בוחר את הבר הבא':{en:'Example: loser makes coffee / winner chooses the next bar',es:'Ejemplo: el perdedor hace café / el ganador elige el próximo bar','pt-BR':'Ex.: quem perder faz café / quem ganhar escolhe o próximo bar',fr:'Ex. : le perdant fait le café / le gagnant choisit le prochain bar',ja:'例：負けた人がコーヒーを作る / 勝者が次の店を決める',he:'למשל: שחר מכין לכולם קפה / המנצח בוחר את הבר הבא'},
 'מי אתם? על מה אתם מדברים? איזה ערב אתם רוצים?':{en:'Who are you? What do you talk about? What kind of night do you want?',es:'¿Quiénes sois? ¿De qué habláis? ¿Qué tipo de noche queréis?','pt-BR':'Quem vocês são? Sobre o que conversam? Que noite querem?',fr:'Qui êtes-vous ? De quoi parlez-vous ? Quelle soirée voulez-vous ?',ja:'どんなグループ？普段何を話す？どんな夜にしたい？',he:'מי אתם? על מה אתם מדברים? איזה ערב אתם רוצים?'},
 'קוד חדר':{en:'Room code',es:'Código de sala','pt-BR':'Código da sala',fr:'Code de salle',ja:'ルームコード',he:'קוד חדר'},
-'כתוב/י תשובה קצרה, מצחיקה ואמיתית…':{en:'Write a short, funny and honest answer…',es:'Escribe una respuesta corta, divertida y real…','pt-BR':'Escreva uma resposta curta, divertida e verdadeira…',fr:'Écrivez une réponse courte, drôle et sincère…',ja:'短く、面白く、本音で答えて…',he:'כתוב/י תשובה קצרה, מצחיקה ואמיתית…'}
+'כתוב/י תשובה קצרה, מצחיקה ואמיתית…':{en:'Write a short, funny and honest answer…',es:'Escribe una respuesta corta, divertida y real…','pt-BR':'Escreva uma resposta curta, divertida e verdadeira…',fr:'Écrivez une réponse courte, drôle et sincère…',ja:'短く、面白く、本音で答えて…',he:'כתוב/י תשובה קצרה, מצחיקה ואמיתית…'},
+'🎮 סגנון משחק':{en:'🎮 Game modes',es:'🎮 Modos de juego','pt-BR':'🎮 Modos de jogo',fr:'🎮 Modes de jeu',ja:'🎮 ゲームモード',he:'🎮 סגנון משחק'},
+'💬 נושאים פופולריים':{en:'💬 Popular topics',es:'💬 Temas populares','pt-BR':'💬 Temas populares',fr:'💬 Thèmes populaires',ja:'💬 人気テーマ',he:'💬 נושאים פופולריים'},
+'➕ עוד נושאים':{en:'➕ More topics',es:'➕ Más temas','pt-BR':'➕ Mais temas',fr:'➕ Plus de thèmes',ja:'➕ その他のテーマ',he:'➕ עוד נושאים'},
+'⚡ 8 — קצר':{en:'⚡ 8 — Short',es:'⚡ 8 — Corto','pt-BR':'⚡ 8 — Curto',fr:'⚡ 8 — Court',ja:'⚡ 8 — ショート',he:'⚡ 8 — קצר'},
+'🎉 12 — רגיל':{en:'🎉 12 — Regular',es:'🎉 12 — Normal','pt-BR':'🎉 12 — Normal',fr:'🎉 12 — Normal',ja:'🎉 12 — レギュラー',he:'🎉 12 — רגיל'},
+'🔥 18 — ארוך':{en:'🔥 18 — Long',es:'🔥 18 — Largo','pt-BR':'🔥 18 — Longo',fr:'🔥 18 — Long',ja:'🔥 18 — ロング',he:'🔥 18 — ארוך'}
+
 };
 
 const UI={
