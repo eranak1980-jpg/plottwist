@@ -261,10 +261,12 @@ def qdata(g,ps):
  if int(g['spice'] or 1)>=3:focused+=SPICY
  tailored=custom_questions(g)
  themed=len(selected)==1 and selected[0] in THEME_ONLY
- base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
+ if language_code(g)=='he':base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
+ else:
+  local=localized_general(g);base=(tailored+local) if tailored else local
  if len(ps)==2:
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
-  if not base:base=[q for q in GENERAL if q[0]=='know']
+  if not base:base=[q for q in (GENERAL if language_code(g)=='he' else localized_general(g)) if q[0]=='know']
  used={question_key(e.get('question',''),ps) for e in mem(g)}
  used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
@@ -273,13 +275,14 @@ def qdata(g,ps):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
-  fallback=[q for q in GENERAL if not (len(ps)==2 and q[0]=='room')]
+  fallback=[q for q in (GENERAL if language_code(g)=='he' else localized_general(g)) if not (len(ps)==2 and q[0]=='room')]
   for q in fallback:
    typ,text,opts=q;formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   # Last-resort variant keeps gameplay moving without repeating the exact prompt.
-  typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
+  if language_code(g)=='he':typ='know';formatted=f'מה הכי יפתיע את מי שחושב שהוא מכיר את {sub["name"]} טוב?';opts=['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב']
+  else:typ='know';formatted=f'What would surprise people who think they know {sub["name"]} well?';opts=['A spontaneous choice','The safe choice','Something nobody expects','It depends']
  else:typ,formatted,opts=chosen
  if typ=='room':opts=[p['name'] for p in ps if p['id']!=sub['id']]
  elif typ=='know' and int(g['spice'] or 1)>=3 and other_label(g) not in opts:opts=list(opts)+[other_label(g)]
@@ -291,9 +294,9 @@ def _clean_pack(pack):
   key=str(q[1]).strip().lower()
   if key and key not in seen:seen.add(key);clean.append(q)
  return clean
-def prepare_pack_async(gid,ts,ctx,spice):
+def prepare_pack_async(gid,ts,ctx,spice,language='en'):
  try:
-  pack=_clean_pack(generate_pack(ts,ctx,spice))
+  pack=_clean_pack(generate_pack(ts,ctx,spice,language))
   if not pack:return
   with cn() as c:
    g=c.execute('SELECT status FROM games WHERE id=?',(gid,)).fetchone()
