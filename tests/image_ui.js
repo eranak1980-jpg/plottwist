@@ -9,6 +9,13 @@ const sandbox={copy:{instant_loading:"Preparing Visual Reveal…"},Image,perform
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 const instant='/api/instant-image/TEST/0?run=1',full='/api/hero-image/TEST/0?run=1';
 const d={instant_visual:instant,hero:null,subject:{photo_url:'/photo.jpg'},hero_status:'running'};
+sandbox.renderRoundImage({...d,instant_visual:null,hero_status:'queued'});
+assert.ok(element('#visualStage').classList.set.has('is-loading'));
+assert.ok(!element('#heroStatus').classList.set.has('hidden'));
+sandbox.renderRoundImage({...d,instant_visual:null,hero_status:'failed'});
+assert.ok(!element('#visualStage').classList.set.has('is-loading'));
+assert.ok(element('#heroStatus').classList.set.has('hidden'));
+console.log('SOFT_PLACEHOLDER_AND_FAILED_AI_FALLBACK_OK');
 sandbox.preloadVisual(instant);images[instant].complete=true;images[instant].naturalWidth=640;
 sandbox.renderRoundImage(d);
 assert.equal(element('#heroImg').src,instant,'preloaded visual appears synchronously');
