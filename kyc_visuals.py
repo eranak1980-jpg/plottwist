@@ -85,7 +85,9 @@ def generate_many(items, question, answer, focus, selected='', final=False):
     # Party-game latency matters more than waiting for the final render. Stream one
     # displayable partial image and use the first valid image event as the Reveal.
     # The request starts as soon as the secret answer is saved, during guessing.
-    with OpenAI(api_key=key, timeout=5, max_retries=0) as client:
+    # Render live: the five-second read deadline aborted every request before
+    # its first frame. This background wait never blocks answering or guessing.
+    with OpenAI(api_key=key, timeout=60, max_retries=0) as client:
         for attempt in range(2):
             stream = None
             received = False
@@ -121,6 +123,9 @@ def generate_many(items, question, answer, focus, selected='', final=False):
                 print(json.dumps({
                     'event': 'image_api_error', 'model': MODEL,
                     'type': type(exc).__name__, 'status': status,
+                    'code': code, 'param': getattr(exc, 'param', None),
+                    'seconds': round(time.monotonic() - started, 2),
+                    'received_image': received,
                     'request_id': getattr(exc, 'request_id', None), 'retry': retry,
                 }), flush=True)
                 if not retry:
