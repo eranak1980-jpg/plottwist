@@ -1,7 +1,7 @@
 name: PlotTwist V2 QA
 on:
   push:
-    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*', 'ai-images-*']
+    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*', 'ai-images-*', 'fix-*']
   workflow_dispatch:
 jobs:
   smoke:
