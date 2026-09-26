@@ -2,22 +2,21 @@
 function topicLabel(t){return topicMap[t]||t}function fmt(k,v={}){let x=copy[k]||k;Object.entries(v).forEach(([a,b])=>x=x.replaceAll('{'+a+'}',b));return x}
 function applyCopy(){
  if(!copy.home_title)return;
- document.documentElement.lang=uiLang;document.documentElement.dir=(uiLang==='he'?'rtl':'ltr');
- $('#languageSelect').value=uiLang;
- $('#homeTitle').textContent=copy.home_title;$('#homeSub').textContent=copy.home_sub;
- $('#homeHow').innerHTML='<b>'+esc(copy.how_title)+'</b><br>1️⃣ '+esc(copy.how1)+' → 2️⃣ '+esc(copy.how2)+' → 3️⃣ '+esc(copy.how3);
- $('#createModeBtn').textContent=copy.create;$('#joinModeBtn').textContent=copy.join;
- $('#createTitle').textContent=copy.create_title;$('#cname').placeholder=copy.name;$('#joinTitle').textContent=copy.join_title;$('#jname').placeholder=copy.name;$('#jcode').placeholder=copy.room_code;$('#joinBtn').textContent=copy.join_room;
- $('#adultText').textContent=copy.adult;$('#finishTitle').textContent=copy.finish;$('#replayBtn').textContent='🔁 '+copy.play_again;$('#newGameBtn').textContent=copy.new_game;
- $('#howTitle').textContent=copy.how_title;$('#how1').textContent='1️⃣ '+copy.how1;$('#how2').textContent='2️⃣ '+copy.how2;$('#how3').textContent='3️⃣ '+copy.how3;$('#how4').textContent='4️⃣ '+copy.how4;$('#howBtn').textContent=copy.got_it;
- let labels=document.querySelectorAll('#create > .label');if(labels[0])labels[0].textContent=copy.topics;if(labels[1])labels[1].textContent='🎮 '+copy.rounds;if(labels[2])labels[2].textContent='🌶️ '+copy.spice;if(labels[3])labels[3].textContent='🏆 '+copy.prize;if(labels[4])labels[4].textContent='✨ '+copy.context;
- let hint=$('#create .tiny');if(hint)hint.textContent=copy.topics_hint;
- let createBtn=[...document.querySelectorAll('#create > button.primary')].pop();if(createBtn)createBtn.textContent=copy.create_room;
+ document.documentElement.lang=uiLang;document.documentElement.dir=(uiLang==='he'?'rtl':'ltr');$('#languageSelect').value=uiLang;
+ $('#homeTitle').textContent=copy.home_title;$('#homeSub').textContent=copy.home_sub;$('#homeHow').innerHTML='<b>'+esc(copy.how_title)+'</b><br>1️⃣ '+esc(copy.how1)+' → 2️⃣ '+esc(copy.how2)+' → 3️⃣ '+esc(copy.how3);
+ $('#createModeBtn').textContent=copy.create;$('#joinModeBtn').textContent=copy.join;$('#createTitle').textContent=copy.create_title;$('#cname').placeholder=copy.name;$('#joinTitle').textContent=copy.join_title;$('#jname').placeholder=copy.name;$('#jcode').placeholder=copy.room_code;$('#joinBtn').textContent=copy.join_room;
+ $('#topicsLabel').textContent=copy.topics;$('#topicsHint').textContent=copy.topics_hint;$('#roundsLabel').textContent='🎮 '+copy.rounds;$('#spiceLabel').textContent='🌶️ '+copy.spice;$('#prizeLabel').textContent='🏆 '+copy.prize;$('#contextLabel').textContent='✨ '+copy.context;$('#contextHint').textContent=copy.context_hint||'';$('#personalizingNote').textContent=copy.personalizing_note||'';
+ $('#adultText').textContent=copy.adult;$('#createRoomBtn').textContent=copy.create_room;$('#shareBtn').textContent=copy.share;
+ $('#lobbyGameTitle').textContent=copy.lobby_game;$('#lobbyTopicsLabel').textContent=copy.topics_label;$('#lobbyLengthLabel').textContent=copy.length_label;$('#lobbyLevelLabel').textContent=copy.level_label;$('#lobbyAboutLabel').textContent=copy.about_label;$('#lobbyPrizeLabel').textContent=copy.prize_label;$('#roundsWord').textContent=copy.rounds_word;$('#lobbyNote').textContent=copy.lobby_note;$('#addTopicsTitle').textContent='➕ '+copy.add_topics;$('#addTopicsNote').textContent=copy.add_topics_note;$('#editSetupBtn').textContent=copy.edit_game;
+ $('#editTitle').textContent=copy.edit_title;$('#editTopicsLabel').textContent=copy.edit_topics;$('#editRoundsLabel').textContent=copy.edit_rounds;$('#editSpiceLabel').textContent=copy.edit_spice;$('#editAdultText').textContent=copy.adult;$('#editAboutLabel').textContent=copy.edit_about;$('#editPrizeLabel').textContent=copy.edit_prize;$('#saveSetupBtn').textContent=copy.save_changes;$('#cancelSetupBtn').textContent=copy.cancel;
+ $('#photoToggle').textContent=copy.photo_button;$('#photoTitle').textContent=copy.photo_title;$('#photoHelp').textContent=copy.photo_help;$('#photoConsentText').textContent=copy.photo_consent;$('#photoSave').textContent=copy.save_photo;$('#playPhotoBtn').textContent=copy.photo_short;
+ $('#customPrompt').textContent=copy.custom_prompt;$('#customText').placeholder=copy.custom_placeholder;$('#customSaveBtn').textContent=copy.custom_save;$('#reviewBtn').textContent=copy.previous;$('#reopenBtn').textContent=copy.back_lobby;$('#skip').textContent=copy.skip;$('#guessBoardTitle').textContent=copy.guess_board;$('#next').textContent=copy.next;$('#heroStatus').textContent=copy.hero_generating_static;$('#finalHeroStatus').textContent=copy.final_hero_generating;$('#scoreContinue').textContent=copy.score_continue;
+ $('#finishTitle').textContent=copy.finish;$('#replayBtn').textContent='🔁 '+copy.play_again;$('#newGameBtn').textContent=copy.new_game;$('#howTitle').textContent=copy.how_title;$('#how1').textContent='1️⃣ '+copy.how1;$('#how2').textContent='2️⃣ '+copy.how2;$('#how3').textContent='3️⃣ '+copy.how3;$('#how4').textContent='4️⃣ '+copy.how4;$('#howBtn').textContent=copy.got_it;
  $('#prize').placeholder=copy.prize_ph||'';$('#context').placeholder=copy.context_ph||'';
- let lb=document.querySelectorAll('.lengths button');if(lb[0])lb[0].innerHTML='⚡ '+(copy.short||'Short')+'<br><small>8</small>';if(lb[1])lb[1].innerHTML='🎉 '+(copy.regular||'Regular')+'<br><small>12</small>';if(lb[2])lb[2].innerHTML='🔥 '+(copy.long||'Long')+'<br><small>18</small>';
- let sb=document.querySelectorAll('.spice button');if(sb[0])sb[0].innerHTML='🌶️ Chill<br><small>'+(copy.chill_desc||'')+'</small>';if(sb[1])sb[1].innerHTML='🌶️🌶️ Bold<br><small>'+(copy.bold_desc||'')+'</small>';if(sb[2])sb[2].innerHTML='🌶️🌶️🌶️ No Filter<br><small>'+(copy.nofilter_desc||'')+'</small>';
- let inspire=$('#create .inspire');if(inspire)inspire.classList.toggle('hidden',uiLang!=='he');
- renderCreateTopics();
+ let lb=document.querySelectorAll('.lengths button');if(lb[0])lb[0].innerHTML='⚡ '+copy.short+'<br><small>8</small>';if(lb[1])lb[1].innerHTML='🎉 '+copy.regular+'<br><small>12</small>';if(lb[2])lb[2].innerHTML='🔥 '+copy.long+'<br><small>18</small>';
+ let er=$('#editRounds');if(er){er.options[0].textContent='⚡ 8 — '+copy.short;er.options[1].textContent='🎉 12 — '+copy.regular;er.options[2].textContent='🔥 18 — '+copy.long}
+ let sb=document.querySelectorAll('.spice button');if(sb[0])sb[0].innerHTML='🌶️ Chill<br><small>'+copy.chill_desc+'</small>';if(sb[1])sb[1].innerHTML='🌶️🌶️ Bold<br><small>'+copy.bold_desc+'</small>';if(sb[2])sb[2].innerHTML='🌶️🌶️🌶️ No Filter<br><small>'+copy.nofilter_desc+'</small>';
+ let inspire=$('#create .inspire');if(inspire)inspire.classList.toggle('hidden',uiLang!=='he');renderCreateTopics();
 }
 async function setLanguage(lang,fromRoom=false){
  try{let m=await req('/api/meta?lang='+encodeURIComponent(lang));uiLang=m.language;copy=m.copy||{};topicMap=m.topics||{};if(!fromRoom)localStorage.setItem('plot_lang',uiLang);applyCopy();if(window.lastState){renderVoteTopics(window.lastState);$('#sharedTopics').textContent=(window.lastState.topics_display||window.lastState.topics||[]).join(' · ')||'Mixed'}}catch(e){console.error('locale',e)}
