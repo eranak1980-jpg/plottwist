@@ -159,6 +159,11 @@ def total_rounds(g):
 def smart_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
  if rn not in marks or len(m)<3:return None
+ if language_code(g)!='he':
+  e=m[-2];sub=next((p for p in ps if p['name']==e.get('subject')),None)
+  if not sub:return None
+  x=callback_text(g,sub,e.get('answer'))
+  return ('callback',x[0],x[1],sub) if x else None
  names=[p['name'] for p in ps]
  room=[e for e in m if e.get('answer') in names and e.get('answer')!=e.get('subject')]
  if room:
@@ -192,6 +197,9 @@ def interactive_match_data(g,typ,text,sub):
  if not partner and len(active)==2:
   partner=next((p for p in active if p['id']!=sub['id']),None)
  if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1:return None
+ if language_code(g)!='he':
+  prompt=match_prompt(g,sub['name'],partner['name'])
+  return {'prompt':prompt,'player_ids':[sub['id'],partner['id']],'names':[sub['name'],partner['name']]}
  q=(text or '').lower()
  if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה','יעד']):
   prompt=f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.'
@@ -221,6 +229,11 @@ def match_equal(a,b):
 def duo_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
  if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15) or len(m)<3:return None
+ if language_code(g)!='he':
+  sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name']]
+  if not mine:return None
+  x=callback_text(g,sub,mine[0].get('answer'))
+  return ('duo_callback',x[0],x[1],sub) if x else None
  sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name']]
  if not mine:return None
  used={e.get('question','') for e in m}
