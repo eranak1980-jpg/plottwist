@@ -1,5 +1,6 @@
 import json,os,random,secrets,sqlite3,mimetypes
-from threading import Thread
+from threading import Thread,Lock
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
@@ -10,7 +11,7 @@ import kyc_image_jobs as image_jobs
 import kyc_instant as instant
 from kyc_ai import generate_pack
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
-BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'}
+BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=12;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock()
 def now():return datetime.now(timezone.utc).isoformat()
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
 def recently_seen(p,timeout=PRESENCE_TIMEOUT):
@@ -378,11 +379,27 @@ def prepare_hero_async(gid,rn,expected_run=None):
  except Exception as e:print('instant visual failed',type(e).__name__,flush=True)
  if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
  return image_jobs.queue(cn,g,int(rn),payload,generate_many)
-def schedule_image_after_action(gid):
- try:
-  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
-  if g:prepare_hero_async(gid,99 if g['status']=='finished' else int(g['round_no']),g['image_run'])
+def _visual_worker(gid,rn,run,key):
+ try:prepare_hero_async(gid,rn,run)
  except Exception as e:print('image scheduling failed',type(e).__name__,flush=True)
+ finally:
+  with VISUAL_TASKS_LOCK:VISUAL_TASKS.discard(key)
+def schedule_image_after_action(gid):
+ # Game actions must return immediately. Instant composition and Full AI queueing
+ # run off the request thread so a slow image path can never block Join/Guess/State.
+ try:
+  with cn() as c:g=c.execute('SELECT status,round_no,image_run FROM games WHERE id=?',(gid,)).fetchone()
+  if not g:return
+  rn=99 if g['status']=='finished' else int(g['round_no']);run=int(g['image_run']);key=(int(gid),run,rn)
+  with VISUAL_TASKS_LOCK:
+   if key in VISUAL_TASKS:return
+   VISUAL_TASKS.add(key)
+  VISUAL_POOL.submit(_visual_worker,gid,rn,run,key)
+ except Exception as e:print('image scheduling submit failed',type(e).__name__,flush=True)
+def _portrait_worker(pid,data):
+ try:
+  with cn() as c:instant.save_portrait(c,pid,data)
+ except Exception as e:print('portrait preprocess failed',type(e).__name__,flush=True)
 def ensure_round_score(g,ps,guessed):
  sub=ps[int(g['round_no'])%len(ps)] if ps else None
  active_guessers=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1 and (not sub or p['id']!=sub['id'])]
@@ -602,12 +619,13 @@ class H(BaseHTTPRequestHandler):
    try:decode_image(data)
    except Exception:return self.J({'error':'invalid_image'},400)
    try:
-    with cn() as c:
-     instant.save_portrait(c,me['id'],data)
-     c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
+    # Save the original photo first and respond immediately. Portrait preprocessing
+    # is best-effort background work and must never make the lobby or room unavailable.
+    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
+    VISUAL_POOL.submit(_portrait_worker,me['id'],data)
    except Exception as e:
     print('photo save db error',type(e).__name__,flush=True);return self.J({'error':'photo_save_failed'},503)
-   return self.J({'ok':True,'bytes':len(data)})
+   return self.J({'ok':True,'bytes':len(data),'portrait':'processing'})
   if act=='topicvote':
    me=next((x for x in ps if x['token']==d.get('token')),None);topic=str(d.get('topic','')).strip()[:80]
    if not me or g['status']!='lobby':return self.J({'error':'not_allowed'},403)
