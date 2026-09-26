@@ -54,7 +54,19 @@ try:
     # Reconnect from a persisted token returns the current player/game state.
     st = request(f"/api/state/{code}?token={j1['token']}")
     assert st['me']['name'] == 'Shai' and st['code'] == code
+    assert st['language'] == 'en'
     print('HTTP_TOKEN_RECONNECT_OK')
+    print('HTTP_DEFAULT_ENGLISH_OK')
+
+    # Explicit room language persists server-side and is inherited by joiners.
+    jp = request('/api/create', {
+        'name': 'Yuki', 'topics': [], 'spice': 1, 'rounds': 6,
+        'client_id': 'jp-host', 'language': 'ja',
+    })
+    jp_guest = request('/api/join', {'code': jp['code'], 'name': 'Hana', 'client_id': 'jp-guest'})
+    jp_state = request(f"/api/state/{jp['code']}?token={jp_guest['token']}")
+    assert jp_state['language'] == 'ja'
+    print('HTTP_ROOM_LANGUAGE_PERSISTS_OK')
 
     # Start is immediate. First secret answer / prediction is locked server-side.
     request(f'/api/{code}/start', {'host': host_token})
