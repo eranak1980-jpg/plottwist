@@ -140,10 +140,14 @@ def compose(portraits,cat):
   fade=Image.new('L',(w,h),255);fd=ImageDraw.Draw(fade)
   for yy in range(max(0,h-55),h):fd.line((0,yy,w,yy),fill=int(255*(h-yy)/55))
   mask=chops.multiply(mask,fade)
-  layer=Image.new('RGBA',canvas.size);layer.paste((*accent,180),(x,y,x+w,y+h),mask)
-  canvas=Image.alpha_composite(canvas,layer.filter(ImageFilter.GaussianBlur(16)))
-  shadow=Image.new('RGBA',canvas.size);shadow.paste((0,0,0,210),(x+9,y+12,x+w+9,y+h+12),mask)
-  canvas=Image.alpha_composite(canvas,shadow.filter(ImageFilter.GaussianBlur(13)))
+  # Blur a small single-channel mask, not four full-size RGBA canvases.
+  # This also keeps two-player composition inside the small Render CPU budget.
+  from PIL import ImageOps
+  padded=ImageOps.expand(mask,border=30,fill=0)
+  glow=padded.filter(ImageFilter.GaussianBlur(12)).point(lambda value:int(value*.40))
+  canvas.paste((*accent,255),(x-30,y-30,x+w+30,y+h+30),glow)
+  shadow=padded.filter(ImageFilter.GaussianBlur(9)).point(lambda value:int(value*.65))
+  canvas.paste((0,0,0,255),(x-21,y-18,x+w+39,y+h+42),shadow)
   canvas.paste(im,(x,y),mask)
  # Film-frame corner marks, no language-dependent raster text.
  d=ImageDraw.Draw(canvas)
