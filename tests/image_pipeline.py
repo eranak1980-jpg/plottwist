@@ -248,7 +248,7 @@ class PipelineTests(unittest.TestCase):
 class ProviderTests(unittest.TestCase):
     def test_instant_categories_and_no_face_synthesis(self):
         import kyc_instant as instant
-        for question,answer,expected in [('A flight?','spontaneous trip','travel'),('Spend cash?','bank','money'),('First date?','romantic dinner','dating'),('Unknown question','yes','general'),('טיול?','חופשה','travel')]:
+        for question,answer,expected in [('A flight?','spontaneous trip','travel'),('Spend cash?','bank','money'),('Gets $1,000 for fun','Shopping','money'),('First date?','romantic dinner','dating'),('Unknown question','yes','general'),('טיול?','חופשה','travel')]:
             self.assertEqual(instant.category(question,answer),expected)
         self.assertEqual(len(instant.CATEGORIES),15)
         portrait,seconds=instant.preprocess(PHOTO)
