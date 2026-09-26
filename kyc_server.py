@@ -93,7 +93,7 @@ def too_similar(qk,used):
    if not u:continue
    if qk==u or SequenceMatcher(None,qk,u).ratio()>=0.84:return True
    b=toks(u)
-   if a and b and len(a&b)/max(1,min(len(a),len(b)))>=0.72:return True
+   if a and b and (len(a&b)>=5 and len(a&b)/max(1,min(len(a),len(b)))>=0.58):return True
   return False
  except:return qk in used
 def remember_question(ps,text):
