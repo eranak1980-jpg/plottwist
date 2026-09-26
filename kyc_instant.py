@@ -41,6 +41,14 @@ _segment_lock=RLock()
 
 def warm():
  global _segmenter
+ # The live game must never sacrifice room/join responsiveness for portrait
+ # segmentation. U2NetP is opt-in because it can consume most of a small
+ # Render instance's CPU/RAM. The default fast path keeps the original photo
+ # pixels and uses the feathered portrait montage in compose().
+ if os.getenv('ENABLE_U2NET_CUTOUT','0').strip()!='1':
+  _segmenter=None
+  print(json.dumps({'event':'instant_cutout_runtime_skipped','mode':'fast_portrait'}),flush=True)
+  return
  try:
   import onnxruntime as ort
   options=ort.SessionOptions();options.intra_op_num_threads=1;options.inter_op_num_threads=1
@@ -49,6 +57,7 @@ def warm():
   _segmenter=ort.InferenceSession(str(Path(__file__).parent/'models'/'u2netp.onnx'),sess_options=options,providers=['CPUExecutionProvider'])
   print(json.dumps({'event':'instant_cutout_runtime_ready','model':'u2netp'}),flush=True)
  except Exception as exc:
+  _segmenter=None
   print(json.dumps({'event':'instant_cutout_runtime_unavailable','type':type(exc).__name__}),flush=True)
 
 def cutout(im):
