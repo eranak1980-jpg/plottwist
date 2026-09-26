@@ -1,7 +1,7 @@
 name: PlotTwist V2 QA
 on:
   push:
-    branches: [main, 'plot-hardening-*']
+    branches: [main, 'plot-hardening-*', 'multilang-*']
   workflow_dispatch:
 jobs:
   smoke:
@@ -12,11 +12,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Python syntax
-        run: python -m py_compile kyc_server.py kyc_ai.py kyc_visuals.py kyc_questions.py
+        run: python -m py_compile kyc_server.py kyc_ai.py kyc_visuals.py kyc_questions.py kyc_locales.py
       - name: Game engine smoke test
         run: python tests/qa_smoke.py
       - name: HTTP flow smoke test
         run: python tests/http_smoke.py
+      - name: Multilingual smoke test
+        run: python tests/language_smoke.py
       - name: Browser JavaScript syntax
         run: |
           python - <<'PY'
@@ -26,3 +28,4 @@ jobs:
           Path('/tmp/kyc.js').write_text(js)
           PY
           node --check /tmp/kyc.js
+          node --check static/kyc_i18n.js
