@@ -107,6 +107,10 @@ class PipelineTests(unittest.TestCase):
         self.assertLess(time.monotonic()-start,1)
         self.assertTrue(st['reveal']);self.assertTrue(self.entered.wait(1))
         self.assertIn(st['hero_status'],['queued','running']);self.assertIsNone(st['hero'])
+        self.assertTrue(st['instant_visual'])
+        instant_bytes,headers=request(st['instant_visual'],raw=True)
+        self.assertIn('immutable',headers['Cache-Control'])
+        self.assertEqual(Image.open(io.BytesIO(instant_bytes)).size,(640,800))
         body={'host':self.host,'round':0,'image_run':st['image_run']}
         with ThreadPoolExecutor(max_workers=10) as pool:
             responses=list(pool.map(lambda _: self.post('hero',body,202),range(10)))
@@ -114,6 +118,8 @@ class PipelineTests(unittest.TestCase):
         reconnect=request(f'/api/state/WRONG?token={self.tokens["Alice"]}')
         self.assertEqual(reconnect['code'],self.code)
         self.assertEqual(len(self.calls),1)
+        with k.cn() as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) AS n FROM instant_scenes WHERE game_id=?',(self.g['id'],)).fetchone()['n'],1)
         self.assertEqual([x[0] for x in self.calls[0]['items']],['Alice'])
         self.release.set();st=self.wait_status('ready')
         self.assertNotIn('base64',json.dumps(st));self.assertLess(len(json.dumps(st)),20000)
@@ -138,7 +144,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_no_photo_and_no_consent(self):
         self.room(2,0);st=self.reveal()
-        self.assertEqual(self.calls,[]);self.assertTrue(st['reveal'])
+        self.assertEqual(self.calls,[]);self.assertTrue(st['reveal']);self.assertIsNone(st['instant_visual'])
         self.assertEqual(self.post('hero',{'host':self.host})['status'],'no_photo')
         self.post('photo',{'token':self.tokens['Alice'],'data_url':PHOTO,'consent':False},400)
         with k.cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=0 WHERE game_id=?',(PHOTO,self.g['id']))
@@ -147,18 +153,21 @@ class PipelineTests(unittest.TestCase):
 
     def test_ai_failure_is_terminal_and_game_continues(self):
         self.room();self.provider_fail=True;self.release.set();self.reveal();st=self.wait_status('failed')
-        self.assertIsNone(st['hero']);self.assertTrue(st['subject']['photo_url'])
+        self.assertIsNone(st['hero']);self.assertTrue(st['subject']['photo_url']);request(st['instant_visual'],raw=True)
         for _ in range(3):self.assertEqual(self.post('hero',{'host':self.host})['status'],'failed')
         self.post('next',{'host':self.host});self.assertEqual(self.state()['round'],1)
         self.assertEqual(len(self.calls),1)
 
     def test_replay_during_generation_discards_old_result_and_url(self):
         self.room();st=self.reveal();self.assertTrue(self.entered.wait(1))
-        oldrun=st['image_run']
+        oldrun=st['image_run'];oldinstant=st['instant_visual']
+        with k.cn() as c:portrait_before=dict(c.execute('SELECT * FROM visual_portraits WHERE player_id=?',(st['subject']['id'],)).fetchone())
         with k.cn() as c:c.execute("UPDATE games SET status='finished' WHERE id=?",(self.g['id'],))
         self.post('replay',{'host':self.host});self.post('start',{'host':self.host})
         self.release.set();time.sleep(.08)
         st=self.state();self.assertGreater(st['image_run'],oldrun);self.assertIsNone(st['hero'])
+        self.assertIsNone(st['instant_visual']);request(oldinstant,expect=404,raw=True)
+        with k.cn() as c:self.assertEqual(dict(c.execute('SELECT * FROM visual_portraits WHERE player_id=?',(st['subject']['id'],)).fetchone()),portrait_before)
         self.post('hero',{'host':self.host,'image_run':oldrun},409)
         request(f'/api/hero-image/{self.code}/0?run={oldrun}',expect=404,raw=True)
         with k.cn() as c:self.assertIsNone(c.execute('SELECT 1 FROM hero_scenes WHERE game_id=?',(self.g['id'],)).fetchone())
@@ -237,6 +246,15 @@ class PipelineTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_instant_categories_and_no_face_synthesis(self):
+        import kyc_instant as instant
+        for question,answer,expected in [('A flight?','spontaneous trip','travel'),('Spend cash?','bank','money'),('First date?','romantic dinner','dating'),('Unknown question','yes','general'),('טיול?','חופשה','travel')]:
+            self.assertEqual(instant.category(question,answer),expected)
+        self.assertEqual(len(instant.CATEGORIES),15)
+        portrait,seconds=instant.preprocess(PHOTO)
+        self.assertLess(seconds,1)
+        self.assertEqual(Image.open(io.BytesIO(base64.b64decode(portrait.split(',')[1]))).size,(128,128))
+
     def test_story_prompt_does_not_inherit_final_awards(self):
         question='Who would Alice call after sending an embarrassing message?'
         story=visuals.prompt_for(question,'Bob',['Alice','Bob'],'Alice','Bob')
