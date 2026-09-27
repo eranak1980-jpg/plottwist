@@ -146,11 +146,62 @@
   }
   const adultTopics=new Set(['דייטים','אינטימיות למבוגרים']);
   const phrase=(he,en)=>lang()==='he'?he:en;
+  const guideCopy={
+    he:['לפני שמתחילים — איך משחקים?','הבנתי, בואו ניצור משחק','איך משחקים?',[
+      'בכל סיבוב שחקן עונה בסוד, והאחרים מנחשים מה בחר.',
+      'כל ניחוש נכון מזכה בנקודה. הניקוד זמין בתחתית המסך.',
+      'תמונת AI מצחיקה ממחישה את התשובה. מחכים שתופיע לפני שממשיכים.',
+      'המארח בוחר נושאים ורמת חריפות, ומשתף לינק להזמנת השחקנים.'
+    ],'רוצים ערב למבוגרים? בהגדרות יש אפשרויות 18+ לדייטים, משיכה ואינטימיות. הן נפתחות לבחירה, והמשחק מתחיל רק לאחר אישור גיל והסכמה מכל המשתתפים. במצב משפחה האפשרויות מוסתרות.','דייטים, משיכה ואינטימיות — לבחירה ובהסכמת כל המשתתפים.'],
+    en:['Before we play — the basics','Got it, let’s create a game','How to play',[
+      'Each round, one player answers secretly. Everyone else guesses their choice.',
+      'Each correct guess earns a point. Scores are available at the bottom.',
+      'A funny AI image brings the answer to life. Wait for it before continuing.',
+      'The host picks topics and boldness, then shares an invitation link.'
+    ],'Want an adults-only evening? Settings include optional 18+ dating, attraction and intimacy topics. Every player must confirm their age and consent before play. These options are hidden in family mode.','Dating, attraction and intimacy — optional, with everyone’s consent.'],
+    es:['Antes de jugar — las reglas','Entendido, vamos a crear una partida','Cómo jugar',[
+      'En cada ronda, alguien responde en secreto y los demás adivinan su elección.',
+      'Cada acierto suma un punto. Los puntos están abajo.',
+      'Una imagen divertida de IA representa la respuesta. Esperad a verla antes de continuar.',
+      'El anfitrión elige temas e intensidad y comparte un enlace de invitación.'
+    ],'¿Una noche para adultos? Los ajustes incluyen temas opcionales de citas, atracción e intimidad para mayores de 18. Todos deben confirmar su edad y consentimiento antes de jugar. Se ocultan en modo familia.','Citas, atracción e intimidad: opcionales y con el consentimiento de todos.'],
+    'pt-BR':['Antes de jogar — as regras','Entendi, vamos criar um jogo','Como jogar',[
+      'A cada rodada, uma pessoa responde em segredo e as outras adivinham sua escolha.',
+      'Cada acerto vale um ponto. A pontuação fica na parte inferior.',
+      'Uma imagem divertida de IA ilustra a resposta. Esperem aparecer antes de continuar.',
+      'Quem organiza escolhe temas e intensidade e compartilha o link de convite.'
+    ],'Querem uma noite para adultos? As configurações incluem temas opcionais de encontros, atração e intimidade para maiores de 18. Todos confirmam idade e consentimento antes de jogar. Essas opções ficam ocultas no modo família.','Encontros, atração e intimidade — opcionais, com o consentimento de todos.'],
+    fr:['Avant de jouer — les règles','Compris, créons une partie','Comment jouer',[
+      'À chaque tour, une personne répond en secret et les autres devinent son choix.',
+      'Chaque bonne réponse rapporte un point. Les scores restent accessibles en bas.',
+      'Une image IA amusante illustre la réponse. Attendez son affichage avant de continuer.',
+      'L’hôte choisit les thèmes et le niveau, puis partage un lien d’invitation.'
+    ],'Une soirée entre adultes ? Les réglages proposent des thèmes facultatifs de rencontres, attirance et intimité réservés aux 18 ans et plus. Chaque joueur confirme son âge et son accord avant de jouer. Ces options sont masquées en mode famille.','Rencontres, attirance et intimité — au choix, avec l’accord de tous.'],
+    ja:['始める前に — 遊び方','わかった！ゲームを作る','遊び方',[
+      '毎回、1人がこっそり回答し、ほかの人はその答えを予想します。',
+      '予想が当たると1点。得点は画面下で確認できます。',
+      '答えをもとに楽しいAI画像が完成します。表示されてから次へ進みましょう。',
+      'ホストがテーマとレベルを選び、招待リンクを共有します。'
+    ],'大人だけの夜にしたい？設定には、デート・魅力・親密さを扱う18歳以上向けの選択肢があります。開始前に全員の年齢確認と同意が必要です。ファミリーモードでは表示されません。','デート・魅力・親密さのテーマ — 全員の同意のもとで選べます。']
+  };
+  const guideText=()=>guideCopy[lang()]||guideCopy.en;
+  const intro=document.createElement('section');intro.id='hostIntro';intro.className='card hidden';intro.setAttribute('aria-labelledby','hostIntroTitle');
+  intro.innerHTML='<h2 id="hostIntroTitle" tabindex="-1"></h2><ol id="hostIntroRules"></ol><p id="hostIntroAdult" class="setup-note"></p><button type="button" id="hostIntroContinue" class="primary"></button>';
+  el('create').before(intro);
+  const guideLink=document.createElement('button');guideLink.type='button';guideLink.id='hostGuideLink';guideLink.className='mini';el('createTitle').after(guideLink);
+  function guideLabels(){const c=guideText();el('hostIntroTitle').textContent=c[0];el('hostIntroContinue').textContent=c[1];guideLink.textContent=c[2];el('hostIntroRules').innerHTML=c[3].map(rule=>'<li>'+safe(rule)+'</li>').join('');el('hostIntroAdult').textContent=c[4];if(el('adultOptionsHint'))el('adultOptionsHint').textContent=c[5]}
+  const baseMode=window.mode;
+  function showHostGuide(){baseMode('create');el('create').classList.add('hidden');intro.classList.remove('hidden');guideLabels();intro.scrollIntoView({block:'start'});el('hostIntroTitle').focus({preventScroll:true})}
+  window.mode=function(next){intro.classList.add('hidden');if(next==='create')showHostGuide();else baseMode(next)};
+  guideLink.onclick=showHostGuide;
+  el('hostIntroContinue').onclick=()=>{intro.classList.add('hidden');baseMode('create');el('create').scrollIntoView({block:'start'});el('cname').focus({preventScroll:true})};
+  guideLabels();
   function adultSetup(){
     const content=el('contentTopics');if(!content)return;
     let section=el('adultOptions');
     if(!section){section=document.createElement('details');section.id='adultOptions';section.innerHTML='<summary></summary><div class="topics"></div>';content.after(section)}
     section.querySelector('summary').textContent=phrase('אפשרויות לערב של מבוגרים · 18+','Adult evening options · 18+');
+    let hint=el('adultOptionsHint');if(!hint){hint=document.createElement('span');hint.id='adultOptionsHint';section.querySelector('summary').appendChild(hint)}hint.textContent=guideText()[5];
     const family=audienceType==='family';section.classList.toggle('hidden',family);
     const target=section.querySelector('div');if(content.querySelector('[data-topic="דייטים"]'))target.querySelectorAll('[data-topic]').forEach(b=>b.remove());
     for(const b of document.querySelectorAll('#topics [data-topic]'))if(adultTopics.has(b.dataset.topic)){
@@ -216,7 +267,7 @@
     if(final&&el('tieBreakBtn'))el('tieBreakBtn').disabled=state==='pending';if(before==='pending'&&state==='ready')sound('ready');if(gateStates.size>100)gateStates.delete(gateStates.keys().next().value);
     if(!final&&state!=='pending')autoScores(d);
   };
-  new MutationObserver(()=>{label();lastScores='';if(current){scoreUI(current);finishUI(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+  new MutationObserver(()=>{guideLabels();label();lastScores='';if(current){scoreUI(current);finishUI(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
   setInterval(()=>{if(!document.hidden)companion(Date.now()>lineUntil)},7500);
   if(window.lastState)window.render(window.lastState);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).catch(()=>{});
