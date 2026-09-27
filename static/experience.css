@@ -13,3 +13,37 @@
 @keyframes popWiggle{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
 @keyframes popTwinkle{0%,100%{opacity:.5;transform:scale(.8)}50%{opacity:1;transform:scale(1.1)}}
 @media(prefers-reduced-motion:reduce){.popMascot,.popSpark{animation:none}}
+/* Quiet, expressive host and always-available standings. */
+.soundToggle{position:fixed;inset-inline-end:12px;top:calc(10px + env(safe-area-inset-top));z-index:45;box-shadow:0 3px 12px #48316818}
+.topbar{padding-inline-end:44px}
+.popMascot{width:49px;height:48px;animation:hostBreathe 3s ease-in-out infinite}
+.popEyes{top:4px;left:10px;animation:hostBlink 5.7s infinite}
+.popBrow{position:absolute;width:13px;height:4px;border-top:3px solid #fff;border-radius:50%;top:7px;left:7px;transform:rotate(-17deg)}
+.popHand{position:absolute;top:29px;width:12px;height:8px;border-radius:50%;background:#9f78e6}
+.popHand.left{left:-9px;transform:rotate(-25deg)}.popHand.right{right:-9px;transform:rotate(25deg)}
+.mood-wow .popSmile,.mood-miss .popSmile{width:8px;height:10px;border:2px solid white;border-radius:50%;left:21px}
+.mood-tie .popHand.left{transform:translateY(-12px) rotate(-45deg)}.mood-tie .popHand.right{transform:translateY(-12px) rotate(45deg)}
+.mood-correct,.mood-win{animation:hostCelebrate 1.1s ease-in-out 2}
+.mood-peek{animation:hostPeek 4s ease-in-out infinite}.mood-hum .popSmile{height:2px;top:33px}
+@keyframes hostBreathe{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-4px) rotate(3deg)}}
+@keyframes hostBlink{0%,42%,46%,100%{transform:scaleY(1)}44%{transform:scaleY(.15)}}
+@keyframes hostPeek{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(9deg) translateY(-4px)}}
+@keyframes hostCelebrate{0%,100%{transform:translateY(0)}40%{transform:translateY(-7px) rotate(-8deg)}70%{transform:rotate(8deg)}}
+.scoreDock{position:fixed;bottom:0;left:0;right:0;max-width:650px;margin:auto;padding:8px 12px calc(8px + env(safe-area-inset-bottom));z-index:30;background:#faf7f1f5;box-shadow:0 -4px 24px #48316814;backdrop-filter:blur(10px);border-radius:18px 18px 0 0}
+.scoreDock .nextDock{position:static;padding:6px 0 0;background:none}.scoreDock #next{min-height:46px}
+.scoreBar{display:flex;align-items:center;gap:10px;margin:0;padding:9px 12px;min-height:48px;background:#fffdf9;border:1px solid #d7c4ec;color:#342541;border-radius:14px}
+.scoreCaption{font-size:13px;white-space:nowrap;color:#674299}.scoreChips{display:flex;gap:8px;justify-content:space-around;flex:1;min-width:0}
+.scoreChip{display:flex;align-items:center;gap:7px;min-width:0}.scoreName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px;font-size:14px;font-weight:700}.scoreChip strong{font-size:23px;line-height:1.1;color:#7040bc}.scoreChip.isMe .scoreName{text-decoration:underline;text-underline-offset:4px}
+.scorePanel{max-height:38dvh;overflow:auto;background:#fffdf9;border:1px solid #d7c4ec;border-radius:16px;padding:12px 14px;margin-bottom:8px;animation:scoreSlide .25s ease-out}
+.scorePanelHeading{display:flex;align-items:center;justify-content:space-between;gap:8px}.scorePanelHeading b{font-size:16px}.scorePanelHeading button{width:auto;padding:7px 12px;margin:0;font-size:13px}
+.dockScoreRow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eee6f3}.dockScoreRow:last-child{border-bottom:0}.dockName{flex:1;overflow-wrap:anywhere;font-size:16px;font-weight:700}.dockRank{font-size:13px;color:#756781}.dockScoreRow strong{font-size:24px;color:#7040bc}
+.companionMoment{display:flex;align-items:center;gap:16px;margin:0 0 8px;padding:10px 17px;background:#eee5f8;border-radius:14px;animation:scoreSlide .25s ease-out}.companionMoment p{margin:0;font-size:14px;font-weight:600;line-height:1.4}
+.hasScoreDock main{padding-bottom:calc(200px + env(safe-area-inset-bottom))}.hasScoreDock .toast{bottom:calc(160px + env(safe-area-inset-bottom))}
+.connectionNote{position:fixed;top:calc(62px + env(safe-area-inset-top));inset-inline:12px;max-width:620px;margin:auto;z-index:44;box-shadow:0 5px 16px #34254120}
+#ruleHelp{font-size:13px;color:#756781;margin:12px 0 4px}#ruleHelp summary{cursor:pointer;min-height:32px;align-content:center}#ruleHelp .rulebox{font-size:14px}
+body[data-game-status="playing"] #photoToggle{display:none}body[data-game-status="playing"] #vibe{display:none}
+#questionCard,#reveal{scroll-margin-top:12px}.loadingJoke{min-height:42px}.loadingCompanion{padding:4px 6px}
+#tieChoice{padding:10px 14px;margin:12px 0;background:#f1e8fc;border-radius:14px}#tieHelp{font-size:14px;line-height:1.5;margin:0 0 8px}#tieBreakBtn{margin:0;background:#8053d4;color:white}
+@keyframes scoreSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:420px){.scoreCaption{font-size:12px}.scoreName{max-width:78px}.scoreChips:has(.scoreChip:nth-child(3)){flex-wrap:wrap;justify-content:flex-start}.scoreChips:has(.scoreChip:nth-child(3)) .scoreChip{flex:1 0 40%}.scoreChips:has(.scoreChip:nth-child(3)) .scoreChip strong{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.popMascot,.popEyes,.popSpark,.scorePanel,.companionMoment{animation:none}}

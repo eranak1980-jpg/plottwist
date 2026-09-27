@@ -17,6 +17,18 @@ jobs:
         run: python tests/qa_smoke.py
       - name: HTTP flow smoke test
         run: python tests/http_smoke.py
+      - name: Ties, fair continuation and session recovery
+        run: python tests/ties_reconnect.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: DOM, audio, score dock and companion regression
+        run: |
+          npm install --prefix /tmp/plot-ui jsdom@30.1.1 --ignore-scripts --no-audit --no-fund
+          PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/experience_ui.js
+          node tests/session_ui.js
+          node --check static/experience.js
+          node --check static/sw.js
       - name: Browser JavaScript syntax
         run: |
           python - <<'PY'

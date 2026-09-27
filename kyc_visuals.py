@@ -71,12 +71,21 @@ def _file(data_url, i):
     return (f'player_{i}.{ext}', raw, mime)
 
 
-def prompt_for(question, answer, people, focus, selected='', final=False):
+def prompt_for(question, answer, people, focus, selected='', final=False, winners=None):
     refs = '; '.join(f'input image {i+1} = {name}' for i, name in enumerate(people))
     composition = f'{focus} is the central, clearly recognizable main character.'
     if selected and selected in people and selected != focus:
         composition += f' {selected} is the second featured character interacting with {focus}.'
-    if final:
+    if final and winners and len(winners)>1:
+        composition = 'Equal prominence for ALL joint winners: '+', '.join(winners)+'. No single central champion.'
+        scene = f'''FINAL JOINT WINNERS POSTER: There are {len(winners)} equally ranked winners: {', '.join(winners)}.
+Give EACH winner an equally obvious trophy, celebratory styling and the supplied prize.
+If the prize is wearing an outfit, EVERY joint winner must wear that outfit.
+Do not turn any joint winner into a spectator or supporting character.
+Other referenced players may support the celebration without trophies.
+Even if two reference photos resemble the same person, they represent separate players:
+show one distinct person for each supplied reference, never merge or omit them.'''
+    elif final:
         scene = f'''FINAL WINNER POSTER: {focus} is the winner. Give them the central position,
 an obvious trophy and celebratory lighting; supporting referenced players flank them.
 Incorporate the supplied prize as a visual prop or setting. Never give another participant
@@ -108,13 +117,13 @@ No written text, logos, nudity, sexual activity, graphic violence, hateful conte
 humiliation. Dating, LGBTQ+ and nightlife themes remain playful, celebratory and non-explicit.'''
 
 
-def generate_many(items, question, answer, focus, selected='', final=False):
+def generate_many(items, question, answer, focus, selected='', final=False, winners=None):
     key = os.getenv('OPENAI_API_KEY', '').strip()
     if not key or not items:
         return ''
     prepared_at = time.monotonic()
     files = [_file(data, i) for i, (_, data) in enumerate(items)]
-    prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected, final)
+    prompt = prompt_for(question, answer, [name for name, _ in items], focus, selected, final, winners)
     from openai import OpenAI
     prepared_seconds = round(time.monotonic() - prepared_at, 3)
     started = time.monotonic()
