@@ -75,7 +75,10 @@ class PipelineTests(unittest.TestCase):
         for name in list(self.tokens)[:photos]:
             self.post('photo',{'token':self.tokens[name],'data_url':PHOTO,'consent':True})
         self.g=k.game(self.code)
+        with k.cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE game_id=?',(PHOTO,self.g['id']))
         self.post('start',{'host':self.host})
+        for name in list(self.tokens)[photos:]:
+            with k.cn() as c:c.execute("UPDATE players SET photo_data='',photo_consent=0 WHERE token=?",(self.tokens[name],))
         self.g=k.game(self.code)
         return self.state()
 
@@ -163,7 +166,9 @@ class PipelineTests(unittest.TestCase):
         oldrun=st['image_run'];oldinstant=st['instant_visual']
         with k.cn() as c:portrait_before=dict(c.execute('SELECT * FROM visual_portraits WHERE player_id=?',(st['subject']['id'],)).fetchone())
         with k.cn() as c:c.execute("UPDATE games SET status='finished' WHERE id=?",(self.g['id'],))
-        self.post('replay',{'host':self.host});self.post('start',{'host':self.host})
+        self.post('replay',{'host':self.host})
+        with k.cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE game_id=?',(PHOTO,self.g['id']))
+        self.post('start',{'host':self.host})
         self.release.set();time.sleep(.08)
         st=self.state();self.assertGreater(st['image_run'],oldrun);self.assertIsNone(st['hero'])
         self.assertIsNone(st['instant_visual']);request(oldinstant,expect=404,raw=True)

@@ -30,8 +30,8 @@
       for(const [from,to,duration] of syllables){
         const oscillator=context.createOscillator(),gain=context.createGain();
         oscillator.type=voice[kind]?'triangle':'sine';oscillator.frequency.setValueAtTime(from,start);oscillator.frequency.exponentialRampToValueAtTime(to,start+duration);
-        gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(voice[kind]?.042:.028,start+.015);gain.gain.exponentialRampToValueAtTime(.0001,start+duration+.045);
-        if(voice[kind]&&context.createBiquadFilter){const formant=context.createBiquadFilter();formant.type='bandpass';formant.frequency.setValueAtTime(kind==='hum'?650:1100,start);formant.Q.value=.7;oscillator.connect(formant);formant.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();formant.disconnect();gain.disconnect()};}
+        gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(voice[kind]?.13:.035,start+.015);gain.gain.exponentialRampToValueAtTime(.0001,start+duration+.045);
+        if(voice[kind]&&context.createBiquadFilter){const formant=context.createBiquadFilter();formant.type='bandpass';formant.frequency.setValueAtTime(kind==='hum'?280:440,start);formant.Q.value=.7;oscillator.connect(formant);formant.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();formant.disconnect();gain.disconnect()};}
         else{oscillator.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();gain.disconnect()};}
         gain.connect(context.destination);nodes.add(oscillator);if(epoch!==audioEpoch)return;
         oscillator.start(start);oscillator.stop(start+duration+.06);start+=duration+.065;
@@ -110,12 +110,25 @@
     const waiting=el('waiting');if(!targets.length&&current.status==='playing'&&!current.reveal&&waiting&&!waiting.classList.contains('hidden'))targets.push(waiting);
     if(!targets.length){loadingKey='';return}
     const key=current.code+'_'+current.image_run+'_'+current.round+'_'+current.status+'_'+targets[0].id;
-    const changed=loadingKey!==key;
-    if(changed||force||Date.now()>lineUntil){loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
-    for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine}
+    const changed=loadingKey!==key;let newAntic=false;
+    if(changed||force||Date.now()>lineUntil){newAntic=true;loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
+    for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
     // Spaced, soft vocal gestures. Never an endless audio loop or overlapping voices.
     if((force||changed)&&Date.now()-lastAntic>11000){lastAntic=Date.now();sound(['hum','peek','wow'][Math.floor(Math.random()*3)])}
   }
+  function animateMascot(box){
+    const actor=box.querySelector('.popMascot');if(!actor||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+    actor.classList.remove('antic-spin','antic-dive','antic-hop');void actor.offsetWidth;
+    actor.classList.add(['antic-spin','antic-dive','antic-hop'][Math.floor(Math.random()*3)]);
+  }
+  // The companion also peeks from the score strip during quiet question time.
+  const visitor=document.createElement('div');visitor.className='companionVisitor hidden';visitor.innerHTML=mascot();dock.prepend(visitor);
+  let visitorTimer;
+  setInterval(()=>{
+    if(document.hidden||!current||current.status!=='playing'||current.reveal||!el('waiting').classList.contains('hidden'))return;
+    visitor.classList.remove('hidden');animateMascot(visitor);sound(['hum','peek','oops','wow'][Math.floor(Math.random()*4)]);
+    clearTimeout(visitorTimer);visitorTimer=setTimeout(()=>visitor.classList.add('hidden'),2300);
+  },17000);
   function finishUI(d){
     if(d.status!=='finished')return;
     const ws=d.players.filter(p=>(d.winner_ids||leaders(d).map(x=>x.id)).includes(p.id));
@@ -131,12 +144,62 @@
       };
     }
   }
+  const adultTopics=new Set(['דייטים','אינטימיות למבוגרים']);
+  const phrase=(he,en)=>lang()==='he'?he:en;
+  function adultSetup(){
+    const content=el('contentTopics');if(!content)return;
+    let section=el('adultOptions');
+    if(!section){section=document.createElement('details');section.id='adultOptions';section.innerHTML='<summary></summary><div class="topics"></div>';content.after(section)}
+    section.querySelector('summary').textContent=phrase('אפשרויות לערב של מבוגרים · 18+','Adult evening options · 18+');
+    const family=audienceType==='family';section.classList.toggle('hidden',family);
+    const target=section.querySelector('div');if(content.querySelector('[data-topic="דייטים"]'))target.querySelectorAll('[data-topic]').forEach(b=>b.remove());
+    for(const b of document.querySelectorAll('#topics [data-topic]'))if(adultTopics.has(b.dataset.topic)){
+      target.appendChild(b);b.dataset.extra='0';b.classList.remove('hidden');
+      if(family)b.classList.remove('on');
+    }
+    const bold=document.querySelector('.spice [data-s="3"]');
+    bold.classList.toggle('hidden',family||!section.open);
+    if((family||!section.open)&&spice===3){spice=2;document.querySelectorAll('.spice button').forEach(b=>b.classList.toggle('on',b.dataset.s==='2'))}
+    el('adultText').textContent=phrase('אני בן/בת 18 ומעלה ומסכים/ה לתכנים למבוגרים. כל שחקן יאשר בנפרד לפני ההתחלה.','I am 18+ and agree to adult content. Each player must confirm separately before play.');
+    section.ontoggle=()=>{if(!section.open){target.querySelectorAll('.on').forEach(b=>b.classList.remove('on'));el('adultConfirm').checked=false}adultSetup();syncCreateAdult()};
+    syncCreateAdult();
+    section.appendChild(el('adultBox'));
+  }
+  const baseTopics=window.renderCreateTopics;window.renderCreateTopics=function(){baseTopics();adultSetup()};
+  const baseAudience=window.renderAudience;window.renderAudience=function(){baseAudience();adultSetup()};
+  adultSetup();
+  const baseEdit=window.openSetupEdit;window.openSetupEdit=function(){
+    baseEdit();let section=el('editAdultOptions');if(!section){section=document.createElement('details');section.id='editAdultOptions';section.innerHTML='<summary></summary>';el('editTopics').appendChild(section)}
+    section.querySelector('summary').textContent=phrase('אפשרויות לערב של מבוגרים · 18+','Adult evening options · 18+');
+    document.querySelectorAll('#editTopics [data-topic]').forEach(b=>{if(adultTopics.has(b.dataset.topic))section.appendChild(b)});
+    section.open=!!window.lastState?.adult_required;
+  };
+  const age=document.createElement('div');age.id='playerAge';age.className='setup-note hidden';
+  age.innerHTML='<label><input type="checkbox" id="playerAgeCheck"><span></span></label><button class="mini" id="playerAgeSave"></button>';
+  el('host').before(age);
+  el('playerAgeSave').onclick=async()=>{if(!el('playerAgeCheck').checked)return;const b=el('playerAgeSave');b.disabled=true;try{await req('/api/'+s.code+'/adultconfirm',{token:s.token,confirmed:true});stateSig='';await load()}catch(_){toast(copy.retry)}finally{b.disabled=false}};
+  function lobbyPolish(d){
+    document.querySelectorAll('#voteTopics [data-topic]').forEach(b=>{if(adultTopics.has(b.dataset.topic)&&!d.adult_required)b.classList.add('hidden')});
+    age.classList.toggle('hidden',d.status!=='lobby'||!d.adult_required||!d.me||d.me.adult_confirmed);
+    age.querySelector('span').textContent=phrase('אני מאשר/ת שאני בן/בת 18 ומעלה ומסכים/ה לתכני החדר','I confirm I am 18+ and agree to this room’s adult content');
+    el('playerAgeSave').textContent=phrase('אישור 18+','Confirm 18+');
+    el('photoHelp').textContent=phrase('כדי להשתתף, הוסיפו תמונה שלכם ואשרו שימוש בה לתמונות המשחק הפרטי.','To play, add your photo and consent to using it for this private game’s images.');
+    if(d.status==='lobby'){
+      if(d.me&&!d.me.has_photo)el('photoBox').classList.remove('hidden');
+      const start=el('start');if(start&&start.disabled&&d.players.filter(p=>p.active).length>=2)start.textContent=d.players.some(p=>p.active&&!p.has_photo)?phrase('ממתינים לתמונות מכל השחקנים','Waiting for everyone’s photo'):phrase('ממתינים לאישור 18+ מכל השחקנים','Waiting for everyone’s 18+ confirmation');
+    }
+  }
+  // Invitation links are the visible join mechanism; the room code stays internal.
+  el('jcode').placeholder=phrase('הדביקו את לינק ההזמנה','Paste invitation link');el('jcode').removeAttribute('maxlength');
+  el('jcode').classList.toggle('hidden',!!new URLSearchParams(location.search).get('code'));
+  const baseJoin=window.joinGame;window.joinGame=async function(){let field=el('jcode');try{if(field.value.includes('://'))field.value=new URL(field.value).searchParams.get('code')||''}catch(_){}return baseJoin()};
   const baseReq=window.req;
   window.req=async function(path,body){const result=await baseReq(path,body);if(body&&/\/(answer|guess|matchanswer)$/.test(path))sound('saved');return result};
   const baseRender=window.render;
   window.render=function(d){
     const newGame=current&&(current.code!==d.code||current.image_run!==d.image_run);if(newGame){closeScores();lastLine='';loadingKey='';el('companionMoment').classList.add('hidden')}
-    current=d;baseRender(d);label();scoreUI(d);finishUI(d);
+    if(previous&&previous.round!==d.round)closeScores();
+    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);
     const help=el('ruleHelp');if(help)help.querySelector('summary span').textContent=L()[12];
     if(d.tiebreak?.sets&&d.status==='playing')el('round').textContent=L()[9]+' '+d.tiebreak.sets+' / 3 · '+(d.round-d.tiebreak.start+1)+' / '+d.tiebreak.order.length;
     const key=d.code+'_'+d.image_run+'_'+d.round+'_'+d.status;

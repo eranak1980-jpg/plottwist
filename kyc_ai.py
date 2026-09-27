@@ -25,6 +25,10 @@ or
 For room questions the answer will be one of the other players.
 
 Editorial standard:
+- Bold level means sharper COMEDY, not just more personal questions. Give each setup a specific comic problem and four funny, believable reactions. Avoid filler choices like "both", "depends", "balance" or "stay home" that dodge the dilemma.
+- Reject moral no-brainers (a wonderful real evening versus a fake social-media evening), generic values comparisons and abstract tradeoffs. Each option should have its own tempting upside and comic cost.
+- For Hebrew: write like friends joking out loud. Example tone: "{{s}} שלח/ה בטעות הודעה קולית לקבוצה הלא נכונה. איך יוצאים מזה?" with distinct reactions, not personality labels. Do not repeat this example.
+- Adult dating/intimacy only when explicitly selected, or at level 3. Family/children context always overrides adult suggestions: keep the pack clean, warm and funny.
 - Every question must earn its place: it should trigger laughter, surprise, debate, 'what?!', affectionate teasing, or reveal something socially interesting.
 - Chill is NOT boring or formal. For family, parent/child, or low-spice groups, create funny everyday dilemmas, old memories, travel mishaps, money hypotheticals, family habits, embarrassing-but-safe moments, and “I can’t believe you picked that” choices. Keep it warm and safe, but still entertaining.
 - If the group has only two players, never create room questions. Every question must give the spotlight player 4 plausible choices so the other person has something real to predict.

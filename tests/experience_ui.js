@@ -20,6 +20,17 @@ const $=id=>w.document.getElementById(id);
  await new Promise(r=>setImmediate(r));
  w.document.documentElement.lang='he';
  assert.equal(notes,0,'no audio before gesture');
+ w.renderCreateTopics();w.renderAudience();
+ assert(!$('adultOptions').open,'adult categories opt in');
+ assert.equal(w.document.querySelector('#adultOptions [data-topic="דייטים"]').textContent.length>0,true);
+ $('adultOptions').open=true;$('adultOptions').dispatchEvent(new w.Event('toggle'));
+ w.document.querySelector('#adultOptions [data-topic="דייטים"]').click();
+ assert(!$('adultBox').classList.contains('hidden'),'dating reveals age consent at medium/chill level');
+ w.renderCreateTopics();assert.equal(w.document.querySelectorAll('#topics [data-topic="דייטים"]').length,1,'rerender does not duplicate adult topics');
+ w.document.querySelector('[data-audience="family"]').click();assert($('adultOptions').classList.contains('hidden'));assert(!w.document.querySelector('#adultOptions [data-topic="דייטים"]').classList.contains('on'));
+ let lobby={...data(),status:'lobby',adult_required:true,adults_ready:false,me:{id:1,has_photo:false,adult_confirmed:false}};
+ w.render(lobby);assert($('start').disabled);assert(!$('playerAge').classList.contains('hidden'));assert(!$('photoBox').classList.contains('hidden'));
+
  assert.equal(new Set(Object.values(w.PlotLines.he).flat()).size,80);
  let d=data();w.render(d);assert(!$('scoreDock').classList.contains('hidden'));assert($('scoreBar').textContent.includes('אבי'));assert(w.document.querySelector('.nextDock').classList.contains('hidden'));
  $('scoreBar').click();assert.equal($('scoreBar').getAttribute('aria-expanded'),'true');assert(notes>0,'gesture activates audio');

@@ -18,7 +18,9 @@ jobs:
       - name: HTTP flow smoke test
         run: python tests/http_smoke.py
       - name: Ties, fair continuation and session recovery
-        run: python tests/ties_reconnect.py
+        run: |
+          python tests/ties_reconnect.py
+          python tests/readiness.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

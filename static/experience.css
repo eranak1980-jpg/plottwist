@@ -47,3 +47,18 @@ body[data-game-status="playing"] #photoToggle{display:none}body[data-game-status
 @keyframes scoreSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:420px){.scoreCaption{font-size:12px}.scoreName{max-width:78px}.scoreChips:has(.scoreChip:nth-child(3)){flex-wrap:wrap;justify-content:flex-start}.scoreChips:has(.scoreChip:nth-child(3)) .scoreChip{flex:1 0 40%}.scoreChips:has(.scoreChip:nth-child(3)) .scoreChip strong{font-size:20px}}
 @media(prefers-reduced-motion:reduce){.popMascot,.popEyes,.popSpark,.scorePanel,.companionMoment{animation:none}}
+
+/* Sharing uses links. Keep the room identifier internal. */
+.roomHeading>.eyebrow,#code{display:none!important}
+#adultOptions{border:1px solid #d7c4ec;border-radius:14px;padding:12px;margin:12px 0}
+#adultOptions summary{cursor:pointer;font-size:14px;font-weight:700}
+#playerAge input{width:auto;margin-inline-end:8px}
+.connectionNote{position:relative;top:auto;inset-inline:auto;box-shadow:none;font-size:13px}
+.companionVisitor{position:absolute;inset-inline-end:25px;bottom:100%;pointer-events:none;padding:8px;overflow:hidden;height:90px;width:85px}
+.antic-spin{animation:anticSpin 2.2s ease-in-out!important}
+.antic-dive{animation:anticDive 2.2s ease-in-out!important}
+.antic-hop{animation:anticHop 2.2s ease-in-out!important}
+@keyframes anticSpin{0%,100%{transform:rotate(0)}25%{transform:rotate(-20deg)}70%{transform:rotate(360deg) translateY(-10px)}}
+@keyframes anticDive{0%,100%{transform:translateY(0)}35%,55%{transform:translateY(65px) rotate(20deg)}80%{transform:translateY(-13px) rotate(-12deg)}}
+@keyframes anticHop{0%,100%{transform:translateY(0) scale(1)}20%{transform:scale(1.15,.8)}42%{transform:translateY(-22px) rotate(-15deg)}65%{transform:translateY(0) scale(1.1,.85)}80%{transform:translateY(-8px) rotate(12deg)}}
+@media(prefers-reduced-motion:reduce){.antic-spin,.antic-dive,.antic-hop{animation:none!important}}
