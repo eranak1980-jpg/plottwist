@@ -676,3 +676,14 @@ QA_FIX_COPY = {
 }
 for _lang,_extra in QA_FIX_COPY.items():
     UI_COPY[_lang].update(_extra)
+
+IMAGE_GATE_COPY={
+ 'he':('התמונה נטענת…','לא הצלחנו לטעון את התמונה. אפשר להמשיך בלי תמונה.','המשך בלי תמונה'),
+ 'en':('Image loading…','The image could not load. You can continue without it.','Continue without image'),
+ 'es':('Cargando imagen…','No se pudo cargar la imagen. Puedes continuar sin ella.','Continuar sin imagen'),
+ 'pt-BR':('Carregando imagem…','Não foi possível carregar a imagem. Você pode continuar sem ela.','Continuar sem imagem'),
+ 'fr':('Chargement de l’image…','Impossible de charger l’image. Vous pouvez continuer sans elle.','Continuer sans image'),
+ 'ja':('画像を読み込み中…','画像を読み込めませんでした。画像なしで続けられます。','画像なしで続ける')
+}
+for _lang,_values in IMAGE_GATE_COPY.items():
+    UI_COPY[_lang].update(dict(zip(('image_loading','image_failed','image_continue'),_values)))

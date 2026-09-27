@@ -93,3 +93,5 @@ body[data-game-status="playing"] .topbar{margin-bottom:6px}
 .setupFreeText{margin-top:8px;background:#fff;border-style:dashed}
 #contentTopics .topic[data-extra="1"].hidden{display:none!important}
 @media(max-width:480px){.setupStep{padding:14px}.setupStep h3{font-size:17px}.setupChoices .topic,.audienceChoice{font-size:13px;padding:9px 11px}}
+#heroStatus{font-size:17px;font-weight:800;text-align:center}
+#finalHeroStatus.is-loading{min-height:180px;display:grid;place-content:center;background:radial-gradient(ellipse at center,#d9c8ef,#eee8f4 65%);font-size:17px;font-weight:800}
