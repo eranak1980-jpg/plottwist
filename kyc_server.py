@@ -194,6 +194,15 @@ def localized_duo_callback(g,ps,rn):
  sub=ps[rn%2];mine=next((e for e in reversed(m) if e.get('subject')==sub['name']),None)
  if not mine:return None
  cb=callback_copy(game_language(g),'duo',sub['name'],old=mine.get('answer',''));return (*cb,sub) if cb else None
+def _callback_source_text(entry):
+ """Return compact prior context so a callback is understandable on its own."""
+ if 'callback' in str(entry.get('type','')):return None
+ question=' '.join(str(entry.get('question') or '').split()).strip()
+ answer=' '.join(str(entry.get('answer') or '').split()).strip()
+ if not question or not answer or answer=='SKIPPED':return None
+ # Callback cards must stay readable on a phone and must not quote malformed data.
+ if len(question)>220 or len(answer)>90:return None
+ return question,answer
 def smart_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
  if rn not in marks or len(m)<3:return None
@@ -215,11 +224,11 @@ def smart_callback(g,ps,rn):
     text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה ב־{friend}. עכשיו שניהם תקועים יחד בסיטואציה שלא תכננו. מי {sub["name"]} חושב/ת שייקח/תיקח פיקוד ראשון?'
     opts=[sub['name'],friend]
    return 'callback',text,opts,sub
- e=m[-2];sub=next((p for p in ps if p['name']==e.get('subject')),None)
+ e=next((x for x in reversed(m[:-1] or m) if _callback_source_text(x)),None);sub=next((p for p in ps if e and p['name']==e.get('subject')),None)
  if sub:
-  old=e.get('answer')
-  text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה “{old}”. עכשיו הבחירה הזאת חוזרת אליו/ה בזמן הכי לא מתאים. מה {sub["name"]} יעשה/תעשה?'
-  return 'callback',text,['זורם/ת עד הסוף','מתחרט/ת ברגע האחרון','גורר/ת חבר איתו/ה','מאלתר/ת משהו אחר'],sub
+  old_question,old=_callback_source_text(e)
+  text=f'⚡ PLOT TWIST\nהשאלה הקודמת: „{old_question}”\n{sub["name"]} ענה/תה: „{old}”\nעכשיו זה באמת קורה. מה {sub["name"]} עושה קודם?'
+  return 'callback',text,['לזרום עם זה מיד','לבדוק קודם מה באמת קורה','לשנות את התוכנית','לצרף מישהו לעזרה'],sub
  return None
 def interactive_match_data(g,typ,text,sub):
  if 'callback' not in str(typ) or not sub:return None
@@ -231,18 +240,52 @@ def interactive_match_data(g,typ,text,sub):
   partner=next((p for p in active if p['id']!=sub['id']),None)
  if not partner or int(sub['active'] if sub['active'] is not None else 1)!=1:return None
  lang=game_language(g)
- if lang!='he':return {'prompt':match_prompt(lang,sub['name'],partner['name']),'player_ids':[sub['id'],partner['id']],'names':[sub['name'],partner['name']]}
+ # Pick a different secret prompt for each callback in the same game.  These
+ # prompts are not regular questions, so they need their own repeat guard.
+ prompt_index=sum(1 for e in mem(g) if 'callback' in str(e.get('type','')))
+ if lang!='he':
+  a,b=sub['name'],partner['name']
+  extra={
+   'en':[f'🍿 {a} and {b}: secretly type one snack you would both choose for tonight. Same answer = +1 point each.',f'📵 {a} and {b}: secretly type one thing you would do together on a day without phones. Same answer = +1 point each.'],
+   'es':[f'🍿 {a} y {b}: escriban en secreto un snack que elegirían para esta noche. Misma respuesta = +1 punto para cada uno.',f'📵 {a} y {b}: escriban en secreto algo que harían juntos un día sin teléfonos. Misma respuesta = +1 punto para cada uno.'],
+   'pt-BR':[f'🍿 {a} e {b}: escrevam em segredo um lanche que escolheriam para hoje. Mesma resposta = +1 ponto para cada um.',f'📵 {a} e {b}: escrevam em segredo algo que fariam juntos num dia sem celular. Mesma resposta = +1 ponto para cada um.'],
+   'fr':[f'🍿 {a} et {b} : écrivez en secret un snack que vous choisiriez ce soir. Même réponse = +1 point chacun.',f'📵 {a} et {b} : écrivez en secret une activité à faire ensemble sans téléphone. Même réponse = +1 point chacun.'],
+   'ja':[f'🍿 {a}と{b}：今夜2人で選ぶおやつを1つ、秘密で書いてください。同じ答えなら2人に1点。',f'📵 {a}と{b}：スマホなしの日に2人でしたいことを1つ、秘密で書いてください。同じ答えなら2人に1点。']
+  }
+  prompts=[match_prompt(lang,a,b)]+extra.get(lang,extra['en']);prompt=prompts[prompt_index%len(prompts)]
+  return {'prompt':prompt,'player_ids':[sub['id'],partner['id']],'names':[a,b]}
  q=(text or '').lower()
  if any(k in q for k in ['טיול','טיסה','הרפתקה','חופשה','יעד']):
-  prompt=f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.'
+  prompts=[
+   f'✈️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד יעד אחד שהייתם טסים אליו מחר. אם כתבתם אותו יעד — נקודה לשניכם.',
+   f'🧳 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שחייב להיכנס למזוודה המשותפת. אותה תשובה — נקודה לשניכם.',
+   f'🏖️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד את הדבר הראשון שהייתם עושים בחופשה בלי תוכנית. אותה תשובה — נקודה לשניכם.'
+  ];prompt=prompts[prompt_index%len(prompts)]
  elif any(k in q for k in ['דייט','קראש','היכרויות']):
-  prompt=f'😈 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מקום אחד לדייט ספונטני. אם יצאתם על אותו רעיון — נקודה לשניכם.'
+  prompts=[
+   f'😈 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מקום אחד לדייט ספונטני. אם יצאתם על אותו רעיון — נקודה לשניכם.',
+   f'💬 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד משפט פתיחה אחד שבאמת היה מצחיק את שניכם. אותה תשובה — נקודה לשניכם.',
+   f'🍹 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מה מזמינים קודם בדייט בלי תוכנית. אותה תשובה — נקודה לשניכם.'
+  ];prompt=prompts[prompt_index%len(prompts)]
  elif any(k in q for k in ['50,000','כסף','תקציב','מיליון']):
-  prompt=f'💸 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם מבזבזים עליו את הכסף. אותה תשובה — נקודה לשניכם.'
+  prompts=[
+   f'💸 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם מבזבזים עליו את הכסף. אותה תשובה — נקודה לשניכם.',
+   f'🎁 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מתנה מוגזמת אחת שהייתם קונים לקבוצה. אותה תשובה — נקודה לשניכם.',
+   f'🎉 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד חוויה אחת ששווה לבזבז עליה הכול. אותה תשובה — נקודה לשניכם.'
+  ];prompt=prompts[prompt_index%len(prompts)]
  elif any(k in q for k in ['משפחה','חג','ארוחה']):
-  prompt=f'🏠 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד פעילות אחת שהייתם בוחרים ליום משפחתי מושלם. אותה תשובה — נקודה לשניכם.'
+  prompts=[
+   f'🏠 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד פעילות אחת שהייתם בוחרים ליום משפחתי מושלם. אותה תשובה — נקודה לשניכם.',
+   f'🍽️ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד מאכל אחד שחייב להיות בארוחה משפחתית. אותה תשובה — נקודה לשניכם.',
+   f'🎲 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד משחק אחד שהמשפחה באמת תסכים לשחק. אותה תשובה — נקודה לשניכם.'
+  ];prompt=prompts[prompt_index%len(prompts)]
  else:
-  prompt=f'⚡ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם בוחרים לעשות יחד בסופ״ש חופשי. אותה תשובה — נקודה לשניכם.'
+  prompts=[
+   f'⚡ {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שהייתם בוחרים לעשות יחד בסופ״ש חופשי. אותה תשובה — נקודה לשניכם.',
+   f'🍿 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד בילוי אחד שמתאים לשניכם הערב. אותה תשובה — נקודה לשניכם.',
+   f'😂 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד דבר אחד שתמיד מצחיק את שניכם. אותה תשובה — נקודה לשניכם.',
+   f'📵 {sub["name"]} ו־{partner["name"]}: כל אחד כותב בסוד פעילות אחת שהייתם בוחרים ליום בלי טלפונים. אותה תשובה — נקודה לשניכם.'
+  ];prompt=prompts[prompt_index%len(prompts)]
  return {'prompt':prompt,'player_ids':[sub['id'],partner['id']],'names':[sub['name'],partner['name']]}
 def interactive_prompt(g,typ,text,answer,sub):
  d=interactive_match_data(g,typ,text,sub)
@@ -261,19 +304,18 @@ def match_equal(a,b):
 def duo_callback(g,ps,rn):
  m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
  if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15) or len(m)<3:return None
- sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name']]
+ sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name'] and _callback_source_text(e)]
  if not mine:return None
- used={e.get('question','') for e in m}
+ used={question_key(e.get('question',''),ps) for e in m};old_question,old=_callback_source_text(mine[0])
  variants=[
-  ('⚡ PLOT TWIST: קודם {name} בחר/ה “{old}”. מחר הבחירה הזאת הופכת למציאות בלי אפשרות לבטל. מה הכי סביר ש־{name} יעשה/תעשה ראשון?',['זורם/ת מיד','מחפש/ת דרך לשדרג','נלחץ/ת אבל ממשיך/ה','מנסה לצרף מישהו']),
-  ('⚡ PLOT TWIST: זוכרים ש־{name} בחר/ה “{old}”? עכשיו זה קורה באמת — אבל יש טוויסט: צריך להחליט תוך 30 שניות. מה {name} עושה?',['אומר/ת כן לפני שחושב/ת','מבקש/ת עוד פרטים','משנה את הבחירה','הולך/ת על משהו אפילו יותר קיצוני']),
-  ('⚡ PLOT TWIST: הבחירה של {name} — “{old}” — חזרה אליו/ה כבומרנג. מה החלק שהכי סביר שיגרום לו/לה להגיד “רגע, לא לזה התכוונתי”?',['המחיר','הספונטניות','מי שמצטרף','זה שזה באמת קורה']),
-  ('⚡ PLOT TWIST: קודם “{old}” נשמע ל־{name} כמו רעיון טוב. עכשיו כל החבורה אומרת: יאללה, עושים את זה. מה התגובה?',['אני בפנים','רגע, צחקתי','רק אם משנים פרט אחד','מעלה את הרף עוד יותר'])
+  ('⚡ PLOT TWIST\nהשאלה הקודמת: „{question}”\n{name} ענה/תה: „{old}”\nעכשיו זה באמת קורה. מה {name} עושה קודם?',['זורם/ת עם זה מיד','בודק/ת קודם מה באמת קורה','משנה את התוכנית','מצרף/ת מישהו לעזרה']),
+  ('⚡ PLOT TWIST\nקודם שאלנו: „{question}”\nהתשובה של {name}: „{old}”\nעכשיו צריך להחליט באמת. מה {name} בוחר/ת?',['נשאר/ת עם הבחירה','מבקש/ת עוד פרטים','בוחר/ת משהו אחר','מעלה את הרף']),
+  ('⚡ PLOT TWIST\n{name} ענה/תה „{old}” על השאלה: „{question}”\nעכשיו מציעים לעשות את זה במציאות. איך {name} מגיב/ה?',['יאללה, הולכים על זה','רק אחרי שבודקים הכול','רק אם מישהו מצטרף','עדיף להשאיר את זה בתיאוריה'])
  ]
  seed=(rn+sum(ord(x) for x in str(g['code'])))%len(variants)
  for off in range(len(variants)):
-  template,opts=variants[(seed+off)%len(variants)];text=template.format(name=sub['name'],old=mine[0].get('answer'))
-  if text not in used:return 'duo_callback',text,opts,sub
+  template,opts=variants[(seed+off)%len(variants)];text=template.format(name=sub['name'],question=old_question,old=old)
+  if not too_similar(question_key(text,ps),used):return 'duo_callback',text,opts,sub
  return None
 def qdata(g,ps):
  rn=int(g['round_no']);sub=ps[rn%len(ps)] if ps else None;lang=game_language(g)

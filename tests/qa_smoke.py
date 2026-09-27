@@ -84,10 +84,16 @@ with k.cn() as db:
 duo=k.game('DUO12');cb=k.duo_callback(duo,dps,4)
 if cb:
  first=cb[1]
+ assert 'Q2' in first and 'אי טרופי' in first and '\n' in first,first
+ first_match=k.interactive_match_data(duo,cb[0],cb[1],cb[3])
  mm=k.mem(duo)+[{'round':4,'subject':cb[3]['name'],'question':first,'answer':cb[2][0],'type':'duo_callback'}]
  with k.cn() as db:db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(6,json.dumps(mm,ensure_ascii=False),duo['id']))
  duo=k.game('DUO12');cb2=k.duo_callback(duo,dps,6)
  assert not cb2 or cb2[1]!=first,(first,cb2)
+ if cb2:
+  assert first not in cb2[1] and cb2[1].count('PLOT TWIST')==1,cb2[1]
+  second_match=k.interactive_match_data(duo,cb2[0],cb2[1],cb2[3])
+  assert first_match and second_match and first_match['prompt']!=second_match['prompt'],(first_match,second_match,k.mem(duo))
 print('QA_DUO_CALLBACK_NO_REPEAT_OK')
 
 # Scoring must be idempotent and survive a state/reveal race.
@@ -228,6 +234,8 @@ for code in ['en','es','pt-BR','fr','ja','he']:
 assert '<option value="ar">' not in html
 assert "language:uiLang" in html
 assert "d.language&&d.language!==uiLang" in html
+assert 'function startNewGame()' in html and 'globalNewGameBtn' in html
+assert 'autoSavePhotoWhenReady' in html and "photoConsent').addEventListener('change'" in html
 print('QA_LANGUAGE_SELECTOR_OK')
 
 
@@ -245,7 +253,7 @@ required_polish=[
  'back_lobby_ok','replay_loading','replay_new_questions','need_two','starting',
  'game_ready','skipped_no_score','wait_all_guesses','photo_button','custom_prompt',
  'guess_board','lobby_game','edit_game','save_changes','final_hero_generating',
- 'language_locked','left_game'
+ 'language_locked','left_game','new_game_confirm','photo_auto_saving'
 ]
 for lang in ['en','es','pt-BR','fr','ja']:
  c=ui_copy(lang)
