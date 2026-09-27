@@ -1,0 +1,15 @@
+.soundToggle{width:42px;min-width:42px;min-height:42px;margin:0;padding:7px;font-size:18px;border-radius:14px;background:#fffdfa}
+.topbar{flex-wrap:wrap}
+.loadingCompanion{display:flex;align-items:center;justify-content:center;gap:14px;margin:8px auto 0;max-width:420px}
+.loadingJoke{font-size:14px;line-height:1.4;font-weight:600;margin:0;max-width:250px;min-height:40px;display:flex;align-items:center}
+.popMascot{position:relative;flex:none;width:48px;height:46px;border-radius:45% 45% 38% 38%;background:#8053d4;box-shadow:0 5px 0 #ddcbee;color:white;animation:popWiggle 2.4s ease-in-out infinite}
+.popEyes{position:absolute;top:2px;left:10px;font:bold 27px monospace;letter-spacing:5px;line-height:28px}
+.popSmile{position:absolute;left:18px;top:27px;width:12px;height:7px;border-bottom:2px solid white;border-radius:0 0 12px 12px}
+.popSpark{position:absolute;right:-9px;top:-10px;color:#bd8a22;font-size:20px;animation:popTwinkle 2.4s ease-in-out infinite}
+#heroStatus{position:relative;inset:auto;margin:12px;padding:12px;z-index:2}
+#visualStage.is-loading{min-height:220px;max-height:none;display:flex;align-items:center;justify-content:center}
+#visualStage.is-loading #revealPhoto{position:absolute;inset:0;height:100%;width:100%;object-fit:cover}
+#finalHeroStatus.is-loading{min-height:220px}
+@keyframes popWiggle{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+@keyframes popTwinkle{0%,100%{opacity:.5;transform:scale(.8)}50%{opacity:1;transform:scale(1.1)}}
+@media(prefers-reduced-motion:reduce){.popMascot,.popSpark{animation:none}}
