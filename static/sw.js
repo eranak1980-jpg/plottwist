@@ -1,6 +1,6 @@
 /* Public app shell only. Never cache player tokens, API state, photos or answers. */
-const CACHE='plot-shell-v5';
-const SHELL=['/','/static/premium.css?v=cream-v2','/static/experience.css?v=5','/static/companion-copy.js?v=3','/static/experience.js?v=5'];
+const CACHE='plot-shell-v6';
+const SHELL=['/','/static/premium.css?v=cream-v2','/static/experience.css?v=6','/static/companion-copy.js?v=3','/static/experience.js?v=6'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('plot-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

@@ -1,3 +1,4 @@
+import kyc_budget as budget
 import json,os
 from kyc_locales import normalize_language,topic_labels
 
@@ -45,9 +46,13 @@ Editorial standard:
 - Do not invent facts about players.
 - Vary dating, friendship, nightlife, travel, trust, dilemmas, and group dynamics according to the chosen topics.
 """
+ ticket=None
  try:
   from openai import OpenAI
-  r=OpenAI(api_key=key,timeout=45).responses.create(model='gpt-5.6-luna',input=prompt)
+  ticket=budget.begin('text','gpt-5.6-luna')
+  with OpenAI(api_key=key,timeout=45,max_retries=0) as client:
+   r=client.responses.create(model='gpt-5.6-luna',input=prompt,max_output_tokens=3500)
+  budget.finish(ticket,getattr(r,'usage',None))
   txt=r.output_text.strip();a=txt.find('[');b=txt.rfind(']')
   data=json.loads(txt[a:b+1])
   out=[]
@@ -58,4 +63,5 @@ Editorial standard:
    out.append((typ,text,[str(x)[:90] for x in opts]))
   return out[:10] if len(out)>=6 else []
  except Exception as e:
+  budget.finish(ticket,status='unknown_or_failed')
   print('custom pack generation failed',type(e).__name__,str(e)[:300],flush=True);return []

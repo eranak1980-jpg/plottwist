@@ -81,7 +81,8 @@
     el('scorePanelTitle').textContent=leaders(d).length>1?L()[11]:L()[2];el('closeScores').textContent=L()[3];el('scorePanel').setAttribute('aria-label',L()[2]);
     autoScores(d);
   }
-  function mascot(mood='peek'){return '<div class="popMascot mood-'+mood+'" aria-hidden="true"><span class="popBrow"></span><span class="popEyes">••</span><span class="popSmile"></span><span class="popHand left"></span><span class="popHand right"></span><span class="popSpark">✦</span></div>'}
+  function mascot(mood='peek'){return `<div class="popMascot mood-${mood}" aria-hidden="true"><svg viewBox="0 0 100 100" focusable="false"><path fill="#60249c" d="M14 65C14 37 29 27 50 27s36 13 36 38v22H14z"/><path fill="#b9d729" d="M48 35C69 22 22 22 46 2c-2 13 40 10 22 39-3-10-12-8-20-6z"/><g class="mascotEyes"><path fill="#fff9ef" d="M23 54q12-6 24 2c-2 16-24 18-24-2zm32 4q12-8 24-1c-1 18-22 18-24 1z"/><circle cx="30" cy="58" r="6" fill="#381453"/><circle cx="61" cy="61" r="6" fill="#381453"/></g><path fill="none" stroke="#fff9ef" stroke-width="4" stroke-linecap="round" d="M25 44q8-7 17-3m16 5 17 2"/><path class="mascotSmirk" d="M44 76q13 7 24-4" fill="none" stroke="#fff9ef" stroke-width="3" stroke-linecap="round"/><path fill="#60249c" d="M8 78q12-7 19 4v12H7zm65 4q12-10 20 0v12H73z"/><path d="M14 86v7m7-7v7m58-7v7m7-7v7" stroke="#8e52c2" stroke-width="2" stroke-linecap="round"/></svg></div>`}
+
   function draw(kind='wait'){
     const language=lang(),bank=window.PlotLines[language]||window.PlotLines.en;
     const gameKey=(current?.code||'home')+'_'+((current?.image_run||0)-(current?.tiebreak?.sets||0))+'_'+language;
@@ -245,12 +246,17 @@
   el('jcode').classList.toggle('hidden',!!new URLSearchParams(location.search).get('code'));
   const baseJoin=window.joinGame;window.joinGame=async function(){let field=el('jcode');try{if(field.value.includes('://'))field.value=new URL(field.value).searchParams.get('code')||''}catch(_){}return baseJoin()};
   const baseReq=window.req;
-  window.req=async function(path,body){const result=await baseReq(path,body);if(body&&/\/(answer|guess|matchanswer)$/.test(path))sound('saved');return result};
+  window.req=async function(path,body){try{const result=await baseReq(path,body);if(body&&/\/(answer|guess|matchanswer)$/.test(path))sound('saved');return result}catch(error){if(['pilot_limit','game_ai_limit','retry_limit'].includes(error.message)){let note=el('pilotLimitNote');if(!note){note=document.createElement('div');note.id='pilotLimitNote';note.className='rulebox';note.setAttribute('role','alert');document.querySelector('main').prepend(note)}note.textContent=phrase('מכסת הניסיון זמנית מלאה. אין חיוב. משחק קיים ניתן לפתוח שוב דרך הקישור שלו.','The pilot allowance is currently full. No charge was made. Use your existing game link to resume.')}throw error}};
+  const packages=document.createElement('a');packages.className='pilotPackagesLink';packages.href='/pricing';
+  function packageLabel(){packages.textContent=phrase('חבילות ומחירים לקראת ההשקה','Launch packages & pricing');packages.href='/pricing?lang='+encodeURIComponent(lang())}
+  packageLabel();el('home').appendChild(packages);
+  const costs=document.createElement('details');costs.id='pilotCostReport';costs.className='rulebox hidden';costs.innerHTML='<summary></summary><button type="button"></button><p></p>';el('finish').appendChild(costs);
+  costs.querySelector('button').onclick=async()=>{const b=costs.querySelector('button'),p=costs.querySelector('p');b.disabled=true;try{const r=await baseReq('/api/costs/'+encodeURIComponent(current.code)+'?host='+encodeURIComponent(s.host));p.textContent=phrase('עלות AI שנמדדה: $','Measured AI cost: $')+r.measured_usd.toFixed(4)+phrase(' · קריאות שטרם תומחרו: ',' · Unpriced calls: ')+r.unpriced_calls+phrase(' · אומדן כולל: $',' · Combined estimate: $')+r.estimated_usd.toFixed(4)+phrase(' — אינו חשבונית ואינו כולל שרת וסליקה.',' — not an invoice; excludes hosting and payments.')}catch(_){p.textContent=phrase('לא הצלחנו לטעון את המדידה. נסו שוב.','Could not load usage. Please retry.')}finally{b.disabled=false}};
   const baseRender=window.render;
   window.render=function(d){
     const newGame=current&&(current.code!==d.code||current.image_run!==d.image_run);if(newGame){closeScores();lastLine='';loadingKey='';el('companionMoment').classList.add('hidden')}
     if(previous&&previous.round!==d.round)closeScores();
-    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);
+    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);packageLabel();costs.classList.toggle('hidden',!d.is_host||d.status!=='finished');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
     const help=el('ruleHelp');if(help)help.querySelector('summary span').textContent=L()[12];
     if(d.tiebreak?.sets&&d.status==='playing')el('round').textContent=L()[9]+' '+d.tiebreak.sets+' / 3 · '+(d.round-d.tiebreak.start+1)+' / '+d.tiebreak.order.length;
     const key=d.code+'_'+d.image_run+'_'+d.round+'_'+d.status;
@@ -267,7 +273,7 @@
     if(final&&el('tieBreakBtn'))el('tieBreakBtn').disabled=state==='pending';if(before==='pending'&&state==='ready')sound('ready');if(gateStates.size>100)gateStates.delete(gateStates.keys().next().value);
     if(!final&&state!=='pending')autoScores(d);
   };
-  new MutationObserver(()=>{guideLabels();label();lastScores='';if(current){scoreUI(current);finishUI(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+  new MutationObserver(()=>{guideLabels();label();packageLabel();lastScores='';if(current){scoreUI(current);finishUI(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
   setInterval(()=>{if(!document.hidden)companion(Date.now()>lineUntil)},7500);
   if(window.lastState)window.render(window.lastState);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).catch(()=>{});

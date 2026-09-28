@@ -1,4 +1,5 @@
 """Reference-image edits; called only by the background image worker."""
+import kyc_budget as budget
 import base64
 import io
 import json
@@ -139,12 +140,14 @@ def generate_many(items, question, answer, focus, selected='', final=False, winn
     # complete image: a partial frame can contain unfinished faces and limbs.
     with OpenAI(api_key=key, timeout=60, max_retries=0) as client:
         for attempt in range(2):
+            ticket = budget.begin('image', MODEL)
             try:
                 result = client.images.edit(
                     model=MODEL, image=files, prompt=prompt,
                     size=SIZE, quality=QUALITY,
                     output_format='jpeg', output_compression=82, n=1,
                 )
+                budget.finish(ticket, getattr(result, 'usage', None))
                 if not result.data or not result.data[0].b64_json:
                     raise ValueError('image_response_empty')
                 art = 'data:image/jpeg;base64,' + result.data[0].b64_json
@@ -160,6 +163,7 @@ def generate_many(items, question, answer, focus, selected='', final=False, winn
                 }), flush=True)
                 return art
             except Exception as exc:
+                budget.finish(ticket, status='unknown_or_failed')
                 status = getattr(exc, 'status_code', None)
                 code = getattr(exc, 'code', None)
                 # A timeout may have already generated a billable image; do not
