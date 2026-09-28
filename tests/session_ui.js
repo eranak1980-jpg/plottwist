@@ -10,3 +10,17 @@ r=run('?code=NEW12',{kyc:JSON.stringify(old)});assert.deepEqual(r.value,{});asse
 r=run('',{kyc:'malformed'});assert.deepEqual(r.value,{});
 r=run('',{kyc:JSON.stringify(old)});assert.equal(r.value.code,'ROOMA');
 console.log('SESSION_NEW_GAME_ROOM_SWITCH_REOPEN_CORRUPT_STORAGE_OK');
+
+// A save completing during a poll must refresh immediately when that poll settles.
+const loadSource=page.slice(page.indexOf('async function load('),page.indexOf('function maybeScoreboard'));
+(async()=>{
+ const requests=[],rendered=[],element={classList:{add(){},remove(){}},textContent:''};
+ const ctx={s:{code:'ROOMA'},loading:false,refreshAfterLoad:false,connectionFailures:0,stateSig:'',uiLang:'en',copy:{},document:{hidden:false},window:{lastState:{}},$:()=>element,req:()=>new Promise(resolve=>requests.push(resolve)),render:d=>rendered.push(d.round)};
+ vm.createContext(ctx);vm.runInContext(loadSource,ctx);
+ const first=ctx.load(false);await ctx.load();assert.equal(requests.length,1,'no overlapping polls');
+ requests[0]({code:'ROOMA',round:0});await new Promise(setImmediate);
+ assert.equal(requests.length,2,'pending action triggers immediate follow-up');
+ requests[1]({code:'ROOMA',round:1});await first;
+ assert.deepEqual(rendered,[0,1]);assert.equal(ctx.loading,false);
+ console.log('ACTION_REFRESH_DURING_POLL_OK');
+})().catch(e=>{console.error(e);process.exitCode=1});

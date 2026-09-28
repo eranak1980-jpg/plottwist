@@ -64,6 +64,16 @@ body[data-game-status="playing"] #photoToggle{display:none}body[data-game-status
 @media(prefers-reduced-motion:reduce){.antic-spin,.antic-dive,.antic-hop{animation:none!important}}
 
 #adultOptionsHint{display:block;font-size:13px;font-weight:400;line-height:1.5;color:#756781;margin-top:5px}
+.ageChoice,#playerAge label{display:flex;align-items:flex-start;gap:12px;line-height:1.5;text-align:start}
+.ageChoice input,#playerAge input,#adultBox input{flex:0 0 22px;width:22px!important;height:22px;margin:3px 0;accent-color:#7543cf}
+#howAge{margin:16px 0;padding:14px;border:2px solid #b495df;border-radius:14px;background:#f4edfd}
+#photoBox.needsPhoto{border:2px solid #946bd2;background:#f5edff;padding:20px;margin:16px 0;box-shadow:0 5px 18px #8053d419}
+#photoBox #photoTitle{font-size:24px;line-height:1.3;color:#583090}
+#photoBox #photoHelp{font-size:17px;line-height:1.5;color:#44364f;margin:10px 0 16px}
+.photoPick{display:block;padding:16px;text-align:center;border-radius:14px;background:#7543cf;color:#fff;font-size:19px;font-weight:800;cursor:pointer}
+#photoBox #photoInput{font-size:14px;margin:10px 0;max-width:100%}
+.photoConsentHint{font-size:15px;line-height:1.5;color:#5e4b70}
+#hostIntroPhoto{font-size:17px;line-height:1.5;font-weight:700;background:#f4edfd;padding:14px;border-radius:14px}
 #hostIntro{scroll-margin-top:15px}#hostIntro h2{font-size:25px;line-height:1.3}#hostIntroRules{padding-inline-start:24px;line-height:1.55}#hostIntroRules li{padding:7px 0}#hostIntroAdult{font-size:14px;line-height:1.6}#hostGuideLink{margin:0 0 10px}
 
 /* Lime tuft companion: a knowing smirk and side glance, not baby eyes. */

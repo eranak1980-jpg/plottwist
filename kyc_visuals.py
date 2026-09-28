@@ -98,6 +98,13 @@ question's concrete setting and essential objects, with funny expressions and ph
 A person's name as the answer means that person performs the role asked about in the question.
 Show that relationship in action. Do not replace the story with a portrait of the selected
 person or a generic celebration of guessing correctly. The scene is about the story, not scores.'''
+        scene += '''
+Read the COMPLETE question and answer together before choosing the visual action.
+Respect negation: an answer to "least willing" is a boundary, NOT an action to depict.
+Numbers and time limits describe the event; never turn a booking or deadline into a proposal.
+For intimate preferences or boundaries, show a fully clothed, non-sexual conversation
+at a cafe or a playful reaction with a neutral prop. Do not depict the intimate act,
+bedroom activity or role itself. Keep that visual metaphor even when the answer names it.'''
     return f'''Create ONE premium photorealistic cinematic comedy still for a private party game.
 {scene}
 Reference mapping: {refs}.

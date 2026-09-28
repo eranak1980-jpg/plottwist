@@ -14,24 +14,30 @@
   const safe=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch(_){return fallback}};
   const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch(_){}};
-  let enabled=true,activated=false,context,busyUntil=0,audioEpoch=0;
+  let enabled=true,activated=false,context,busyUntil=0,audioEpoch=0,pendingSound;
   try{enabled=localStorage.getItem('plot_sound')!=='off'}catch(_){}
   const nodes=new Set();
-  function hush(){audioEpoch++;busyUntil=0;for(const n of nodes){try{n.stop()}catch(_){}}nodes.clear();if(context&&context.state==='running')context.suspend().catch(()=>{});}
-  function unlock(){activated=true;try{const A=window.AudioContext||window.webkitAudioContext;if(enabled&&A){context ||= new A();if(context.state==='suspended')context.resume().catch(()=>{});}}catch(_){}}
+  function hush(){audioEpoch++;busyUntil=0;clearTimeout(pendingSound);for(const n of nodes){try{n.stop()}catch(_){}}nodes.clear();if(context&&context.state==='running')context.suspend().catch(()=>{});}
+  function unlock(){activated=true;try{const A=window.AudioContext||window.webkitAudioContext;if(enabled&&A){context ||= new A();if(context.state!=='running')context.resume().catch(()=>{});}}catch(_){}}
   function sound(kind){
-    if(!enabled||!activated||document.hidden||Date.now()<busyUntil)return;
+    if(!enabled||!activated||document.hidden)return;
+    if(Date.now()<busyUntil){
+      // A fast save/reveal must not lose its voice just because the tap is still playing.
+      if(kind!=='tap'){clearTimeout(pendingSound);const epoch=audioEpoch;pendingSound=setTimeout(()=>{if(epoch===audioEpoch)sound(kind)},busyUntil-Date.now()+20)}
+      return;
+    }
     try{
+      clearTimeout(pendingSound);
       unlock();if(!context)return;
       const melodies={tap:[560],saved:[660,880],next:[440,600],ready:[523,659,784],win:[523,659,784,1046]};
-      const voice={hum:[[170,190,.30],[190,150,.18]],peek:[[340,540,.12],[450,270,.16]],oops:[[450,180,.32]],wow:[[200,570,.24],[570,340,.14]],tie:[[290,420,.15],[420,290,.20]],taDa:[[320,440,.12],[470,660,.30]]};
+      const voice={hum:[[300,350,.24],[350,270,.18]],peek:[[420,690,.12],[560,340,.16]],oops:[[510,260,.32]],wow:[[300,740,.24],[740,440,.14]],tie:[[360,520,.15],[520,360,.20]],taDa:[[420,560,.12],[590,830,.30]]};
       const syllables=voice[kind]||((melodies[kind]||melodies.tap).map(hz=>[hz,hz,.09]));
       const epoch=audioEpoch;let start=context.currentTime+.015;
       for(const [from,to,duration] of syllables){
         const oscillator=context.createOscillator(),gain=context.createGain();
         oscillator.type=voice[kind]?'triangle':'sine';oscillator.frequency.setValueAtTime(from,start);oscillator.frequency.exponentialRampToValueAtTime(to,start+duration);
-        gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(voice[kind]?.13:.035,start+.015);gain.gain.exponentialRampToValueAtTime(.0001,start+duration+.045);
-        if(voice[kind]&&context.createBiquadFilter){const formant=context.createBiquadFilter();formant.type='bandpass';formant.frequency.setValueAtTime(kind==='hum'?280:440,start);formant.Q.value=.7;oscillator.connect(formant);formant.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();formant.disconnect();gain.disconnect()};}
+        gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(voice[kind]?.18:.05,start+.015);gain.gain.exponentialRampToValueAtTime(.0001,start+duration+.045);
+        if(voice[kind]&&context.createBiquadFilter){const formant=context.createBiquadFilter();formant.type='lowpass';formant.frequency.setValueAtTime(1800,start);formant.Q.value=.5;oscillator.connect(formant);formant.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();formant.disconnect();gain.disconnect()};}
         else{oscillator.connect(gain);oscillator.onended=()=>{nodes.delete(oscillator);oscillator.disconnect();gain.disconnect()};}
         gain.connect(context.destination);nodes.add(oscillator);if(epoch!==audioEpoch)return;
         oscillator.start(start);oscillator.stop(start+duration+.06);start+=duration+.065;
@@ -41,7 +47,7 @@
   }
   const toggle=document.createElement('button');toggle.id='soundToggle';toggle.type='button';toggle.className='soundToggle';
   function label(){toggle.textContent=enabled?'🔊':'🔇';toggle.setAttribute('aria-label',L()[enabled?0:1]);toggle.title=L()[enabled?0:1];toggle.setAttribute('aria-pressed',String(enabled));}
-  toggle.onclick=()=>{enabled=!enabled;try{localStorage.setItem('plot_sound',enabled?'on':'off')}catch(_){}label();if(enabled){unlock();sound('tap')}else hush()};
+  toggle.onclick=()=>{enabled=!enabled;try{localStorage.setItem('plot_sound',enabled?'on':'off')}catch(_){}label();if(enabled){unlock();sound('peek')}else hush()};
   document.querySelector('.topbar').appendChild(toggle);label();
   document.addEventListener('pointerdown',unlock,{passive:true});
   document.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')unlock()});
@@ -115,7 +121,7 @@
     if(changed||force||Date.now()>lineUntil){newAntic=true;loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
     for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
     // Spaced, soft vocal gestures. Never an endless audio loop or overlapping voices.
-    if((force||changed)&&Date.now()-lastAntic>11000){lastAntic=Date.now();sound(['hum','peek','wow'][Math.floor(Math.random()*3)])}
+    if(newAntic&&Date.now()-lastAntic>=7000){lastAntic=Date.now();sound(['hum','peek','wow'][Math.floor(Math.random()*3)])}
   }
   function animateMascot(box){
     const actor=box.querySelector('.popMascot');if(!actor||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
@@ -129,7 +135,7 @@
     if(document.hidden||!current||current.status!=='playing'||current.reveal||!el('waiting').classList.contains('hidden'))return;
     visitor.classList.remove('hidden');animateMascot(visitor);sound(['hum','peek','oops','wow'][Math.floor(Math.random()*4)]);
     clearTimeout(visitorTimer);visitorTimer=setTimeout(()=>visitor.classList.add('hidden'),2300);
-  },17000);
+  },12000);
   function finishUI(d){
     if(d.status!=='finished')return;
     const ws=d.players.filter(p=>(d.winner_ids||leaders(d).map(x=>x.id)).includes(p.id));
@@ -186,17 +192,29 @@
     ],'大人だけの夜にしたい？設定には、デート・魅力・親密さを扱う18歳以上向けの選択肢があります。開始前に全員の年齢確認と同意が必要です。ファミリーモードでは表示されません。','デート・魅力・親密さのテーマ — 全員の同意のもとで選べます。']
   };
   const guideText=()=>guideCopy[lang()]||guideCopy.en;
+  const setupCopy={
+    he:['אם בוחרים תכני 18+, סמנו כאן לפני יצירת החדר. כל משתתף יאשר גם בעצמו. במשחק רגיל אין צורך.','אני בן/בת 18 ומעלה ומסכים/ה לתכנים למבוגרים','לפני המשחק: העלו תמונת פנים ברורה ואשרו שימוש בה. התמונה הופכת אתכם לכוכבי תמונות ה־AI.','📸 העלו תמונה כדי להתחיל','בחירת תמונה מהטלפון','סמנו את אישור השימוש מתחת לתמונה — השמירה אוטומטית.','✓ התמונה שלכם מוכנה למשחק','בחדר הזה יש תכני 18+. סמנו אישור ואז לחצו על הכפתור להמשך.'],
+    en:['For 18+ topics, tick here before creating the room. Each player also confirms separately. Not needed for a regular game.','I am 18+ and agree to adult content','Before playing, upload a clear face photo and consent to its use. You will star in the AI images.','📸 Add your photo to get started','Choose a photo from your phone','Tick photo consent below the preview — it saves automatically.','✓ Your photo is ready to play','This room includes 18+ topics. Tick to confirm, then press the continue button.'],
+    es:['Para temas de 18+, marca aquí antes de crear la sala. Cada participante confirma por separado. No hace falta en una partida normal.','Tengo 18 años o más y acepto el contenido para adultos','Antes de jugar, sube una foto clara de tu cara y autoriza su uso. Serás protagonista de las imágenes de IA.','📸 Añade tu foto para empezar','Elige una foto del teléfono','Marca el permiso bajo la vista previa: se guarda automáticamente.','✓ Tu foto está lista','Esta sala incluye temas de 18+. Marca la casilla y pulsa continuar.'],
+    'pt-BR':['Para temas de 18+, marque aqui antes de criar a sala. Cada pessoa confirma separadamente. Não é necessário no jogo comum.','Tenho 18 anos ou mais e aceito conteúdo adulto','Antes de jogar, envie uma foto nítida do rosto e autorize seu uso. Você será protagonista das imagens de IA.','📸 Adicione sua foto para começar','Escolha uma foto do celular','Marque a autorização abaixo da prévia: a foto é salva automaticamente.','✓ Sua foto está pronta','Esta sala inclui temas de 18+. Marque a confirmação e toque em continuar.'],
+    fr:['Pour les thèmes 18+, cochez ici avant de créer la salle. Chaque personne confirme séparément. Inutile pour une partie classique.','J’ai 18 ans ou plus et j’accepte le contenu pour adultes','Avant de jouer, ajoutez une photo nette de votre visage et autorisez son utilisation. Vous serez la vedette des images IA.','📸 Ajoutez votre photo pour commencer','Choisir une photo du téléphone','Cochez l’autorisation sous l’aperçu : la photo sera enregistrée automatiquement.','✓ Votre photo est prête','Cette salle propose des thèmes 18+. Cochez la case, puis appuyez sur continuer.'],
+    ja:['18歳以上向けテーマを選ぶ場合は、ルーム作成前にここをチェックしてください。全員が個別に確認します。通常のゲームには不要です。','18歳以上で、大人向けの内容に同意します','開始前に顔がはっきり写った写真を追加し、使用に同意してください。AI画像の主役になれます。','📸 写真を追加して始めよう','スマホから写真を選ぶ','プレビュー下の使用同意をチェックすると自動保存されます。','✓ 写真の準備ができました','このルームは18歳以上向けです。同意欄をチェックして続行してください。']
+  };
+  const S=()=>setupCopy[lang()]||setupCopy.en;
   const intro=document.createElement('section');intro.id='hostIntro';intro.className='card hidden';intro.setAttribute('aria-labelledby','hostIntroTitle');
-  intro.innerHTML='<h2 id="hostIntroTitle" tabindex="-1"></h2><ol id="hostIntroRules"></ol><p id="hostIntroAdult" class="setup-note"></p><button type="button" id="hostIntroContinue" class="primary"></button>';
+  intro.innerHTML='<h2 id="hostIntroTitle" tabindex="-1"></h2><ol id="hostIntroRules"></ol><p id="hostIntroPhoto" class="setup-note photoInstruction"></p><div class="setup-note"><p id="hostIntroAdult"></p><label class="ageChoice"><input type="checkbox" id="hostIntroAge"><span id="hostIntroAgeLabel"></span></label></div><button type="button" id="hostIntroContinue" class="primary"></button>';
   el('create').before(intro);
   const guideLink=document.createElement('button');guideLink.type='button';guideLink.id='hostGuideLink';guideLink.className='mini';el('createTitle').after(guideLink);
-  function guideLabels(){const c=guideText();el('hostIntroTitle').textContent=c[0];el('hostIntroContinue').textContent=c[1];guideLink.textContent=c[2];el('hostIntroRules').innerHTML=c[3].map(rule=>'<li>'+safe(rule)+'</li>').join('');el('hostIntroAdult').textContent=c[4];if(el('adultOptionsHint'))el('adultOptionsHint').textContent=c[5]}
+  function guideLabels(){const c=guideText();el('hostIntroTitle').textContent=c[0];el('hostIntroContinue').textContent=c[1];guideLink.textContent=c[2];el('hostIntroRules').innerHTML=c[3].map(rule=>'<li>'+safe(rule)+'</li>').join('');el('hostIntroAdult').textContent=S()[0];el('hostIntroAgeLabel').textContent=S()[1];el('hostIntroPhoto').textContent=S()[2];if(el('adultOptionsHint'))el('adultOptionsHint').textContent=c[5]}
   const baseMode=window.mode;
-  function showHostGuide(){baseMode('create');el('create').classList.add('hidden');intro.classList.remove('hidden');guideLabels();intro.scrollIntoView({block:'start'});el('hostIntroTitle').focus({preventScroll:true})}
+  function showHostGuide(){baseMode('create');el('create').classList.add('hidden');intro.classList.remove('hidden');el('hostIntroAge').checked=el('adultConfirm').checked;guideLabels();intro.scrollIntoView({block:'start'});el('hostIntroTitle').focus({preventScroll:true})}
   window.mode=function(next){intro.classList.add('hidden');if(next==='create')showHostGuide();else baseMode(next)};
   guideLink.onclick=showHostGuide;
-  el('hostIntroContinue').onclick=()=>{intro.classList.add('hidden');baseMode('create');el('create').scrollIntoView({block:'start'});el('cname').focus({preventScroll:true})};
+  el('hostIntroAge').onchange=()=>{el('adultConfirm').checked=el('hostIntroAge').checked;if(el('hostIntroAge').checked&&audienceType!=='family')el('adultOptions').open=true};
+  el('hostIntroContinue').onclick=()=>{intro.classList.add('hidden');baseMode('create');adultSetup();el('create').scrollIntoView({block:'start'});el('cname').focus({preventScroll:true})};
   guideLabels();
+  const baseSyncAdult=window.syncCreateAdult;
+  window.syncCreateAdult=function(){baseSyncAdult();if(el('adultOptions')?.open&&audienceType!=='family')el('adultBox').classList.remove('hidden')};
   function adultSetup(){
     const content=el('contentTopics');if(!content)return;
     let section=el('adultOptions');
@@ -212,7 +230,8 @@
     const bold=document.querySelector('.spice [data-s="3"]');
     bold.classList.toggle('hidden',family||!section.open);
     if((family||!section.open)&&spice===3){spice=2;document.querySelectorAll('.spice button').forEach(b=>b.classList.toggle('on',b.dataset.s==='2'))}
-    el('adultText').textContent=phrase('אני בן/בת 18 ומעלה ומסכים/ה לתכנים למבוגרים. כל שחקן יאשר בנפרד לפני ההתחלה.','I am 18+ and agree to adult content. Each player must confirm separately before play.');
+    el('adultText').textContent=S()[1];
+    if(family){el('adultConfirm').checked=false;el('hostIntroAge').checked=false}
     section.ontoggle=()=>{if(!section.open){target.querySelectorAll('.on').forEach(b=>b.classList.remove('on'));el('adultConfirm').checked=false}adultSetup();syncCreateAdult()};
     syncCreateAdult();
     section.appendChild(el('adultBox'));
@@ -230,12 +249,30 @@
   age.innerHTML='<label><input type="checkbox" id="playerAgeCheck"><span></span></label><button class="mini" id="playerAgeSave"></button>';
   el('host').before(age);
   el('playerAgeSave').onclick=async()=>{if(!el('playerAgeCheck').checked)return;const b=el('playerAgeSave');b.disabled=true;try{await req('/api/'+s.code+'/adultconfirm',{token:s.token,confirmed:true});stateSig='';await load()}catch(_){toast(copy.retry)}finally{b.disabled=false}};
+  // Put both readiness steps ahead of the shared settings, where guests actually look.
+  el('sharedSetup').before(el('photoBox'));el('sharedSetup').before(age);
+  const photoPick=document.createElement('label');photoPick.className='photoPick';photoPick.htmlFor='photoInput';el('photoInput').before(photoPick);
+  const photoHint=document.createElement('p');photoHint.className='photoConsentHint';el('photoConsent').closest('label').before(photoHint);
+  const howAge=document.createElement('label');howAge.id='howAge';howAge.className='ageChoice hidden';howAge.innerHTML='<input type="checkbox" id="howAgeCheck"><span></span>';el('howBtn').before(howAge);
+  let ageRoomKey='';
+  el('howAgeCheck').onchange=()=>{el('playerAgeCheck').checked=el('howAgeCheck').checked};
+  const baseCloseHow=window.closeHowTo;
+  window.closeHowTo=async function(){if(current?.adult_required&&!current.me?.adult_confirmed&&el('howAgeCheck').checked){await el('playerAgeSave').onclick();if(!current?.me?.adult_confirmed)return}baseCloseHow()};
+  const baseCreate=window.createGame;
+  window.createGame=async function(){if(createAdultRequired()&&!el('adultConfirm').checked){el('adultOptions').open=true;syncCreateAdult();el('adultBox').scrollIntoView({block:'center'});el('adultConfirm').focus();return toast(S()[1])}return baseCreate()};
+  const baseShare=window.share;window.share=function(){if(current?.is_host)return baseShare()};
   function lobbyPolish(d){
+    el('shareBtn').classList.toggle('hidden',!d.is_host);
+    el('shareBtn').closest('.roomHeading').classList.toggle('hidden',!d.is_host);
+    const ageKey=d.code+'_'+d.image_run+'_'+!!d.adult_required;
+    if(ageKey!==ageRoomKey){ageRoomKey=ageKey;el('howAgeCheck').checked=false;el('playerAgeCheck').checked=false}
     document.querySelectorAll('#voteTopics [data-topic]').forEach(b=>{if(adultTopics.has(b.dataset.topic)&&!d.adult_required)b.classList.add('hidden')});
     age.classList.toggle('hidden',d.status!=='lobby'||!d.adult_required||!d.me||d.me.adult_confirmed);
-    age.querySelector('span').textContent=phrase('אני מאשר/ת שאני בן/בת 18 ומעלה ומסכים/ה לתכני החדר','I confirm I am 18+ and agree to this room’s adult content');
+    age.querySelector('span').textContent=S()[1];
     el('playerAgeSave').textContent=phrase('אישור 18+','Confirm 18+');
-    el('photoHelp').textContent=phrase('כדי להשתתף, הוסיפו תמונה שלכם ואשרו שימוש בה לתמונות המשחק הפרטי.','To play, add your photo and consent to using it for this private game’s images.');
+    el('photoHelp').textContent=S()[2];el('photoTitle').textContent=d.me?.has_photo?S()[6]:S()[3];photoPick.textContent=S()[4];photoHint.textContent=S()[5];el('photoBox').classList.toggle('needsPhoto',!d.me?.has_photo);
+    el('how3').textContent=S()[2];el('how4').textContent=d.adult_required?S()[7]:(copy.how4||guideText()[3][3]);
+    howAge.classList.toggle('hidden',!d.adult_required||!!d.me?.adult_confirmed);howAge.querySelector('span').textContent=S()[1];
     if(d.status==='lobby'){
       if(d.me&&!d.me.has_photo)el('photoBox').classList.remove('hidden');
       const start=el('start');if(start&&start.disabled&&d.players.filter(p=>p.active).length>=2)start.textContent=d.players.some(p=>p.active&&!p.has_photo)?phrase('ממתינים לתמונות מכל השחקנים','Waiting for everyone’s photo'):phrase('ממתינים לאישור 18+ מכל השחקנים','Waiting for everyone’s 18+ confirmation');

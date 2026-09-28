@@ -1,6 +1,28 @@
 import kyc_budget as budget
-import json,os
+import json,os,re
 from kyc_locales import normalize_language,topic_labels
+
+def clean_pack(data,language='en'):
+ """Reject broken/overlong choices instead of cutting off their meaning."""
+ if not isinstance(data,list):return []
+ out=[];seen=set()
+ for q in data:
+  if not isinstance(q,dict):continue
+  typ=q.get('type');text=q.get('text');opts=q.get('options',[])
+  if typ not in ('know','room') or not isinstance(text,str):continue
+  text=text.strip();key=re.sub(r'\W+','',text).casefold()
+  if '{s}' not in text or key in seen or len(text)>(160 if language=='ja' else 280):continue
+  if language!='ja' and len(text.split())>40:continue
+  if not isinstance(opts,list):continue
+  if typ=='know':
+   if len(opts)!=4 or any(not isinstance(o,str) or not o.strip() for o in opts):continue
+   opts=[o.strip() for o in opts]
+   if any(len(o)>70 or (language!='ja' and len(o.split())>10) for o in opts):continue
+   if len({re.sub(r'\W+','',o).casefold() for o in opts})!=4:continue
+   if any('משהו אחר' in o or re.search(r'\b(something else|other answer|skip question)\b',o,re.I) for o in opts):continue
+  else:opts=[]
+  seen.add(key);out.append((typ,text,opts))
+ return out[:10] if len(out)>=6 else []
 
 def generate_pack(topics,context,spice,language='en'):
  language=normalize_language(language)
@@ -26,6 +48,9 @@ or
 For room questions the answer will be one of the other players.
 
 Editorial standard:
+- A player must understand the question on the FIRST read. Use one concrete situation and one direct question, at most two sentences and 35 words (140 characters in Japanese). Name what went wrong; never say only "things get complicated". Avoid stacked conditions, metaphors, wordplay and vague references like "this choice".
+- Every answer must directly answer that exact question in at most 8 words (35 characters in Japanese). Four distinct actions, not overlapping categories. Never use a request for "something else", another answer, a skip, or a joke about the questionnaire as an answer option. If asking what someone would NOT do, ensure all options and the question use that meaning consistently.
+- Before returning, silently read each question with EACH answer. Rewrite unclear setups and answers that need explanation. Remove rhetorical fluff such as "the photo will forgive". Replace generic chemistry/value checklists with a specific awkward date or funny decision.
 - Bold level means sharper COMEDY, not just more personal questions. Give each setup a specific comic problem and four funny, believable reactions. Avoid filler choices like "both", "depends", "balance" or "stay home" that dodge the dilemma.
 - Reject moral no-brainers (a wonderful real evening versus a fake social-media evening), generic values comparisons and abstract tradeoffs. Each option should have its own tempting upside and comic cost.
 - For Hebrew: write like friends joking out loud. Example tone: "{{s}} שלח/ה בטעות הודעה קולית לקבוצה הלא נכונה. איך יוצאים מזה?" with distinct reactions, not personality labels. Do not repeat this example.
@@ -55,13 +80,7 @@ Editorial standard:
   budget.finish(ticket,getattr(r,'usage',None))
   txt=r.output_text.strip();a=txt.find('[');b=txt.rfind(']')
   data=json.loads(txt[a:b+1])
-  out=[]
-  for q in data:
-   typ=q.get('type');text=str(q.get('text','')).strip();opts=q.get('options',[])
-   if typ not in ('know','room') or '{s}' not in text:continue
-   if typ=='know' and (not isinstance(opts,list) or len(opts)!=4):continue
-   out.append((typ,text,[str(x)[:90] for x in opts]))
-  return out[:10] if len(out)>=6 else []
+  return clean_pack(data,language)
  except Exception as e:
   budget.finish(ticket,status='unknown_or_failed')
   print('custom pack generation failed',type(e).__name__,str(e)[:300],flush=True);return []

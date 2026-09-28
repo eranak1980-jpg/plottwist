@@ -192,7 +192,7 @@ html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
 
 # Polling must be change-aware rather than re-rendering the DOM on every interval.
 assert "if(sig!==stateSig){stateSig=sig;render(d)}" in html
-assert "if(!document.hidden)load()" in html
+assert "if(!document.hidden)load(false)" in html
 print('QA_POLL_RENDER_GUARD_OK')
 
 # Poll state must never contain raw AI/image base64 payloads.

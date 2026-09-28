@@ -454,10 +454,12 @@ def prepare_hero_async(gid,rn,expected_run=None):
   if not sub:return 'not_ready'
  payload=image_payload(g,ps,final)
  if not payload:return 'no_photo'
+ # Queue the final image first. The legacy local preview must not delay the AI
+ # request (the current UI deliberately hides that preview).
+ result=image_jobs.queue(cn,g,int(rn),payload,generate_many) if os.getenv('OPENAI_API_KEY','').strip() else 'unavailable'
  try:instant.prepare(cn,g,int(rn),payload,ps)
  except Exception as e:print('instant visual failed',type(e).__name__,flush=True)
- if not os.getenv('OPENAI_API_KEY','').strip():return 'unavailable'
- return image_jobs.queue(cn,g,int(rn),payload,generate_many)
+ return result
 def _visual_worker(gid,rn,run,key):
  try:prepare_hero_async(gid,rn,run)
  except Exception as e:print('image scheduling failed',type(e).__name__,flush=True)

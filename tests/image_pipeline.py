@@ -54,6 +54,17 @@ def request(path, data=None, expect=200, raw=False):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_final_request_queued_before_local_preview(self):
+        events=[]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def execute(self,*args):return self
+            def fetchone(self):return {'id':1,'status':'finished','image_run':1}
+        with patch.object(k,'cn',DB),patch.object(k,'players',return_value=[]),patch.object(k,'image_payload',return_value={'kind':'final'}),patch.object(k.image_jobs,'queue',side_effect=lambda *a:events.append('ai') or 'queued'),patch.object(k.instant,'prepare',side_effect=lambda *a:events.append('preview')):
+            self.assertEqual(k.prepare_hero_async(1,99,1),'queued')
+        self.assertEqual(events,['ai','preview'])
+
     def setUp(self):
         self.calls=[]; self.entered=threading.Event(); self.release=threading.Event(); self.provider_fail=False
         def generate(**kw):
