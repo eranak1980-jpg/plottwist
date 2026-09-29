@@ -30,7 +30,10 @@
       clearTimeout(pendingSound);
       unlock();if(!context)return;
       const melodies={tap:[560],saved:[660,880],next:[440,600],ready:[523,659,784],win:[523,659,784,1046]};
-      const voice={hum:[[300,350,.24],[350,270,.18]],peek:[[420,690,.12],[560,340,.16]],oops:[[510,260,.32]],wow:[[300,740,.24],[740,440,.14]],tie:[[360,520,.15],[520,360,.20]],taDa:[[420,560,.12],[590,830,.30]]};
+      const voice={
+        hum:[[300,350,.24],[350,270,.18]],peek:[[420,690,.12],[560,340,.16]],oops:[[510,260,.32]],wow:[[300,740,.24],[740,440,.14]],tie:[[360,520,.15],[520,360,.20]],taDa:[[420,560,.12],[590,830,.30]],
+        snicker:[[560,430,.07],[510,390,.07],[590,450,.10]],wink:[[760,1080,.07],[520,820,.08]],mischief:[[280,460,.10],[540,330,.10],[390,720,.09]],hmm:[[270,320,.20],[320,280,.22]],gasp:[[380,940,.12],[940,670,.14]]
+      };
       const syllables=voice[kind]||((melodies[kind]||melodies.tap).map(hz=>[hz,hz,.09]));
       const epoch=audioEpoch;let start=context.currentTime+.015;
       for(const [from,to,duration] of syllables){
@@ -44,6 +47,15 @@
       }
       busyUntil=Date.now()+(start-context.currentTime)*1000;
     }catch(_){/* Sound never blocks play. */}
+  }
+  let voiceBag=[],lastVoice='';
+  function variedSound(pool){
+    if(!pool.length)return;
+    if(!voiceBag.length||voiceBag.some(k=>!pool.includes(k))){
+      voiceBag=[...pool].filter(k=>k!==lastVoice);
+      for(let i=voiceBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[voiceBag[i],voiceBag[j]]=[voiceBag[j],voiceBag[i]]}
+    }
+    const kind=voiceBag.shift()||pool.find(k=>k!==lastVoice)||pool[0];lastVoice=kind;sound(kind);
   }
   const toggle=document.createElement('button');toggle.id='soundToggle';toggle.type='button';toggle.className='soundToggle';
   function label(){toggle.textContent=enabled?'🔊':'🔇';toggle.setAttribute('aria-label',L()[enabled?0:1]);toggle.title=L()[enabled?0:1];toggle.setAttribute('aria-pressed',String(enabled));}
@@ -110,7 +122,7 @@
     if(d.all_guesses?.length&&d.all_guesses.every(g=>!g.correct))return 'miss';
     return 'correct';
   }
-  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),6000);sound({leader:'wow',tie:'tie',miss:'oops',correct:'taDa',win:'win'}[kind]||'peek')}
+  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),6000);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
   function companion(force=false){
     if(!current)return;
     const targets=['heroStatus','finalHeroStatus'].map(el).filter(st=>st&&!st.classList.contains('hidden')&&(st.id==='heroStatus'?el('visualStage').classList.contains('is-loading'):st.classList.contains('is-loading')));
@@ -121,7 +133,7 @@
     if(changed||force||Date.now()>lineUntil){newAntic=true;loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
     for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
     // Spaced, soft vocal gestures. Never an endless audio loop or overlapping voices.
-    if(newAntic&&Date.now()-lastAntic>=7000){lastAntic=Date.now();sound(['hum','peek','wow'][Math.floor(Math.random()*3)])}
+    if(newAntic&&Date.now()-lastAntic>=8000){lastAntic=Date.now();variedSound(['hum','hmm','peek','snicker','wink'])}
   }
   function animateMascot(box){
     const actor=box.querySelector('.popMascot');if(!actor||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
@@ -133,9 +145,9 @@
   let visitorTimer;
   setInterval(()=>{
     if(document.hidden||!current||current.status!=='playing'||current.reveal||!el('waiting').classList.contains('hidden'))return;
-    visitor.classList.remove('hidden');animateMascot(visitor);sound(['hum','peek','oops','wow'][Math.floor(Math.random()*4)]);
+    visitor.classList.remove('hidden');animateMascot(visitor);variedSound(['peek','wink','mischief','hmm','gasp']);
     clearTimeout(visitorTimer);visitorTimer=setTimeout(()=>visitor.classList.add('hidden'),2300);
-  },12000);
+  },15000);
   function finishUI(d){
     if(d.status!=='finished')return;
     const ws=d.players.filter(p=>(d.winner_ids||leaders(d).map(x=>x.id)).includes(p.id));
@@ -253,6 +265,11 @@
   el('sharedSetup').before(el('photoBox'));el('sharedSetup').before(age);
   const photoPick=document.createElement('label');photoPick.className='photoPick';photoPick.htmlFor='photoInput';el('photoInput').before(photoPick);
   const photoHint=document.createElement('p');photoHint.className='photoConsentHint';el('photoConsent').closest('label').before(photoHint);
+  const photoReady=document.createElement('div');photoReady.id='photoReadyCard';photoReady.className='photoReadyCard hidden';
+  photoReady.innerHTML='<img id="savedPhotoThumb" alt=""><div><b id="savedPhotoLabel"></b><button type="button" id="replacePhotoBtn" class="mini"></button></div>';
+  el('photoBox').after(photoReady);
+  el('replacePhotoBtn').onclick=()=>{photoReady.classList.add('hidden');el('photoBox').classList.remove('hidden');el('photoBox').dataset.editing='1';el('photoBox').scrollIntoView({behavior:'smooth',block:'center'})};
+  new MutationObserver(()=>{if(!el('photoBox').classList.contains('photoSaved'))return;const src=el('photoPreview').src;if(src)el('savedPhotoThumb').src=src;photoReady.classList.remove('hidden');setTimeout(()=>el('photoBox').classList.add('hidden'),300)}).observe(el('photoBox'),{attributes:true,attributeFilter:['class']});
   const howAge=document.createElement('label');howAge.id='howAge';howAge.className='ageChoice hidden';howAge.innerHTML='<input type="checkbox" id="howAgeCheck"><span></span>';el('howBtn').before(howAge);
   let ageRoomKey='';
   el('howAgeCheck').onchange=()=>{el('playerAgeCheck').checked=el('howAgeCheck').checked};
@@ -271,6 +288,9 @@
     age.querySelector('span').textContent=S()[1];
     el('playerAgeSave').textContent=phrase('אישור 18+','Confirm 18+');
     el('photoHelp').textContent=S()[2];el('photoTitle').textContent=d.me?.has_photo?S()[6]:S()[3];photoPick.textContent=S()[4];photoHint.textContent=S()[5];el('photoBox').classList.toggle('needsPhoto',!d.me?.has_photo);
+    el('photoToggle').classList.add('hidden');photoReady.classList.toggle('hidden',d.status!=='lobby'||!d.me?.has_photo);
+    const mine=d.players.find(p=>p.id===d.me?.id);if(mine?.photo_url)el('savedPhotoThumb').src=mine.photo_url+(mine.photo_url.includes('?')?'&':'?')+'v='+(d.photo_count||0);
+    el('savedPhotoLabel').textContent=S()[6];el('replacePhotoBtn').textContent=phrase('החלפת תמונה','Replace photo');
     el('how3').textContent=S()[2];el('how4').textContent=d.adult_required?S()[7]:(copy.how4||guideText()[3][3]);
     howAge.classList.toggle('hidden',!d.adult_required||!!d.me?.adult_confirmed);howAge.querySelector('span').textContent=S()[1];
     if(d.status==='lobby'){
@@ -283,7 +303,69 @@
   el('jcode').classList.toggle('hidden',!!new URLSearchParams(location.search).get('code'));
   const baseJoin=window.joinGame;window.joinGame=async function(){let field=el('jcode');try{if(field.value.includes('://'))field.value=new URL(field.value).searchParams.get('code')||''}catch(_){}return baseJoin()};
   const baseReq=window.req;
-  window.req=async function(path,body){try{const result=await baseReq(path,body);if(body&&/\/(answer|guess|matchanswer)$/.test(path))sound('saved');return result}catch(error){if(['pilot_limit','game_ai_limit','retry_limit'].includes(error.message)){let note=el('pilotLimitNote');if(!note){note=document.createElement('div');note.id='pilotLimitNote';note.className='rulebox';note.setAttribute('role','alert');document.querySelector('main').prepend(note)}note.textContent=phrase('מכסת הניסיון זמנית מלאה. אין חיוב. משחק קיים ניתן לפתוח שוב דרך הקישור שלו.','The pilot allowance is currently full. No charge was made. Use your existing game link to resume.')}throw error}};
+  window.req=async function(path,body){if(body&&current&&/\/(answer|guess|skip|next)$/.test(path))body={...body,image_run:current.image_run,round:current.round};try{const result=await baseReq(path,body);if(body&&/\/(answer|guess|matchanswer)$/.test(path))sound('saved');return result}catch(error){if(['pilot_limit','game_ai_limit','retry_limit'].includes(error.message)){let note=el('pilotLimitNote');if(!note){note=document.createElement('div');note.id='pilotLimitNote';note.className='rulebox';note.setAttribute('role','alert');document.querySelector('main').prepend(note)}note.textContent=phrase('מכסת הניסיון זמנית מלאה. אין חיוב. משחק קיים ניתן לפתוח שוב דרך הקישור שלו.','The pilot allowance is currently full. No charge was made. Use your existing game link to resume.')}throw error}};
+
+  const featureCopy={
+    he:{chat:'צ׳אט במשחק',close:'סגירה',placeholder:'כתבו משהו לקבוצה…',send:'שליחה',empty:'עוד אין הודעות. תתחילו אתם 👋',react:'איך הגבתם לחשיפה?',guessed:'ניחש/ה',newTitle:'איזה משחק חדש לפתוח?',newHelp:'אפשר לשמור את הקבוצה, התמונות וההגדרות, או להתחיל מחדש לגמרי.',keep:'אותם אנשים והגדרות',keepHint:'שומר שחקנים, תמונות, נושאים והסכמות. הניקוד והשאלות מתאפסים ונוצר לינק חדש.',fresh:'להתחיל מאפס',freshHint:'חדר חדש לגמרי, כולל העלאת תמונות ובחירת הגדרות מחדש.',cancel:'ביטול',creating:'יוצר משחק חדש…',created:'נוצר משחק חדש עם אותה קבוצה',failed:'לא הצלחנו ליצור משחק חדש. נסו שוב.',remove:'אם תמשיכו, {name} יצא/תצא מהמשחק. להמשיך?',removed:'{name} יצא/ה מהמשחק',photoReady:'✓ התמונה שלכם מוכנה למשחק',replace:'החלפת תמונה',chatFailed:'ההודעה לא נשלחה. נסו שוב.',openChat:'פתיחת הצ׳אט'},
+    en:{chat:'Game chat',close:'Close',placeholder:'Message the group…',send:'Send',empty:'No messages yet. Say hi 👋',react:'React to the reveal',guessed:'guessed',newTitle:'How should the new game start?',newHelp:'Keep this group, photos and settings, or begin completely fresh.',keep:'Same people & settings',keepHint:'Keeps players, photos, topics and consent. Scores and questions reset and a new link is created.',fresh:'Start from scratch',freshHint:'A completely new room, including new photos and settings.',cancel:'Cancel',creating:'Creating a new game…',created:'New game created with the same group',failed:'Could not create the new game. Please try again.',remove:'If you continue, {name} will leave the game. Continue?',removed:'{name} left the game',photoReady:'✓ Your photo is ready to play',replace:'Replace photo',chatFailed:'Message was not sent. Please retry.',openChat:'Open chat'},
+    es:{chat:'Chat del juego',close:'Cerrar',placeholder:'Escribe al grupo…',send:'Enviar',empty:'Todavía no hay mensajes. Saluda 👋',react:'Reacciona a la revelación',guessed:'adivinó',newTitle:'¿Cómo quieres empezar la nueva partida?',newHelp:'Conserva el grupo, las fotos y los ajustes, o empieza desde cero.',keep:'Mismas personas y ajustes',keepHint:'Conserva jugadores, fotos, temas y permisos. Reinicia puntos y preguntas y crea un enlace nuevo.',fresh:'Empezar desde cero',freshHint:'Una sala completamente nueva, con fotos y ajustes nuevos.',cancel:'Cancelar',creating:'Creando la nueva partida…',created:'Nueva partida creada con el mismo grupo',failed:'No se pudo crear la partida. Inténtalo de nuevo.',remove:'Si continúas, {name} saldrá de la partida. ¿Continuar?',removed:'{name} salió de la partida',photoReady:'✓ Tu foto está lista',replace:'Cambiar foto',chatFailed:'No se envió el mensaje. Inténtalo de nuevo.',openChat:'Abrir chat'},
+    'pt-BR':{chat:'Chat do jogo',close:'Fechar',placeholder:'Escreva para o grupo…',send:'Enviar',empty:'Ainda não há mensagens. Diga oi 👋',react:'Reaja à revelação',guessed:'escolheu',newTitle:'Como começar o novo jogo?',newHelp:'Mantenha o grupo, as fotos e as configurações, ou comece do zero.',keep:'Mesmas pessoas e ajustes',keepHint:'Mantém jogadores, fotos, temas e permissões. Zera pontos e perguntas e cria um novo link.',fresh:'Começar do zero',freshHint:'Uma sala totalmente nova, com novas fotos e configurações.',cancel:'Cancelar',creating:'Criando novo jogo…',created:'Novo jogo criado com o mesmo grupo',failed:'Não foi possível criar o jogo. Tente novamente.',remove:'Se continuar, {name} sairá do jogo. Continuar?',removed:'{name} saiu do jogo',photoReady:'✓ Sua foto está pronta',replace:'Trocar foto',chatFailed:'A mensagem não foi enviada. Tente novamente.',openChat:'Abrir chat'},
+    fr:{chat:'Chat du jeu',close:'Fermer',placeholder:'Écrivez au groupe…',send:'Envoyer',empty:'Aucun message pour le moment. Dites bonjour 👋',react:'Réagissez au Reveal',guessed:'a choisi',newTitle:'Comment lancer la nouvelle partie ?',newHelp:'Gardez le groupe, les photos et les réglages, ou repartez de zéro.',keep:'Même groupe et réglages',keepHint:'Conserve joueurs, photos, thèmes et accords. Les scores et questions repartent à zéro avec un nouveau lien.',fresh:'Repartir de zéro',freshHint:'Une toute nouvelle salle, avec de nouvelles photos et de nouveaux réglages.',cancel:'Annuler',creating:'Création de la partie…',created:'Nouvelle partie créée avec le même groupe',failed:'Impossible de créer la partie. Réessayez.',remove:'Si vous continuez, {name} quittera la partie. Continuer ?',removed:'{name} a quitté la partie',photoReady:'✓ Votre photo est prête',replace:'Changer la photo',chatFailed:'Le message n’a pas été envoyé. Réessayez.',openChat:'Ouvrir le chat'},
+    ja:{chat:'ゲームチャット',close:'閉じる',placeholder:'みんなにメッセージ…',send:'送信',empty:'まだメッセージはありません。話しかけてみよう 👋',react:'Revealにリアクション',guessed:'の予想',newTitle:'新しいゲームをどう始めますか？',newHelp:'今のメンバー・写真・設定を残すか、すべて新しく始められます。',keep:'同じメンバーと設定',keepHint:'プレイヤー、写真、テーマ、同意を保持します。得点と質問をリセットし、新しいリンクを作ります。',fresh:'最初から始める',freshHint:'写真や設定も含めて、まったく新しいルームを作ります。',cancel:'キャンセル',creating:'新しいゲームを作成中…',created:'同じメンバーで新しいゲームを作成しました',failed:'新しいゲームを作れませんでした。もう一度お試しください。',remove:'続けると{name}さんはゲームから退出します。続けますか？',removed:'{name}さんがゲームから退出しました',photoReady:'✓ 写真の準備ができました',replace:'写真を変更',chatFailed:'メッセージを送信できませんでした。もう一度お試しください。',openChat:'チャットを開く'}
+  };
+  const F=()=>featureCopy[lang()]||featureCopy.en;
+  const reactionCopy={
+    he:['לב','צחוק','בכי','שובבות'],en:['Love','Laugh','Cry','Mischief'],es:['Me encanta','Risa','Llanto','Travesura'],'pt-BR':['Amei','Risada','Choro','Travessura'],fr:['J’adore','Rire','Pleurs','Malice'],ja:['いいね','笑い','泣き','いたずら']
+  };
+  const ft=(value,name)=>String(value||'').replaceAll('{name}',name||'');
+
+  const chatRoot=document.createElement('div');chatRoot.id='gameChat';chatRoot.className='gameChat hidden';
+  chatRoot.innerHTML='<button id="chatFab" class="chatFab" type="button" aria-controls="chatSheet" aria-expanded="false"><span aria-hidden="true">💬</span><span id="chatFabLabel"></span><i id="chatUnread" class="chatUnread hidden"></i></button><section id="chatSheet" class="chatSheet hidden" role="dialog" aria-modal="true" aria-labelledby="chatTitle"><header><b id="chatTitle"></b><button id="chatClose" class="chatClose" type="button">×</button></header><div id="chatMessages" class="chatMessages" aria-live="polite"></div><div class="chatQuick" aria-label="Quick reactions"><button type="button" data-reaction="❤️">❤️</button><button type="button" data-reaction="😂">😂</button><button type="button" data-reaction="😭">😭</button><button type="button" data-reaction="😈">😈</button></div><form id="chatForm" class="chatForm"><input id="chatInput" maxlength="160" autocomplete="off"><button id="chatSend" type="submit" class="primary"></button></form></section>';
+  document.body.appendChild(chatRoot);
+  const revealReactions=document.createElement('div');revealReactions.id='revealReactions';revealReactions.className='revealReactions hidden';
+  revealReactions.innerHTML='<b id="revealReactTitle"></b><div><button type="button" data-reaction="❤️">❤️</button><button type="button" data-reaction="😂">😂</button><button type="button" data-reaction="😭">😭</button><button type="button" data-reaction="😈">😈</button></div>';
+  el('guessBoard').before(revealReactions);
+  let chatRoom='',lastChatId=0,chatLoading=false,chatOpen=false,chatInitialLoaded=false,unread=0;
+  const chatItems=new Map();
+  function chatLabels(){const c=F(),title=copy.chat_title||c.chat,names=[copy.reaction_heart,copy.reaction_laugh,copy.reaction_cry,copy.reaction_mischief].map((x,i)=>x||(reactionCopy[lang()]||reactionCopy.en)[i]);el('chatTitle').textContent=title;el('chatFabLabel').textContent=title;el('chatFab').setAttribute('aria-label',c.openChat);el('chatClose').setAttribute('aria-label',c.close);el('chatInput').placeholder=copy.chat_placeholder||c.placeholder;el('chatSend').textContent=copy.chat_send||c.send;el('revealReactTitle').textContent=copy.chat_quick||c.react;el('savedPhotoLabel').textContent=c.photoReady;el('savedPhotoThumb').alt=c.photoReady;el('replacePhotoBtn').textContent=c.replace;document.querySelectorAll('[data-reaction]').forEach((b,i)=>{const label=names[i%4];b.setAttribute('aria-label',label);b.title=label});newGameLabels();renderChat()}
+  function setUnread(value){unread=Math.max(0,value);el('chatUnread').textContent=unread>99?'99+':String(unread);el('chatUnread').classList.toggle('hidden',!unread)}
+  function renderChat(){const list=[...chatItems.values()].sort((a,b)=>Number(a.id)-Number(b.id)),box=el('chatMessages');if(!list.length){box.innerHTML='<p class="chatEmpty">'+safe(F().empty)+'</p>';return}box.innerHTML=list.map(m=>{const mine=Number(m.player_id)===Number(current?.me?.id),reaction=m.kind==='reaction';return '<div class="chatMessage '+(mine?'mine ':'')+(reaction?'reaction':'')+'"><span class="chatAuthor">'+safe(m.name||'')+'</span><span class="chatBody">'+safe(m.body||'')+'</span></div>'}).join('');box.scrollTop=box.scrollHeight}
+  function setChatRoom(code){if(chatRoom===code)return;chatRoom=code||'';lastChatId=0;chatInitialLoaded=false;chatItems.clear();setUnread(0);renderChat()}
+  async function fetchChat(initial=false){if(chatLoading||!current?.me||!s.token||!current.code||current.code!==s.code||document.hidden)return;const requestedRoom=current.code;chatLoading=true;try{const result=await window.req('/api/chat/'+encodeURIComponent(requestedRoom)+'?token='+encodeURIComponent(s.token)+'&after='+(initial?0:lastChatId));if(chatRoom!==requestedRoom)return;const messages=Array.isArray(result.messages)?result.messages:[];let incoming=0;for(const m of messages){const id=Number(m.id)||0;if(chatItems.has(id))continue;chatItems.set(id,m);lastChatId=Math.max(lastChatId,id);if(!initial&&!chatOpen&&Number(m.player_id)!==Number(current.me.id))incoming++}chatInitialLoaded=true;while(chatItems.size>100)chatItems.delete(chatItems.keys().next().value);if(messages.length)renderChat();if(incoming){setUnread(unread+incoming);variedSound(['wink','peek'])}}catch(_){/* Chat retries quietly without blocking play. */}finally{chatLoading=false}}
+  async function sendChat(body,kind='text'){body=String(body||'').trim();if(!body||!current?.me)return;const id=(window.crypto?.randomUUID?.()||String(Date.now())+'_'+Math.random().toString(36).slice(2));try{const result=await window.req('/api/'+encodeURIComponent(current.code)+'/chat',{token:s.token,kind,body,client_msg_id:id}),m=result.message;if(m&&chatRoom===current.code){chatItems.set(Number(m.id),m);lastChatId=Math.max(lastChatId,Number(m.id)||0);renderChat()}else await fetchChat(false)}catch(_){toast(F().chatFailed)}}
+  function openChat(){chatOpen=true;setUnread(0);el('chatSheet').classList.remove('hidden');el('chatFab').setAttribute('aria-expanded','true');document.body.classList.add('chatOpen');fetchChat(true);setTimeout(()=>el('chatInput').focus({preventScroll:true}),80)}
+  function closeChat(){chatOpen=false;el('chatSheet').classList.add('hidden');el('chatFab').setAttribute('aria-expanded','false');document.body.classList.remove('chatOpen')}
+  el('chatFab').onclick=()=>chatOpen?closeChat():openChat();el('chatClose').onclick=closeChat;
+  el('chatForm').onsubmit=e=>{e.preventDefault();const input=el('chatInput'),body=input.value.trim();if(!body)return;input.value='';sendChat(body,'text')};
+  for(const area of [chatRoot,revealReactions])area.addEventListener('click',e=>{const b=e.target.closest('[data-reaction]');if(b)sendChat(b.dataset.reaction,'reaction')});
+
+  const newGameOverlay=document.createElement('div');newGameOverlay.id='newGameOverlay';newGameOverlay.className='choiceOverlay hidden';newGameOverlay.setAttribute('role','dialog');newGameOverlay.setAttribute('aria-modal','true');
+  newGameOverlay.innerHTML='<div class="choiceDialog"><button type="button" id="newGameClose" class="dialogClose">×</button><h2 id="newGameTitle" tabindex="-1"></h2><p id="newGameHelp"></p><button type="button" id="keepGameBtn" class="gameChoice primary"><b id="keepGameLabel"></b><small id="keepGameHint"></small></button><button type="button" id="freshGameBtn" class="gameChoice"><b id="freshGameLabel"></b><small id="freshGameHint"></small></button><button type="button" id="newGameCancel" class="textChoice"></button></div>';
+  document.body.appendChild(newGameOverlay);
+  function newGameLabels(){if(!el('newGameTitle'))return;const c=F();el('newGameTitle').textContent=c.newTitle;el('newGameHelp').textContent=c.newHelp;el('keepGameLabel').textContent=c.keep;el('keepGameHint').textContent=c.keepHint;el('freshGameLabel').textContent=c.fresh;el('freshGameHint').textContent=c.freshHint;el('newGameCancel').textContent=c.cancel;el('newGameClose').setAttribute('aria-label',c.close)}
+  function closeNewGame(){newGameOverlay.classList.add('hidden')}
+  function openNewGameOptions(){if(!s.code){writeStored('kyc',{});location.href='/?new=1';return}newGameLabels();el('keepGameBtn').classList.toggle('hidden',!(current?.is_host||s.host));newGameOverlay.classList.remove('hidden');el('newGameTitle').focus({preventScroll:true})}
+  window.openNewGameOptions=openNewGameOptions;
+  el('newGameClose').onclick=closeNewGame;el('newGameCancel').onclick=closeNewGame;newGameOverlay.onclick=e=>{if(e.target===newGameOverlay)closeNewGame()};
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(chatOpen)closeChat();if(!newGameOverlay.classList.contains('hidden'))closeNewGame()}});
+  el('freshGameBtn').onclick=()=>{writeStored('kyc',{});s={};stateSig='';window.lastState=null;location.href='/?new=1'};
+  el('keepGameBtn').onclick=async()=>{const b=el('keepGameBtn');b.disabled=true;const old=el('keepGameLabel').textContent;el('keepGameLabel').textContent=F().creating;try{const oldCode=s.code,result=await window.req('/api/'+encodeURIComponent(oldCode)+'/freshroom',{host:s.host});if(result.code&&result.code!==oldCode){s.code=result.code;save();setChatRoom(result.code);history.replaceState({},'',location.pathname+'?code='+encodeURIComponent(result.code))}stateSig='';heroAsked=-1;sessionStorage.removeItem('how_'+oldCode);sessionStorage.removeItem('how_'+s.code);closeNewGame();toast(F().created);await load();setTimeout(showHowTo,80)}catch(_){toast(F().failed)}finally{b.disabled=false;el('keepGameLabel').textContent=old}};
+  for(const id of ['globalNewGameBtn','newGameBtn'])if(el(id))el(id).onclick=openNewGameOptions;
+
+  window.dropPlayer=async function(id){const d=window.lastState,p=d?.players?.find(x=>x.id===id);if(!p||!window.confirm(ft(F().remove,p.name)))return;try{await window.req('/api/'+s.code+'/drop',{host:s.host,player_id:id});stateSig='';toast(ft(F().removed,p.name));await load()}catch(e){toast(e.message==='need_2'?copy.need_two:copy.remove_failed)}};
+
+  function featureRender(d){
+    setChatRoom(d.code);chatRoot.classList.toggle('hidden',!d.me);if(d.me&&!chatInitialLoaded)fetchChat(true);
+    document.body.classList.toggle('hasNextDock',!!(d.status==='playing'&&d.reveal&&d.is_host));
+    el('interactiveTwist').classList.add('hidden');el('interactiveTwist').setAttribute('aria-hidden','true');
+    revealReactions.classList.toggle('hidden',!d.reveal||!d.me);
+    if(d.reveal){
+      el('next').classList.toggle('hidden',!d.is_host);
+      const guesses=d.all_guesses||[];el('guessBoard').classList.toggle('hidden',!guesses.length);
+      el('guessRows').innerHTML=guesses.map(g=>'<div class="guessRow emphasizedGuess">'+(g.photo_url?'<img class="avatar" src="'+safe(g.photo_url)+'">':'<div class="avatarFallback">'+safe(String(g.name||'?').charAt(0))+'</div>')+'<div class="guessStatement"><span><b>'+playerLabel(g)+'</b> '+safe(F().guessed)+'</span><strong class="guessChoice">'+safe(g.guess)+'</strong></div><span class="guessResult '+(g.correct?'good':'bad')+'">'+(g.correct?'✓ +1':'✕')+'</span></div>').join('');
+    }
+    el('savedPhotoLabel').textContent=F().photoReady;el('replacePhotoBtn').textContent=F().replace;
+  }
   const packages=document.createElement('a');packages.className='pilotPackagesLink';packages.href='/pricing';
   function packageLabel(){packages.textContent=phrase('חבילות ומחירים לקראת ההשקה','Launch packages & pricing');packages.href='/pricing?lang='+encodeURIComponent(lang())}
   packageLabel();el('home').appendChild(packages);
@@ -293,7 +375,7 @@
   window.render=function(d){
     const newGame=current&&(current.code!==d.code||current.image_run!==d.image_run);if(newGame){closeScores();lastLine='';loadingKey='';el('companionMoment').classList.add('hidden')}
     if(previous&&previous.round!==d.round)closeScores();
-    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);packageLabel();costs.classList.toggle('hidden',!d.is_host||d.status!=='finished');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
+    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);featureRender(d);chatLabels();packageLabel();costs.classList.toggle('hidden',!d.is_host||d.status!=='finished');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
     const help=el('ruleHelp');if(help)help.querySelector('summary span').textContent=L()[12];
     if(d.tiebreak?.sets&&d.status==='playing')el('round').textContent=L()[9]+' '+d.tiebreak.sets+' / 3 · '+(d.round-d.tiebreak.start+1)+' / '+d.tiebreak.order.length;
     const key=d.code+'_'+d.image_run+'_'+d.round+'_'+d.status;
@@ -310,7 +392,8 @@
     if(final&&el('tieBreakBtn'))el('tieBreakBtn').disabled=state==='pending';if(before==='pending'&&state==='ready')sound('ready');if(gateStates.size>100)gateStates.delete(gateStates.keys().next().value);
     if(!final&&state!=='pending')autoScores(d);
   };
-  new MutationObserver(()=>{guideLabels();label();packageLabel();lastScores='';if(current){scoreUI(current);finishUI(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+  new MutationObserver(()=>{guideLabels();label();chatLabels();packageLabel();lastScores='';if(current){scoreUI(current);finishUI(current);featureRender(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+  setInterval(()=>{if(!document.hidden&&current?.me)fetchChat(false)},1800);
   setInterval(()=>{if(!document.hidden)companion(Date.now()>lineUntil)},7500);
   if(window.lastState)window.render(window.lastState);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).catch(()=>{});

@@ -624,15 +624,46 @@ for _lang,_extra in POLISH_UI_EXTRA.items():
     if _lang in UI_COPY: UI_COPY[_lang].update(_extra)
 
 LAST_RESORT = {
- 'en':('What would surprise people who think they know {name} well?',['A spontaneous choice','The safe choice','Something nobody expects','It depends on the moment']),
- 'es':('¿Qué sorprendería más a quienes creen conocer bien a {name}?',['Una elección impulsiva','La opción segura','Algo que nadie espera','Depende del momento']),
- 'pt-BR':('O que mais surpreenderia quem acha que conhece {name} bem?',['Uma escolha impulsiva','A opção segura','Algo que ninguém espera','Depende do momento']),
- 'fr':('Qu’est-ce qui surprendrait le plus ceux qui pensent bien connaître {name} ?',['Un choix spontané','Le choix rassurant','Un truc que personne n’attend','Ça dépend du moment']),
- 'ja':('{name}をよく知ってるつもりの人が一番驚きそうなのは？',['勢いのある選択','無難な選択','誰も予想しないこと','その時次第']),
- 'he':('מה הכי יפתיע את מי שחושב שהוא מכיר את {name} טוב?',['בחירה ספונטנית','בחירה בטוחה','משהו שאף אחד לא מצפה לו','תלוי במצב'])
+ 'en':[
+  ('{name} arrives an hour early to a party and only the host is there. What happens?',['Helps set everything up','Goes out for snacks','Starts the music','Pretends the time was unclear']),
+  ('A rideshare arrives, but the driver calls a different name. What does {name} do?',['Checks the licence plate','Questions the driver','Reports it in the app','Cancels and walks away']),
+  ('A gust sends the whole picnic flying around {name}. What gets rescued first?',['The food','The phones','The blanket','The group photo']),
+  ('{name} notices an inside-out shirt only after the group photo is posted. What happens?',['Deletes the photo','Posts a corrected sequel','Comments before anyone else','Leaves it with confidence'])
+ ],
+ 'es':[
+  ('{name} llega una hora antes a una fiesta y solo está el anfitrión. ¿Qué hace?',['Ayuda a prepararlo todo','Sale a comprar picoteo','Pone la música','Finge que la hora no estaba clara']),
+  ('Llega un coche de app, pero el conductor dice otro nombre. ¿Qué hace {name}?',['Comprueba la matrícula','Interroga al conductor','Lo reporta en la app','Cancela y se va']),
+  ('Una ráfaga manda todo el picnic de {name} por los aires. ¿Qué salva primero?',['La comida','Los móviles','La manta','La foto del grupo']),
+  ('{name} descubre la camiseta al revés después de publicar la foto del grupo. ¿Qué hace?',['Borra la foto','Publica una secuela correcta','Comenta antes que nadie','La deja con orgullo'])
+ ],
+ 'pt-BR':[
+  ('{name} chega uma hora cedo numa festa e só o anfitrião está lá. O que faz?',['Ajuda a arrumar tudo','Sai para buscar petiscos','Coloca a música','Finge que o horário estava confuso']),
+  ('O carro de aplicativo chega, mas o motorista fala outro nome. O que {name} faz?',['Confere a placa','Questiona o motorista','Denuncia pelo aplicativo','Cancela e vai embora']),
+  ('Uma rajada espalha o piquenique inteiro de {name}. O que salva primeiro?',['A comida','Os celulares','A toalha','A foto da galera']),
+  ('{name} nota a camiseta do avesso só depois de postarem a foto. O que faz?',['Apaga a foto','Posta uma sequência correta','Comenta antes de todos','Assume com confiança'])
+ ],
+ 'fr':[
+  ('{name} arrive une heure trop tôt à une soirée et l’hôte est seul. Que fait-il/elle ?',['Aide à tout installer','Va chercher des snacks','Lance la musique','Prétend que l’heure était floue']),
+  ('La voiture réservée arrive, mais le chauffeur annonce un autre nom. Que fait {name} ?',['Vérifie la plaque','Questionne le chauffeur','Le signale dans l’appli','Annule et repart']),
+  ('Une rafale disperse tout le pique-nique de {name}. Qu’est-ce qui est sauvé en premier ?',['La nourriture','Les téléphones','La couverture','La photo du groupe']),
+  ('{name} voit son haut à l’envers après la publication de la photo. Que fait-il/elle ?',['Supprime la photo','Publie une suite corrigée','Commente avant les autres','L’assume avec confiance'])
+ ],
+ 'ja':[
+  ('{name}がパーティーに1時間早く着き、いるのは幹事だけ。まず何をする？',['準備を全部手伝う','買い出しに出る','音楽をかける','時間が曖昧だったふり']),
+  ('配車が来たのに、運転手が別の名前を呼んでいる。{name}はどうする？',['ナンバーを確認する','運転手に質問する','アプリで報告する','キャンセルして離れる']),
+  ('突風で{name}のピクニックが全部飛び始めた。最初に何を救う？',['食べ物','みんなのスマホ','レジャーシート','グループ写真']),
+  ('集合写真の投稿後、{name}は服が裏返しだったと気づく。どうする？',['写真を削除する','撮り直し版を投稿する','先に自分でコメントする','堂々とそのままにする'])
+ ],
+ 'he':[
+  ('{name} מגיע/ה שעה מוקדם למסיבה ורק המארח נמצא שם. מה קורה?',['עוזר/ת להכין הכול','יוצא/ת להביא נשנושים','מתחיל/ה את המוזיקה','טוען/ת שהשעה לא הייתה ברורה']),
+  ('רכב שהוזמן מגיע, אבל הנהג קורא בשם אחר. מה {name} עושה?',['בודק/ת את המספר','מתשאל/ת את הנהג','מדווח/ת באפליקציה','מבטל/ת ומתרחק/ת']),
+  ('משב רוח מעיף את כל הפיקניק סביב {name}. מה מצילים קודם?',['את האוכל','את הטלפונים','את השמיכה','את התמונה הקבוצתית']),
+  ('{name} מגלה שהחולצה הפוכה רק אחרי שהתמונה הקבוצתית עלתה. מה עושים?',['מוחק/ת את התמונה','מעלה תמונת תיקון','מגיב/ה לפני כולם','משאיר/ה בביטחון'])
+ ]
 }
-def last_resort(lang,name):
-    text,opts=LAST_RESORT[normalize_language(lang)]
+def last_resort(lang,name,index=0):
+    pool=LAST_RESORT[normalize_language(lang)]
+    text,opts=pool[int(index or 0)%len(pool)]
     return text.format(name=name),list(opts)
 
 
@@ -687,3 +718,16 @@ IMAGE_GATE_COPY={
 }
 for _lang,_values in IMAGE_GATE_COPY.items():
     UI_COPY[_lang].update(dict(zip(('image_loading','image_failed','image_continue'),_values)))
+
+# Short labels for the in-room conversation tray.  The emoji stays universal;
+# these labels keep its accessible name and tooltip in the room language.
+CHAT_COPY={
+ 'en':{'chat_title':'Room chat','chat_placeholder':'Write to the room…','chat_send':'Send','chat_quick':'Quick reactions','reaction_heart':'Love','reaction_laugh':'Laugh','reaction_cry':'Crying','reaction_mischief':'Mischief'},
+ 'es':{'chat_title':'Chat de la sala','chat_placeholder':'Escribe al grupo…','chat_send':'Enviar','chat_quick':'Reacciones rápidas','reaction_heart':'Me encanta','reaction_laugh':'Risa','reaction_cry':'Llanto','reaction_mischief':'Diablura'},
+ 'pt-BR':{'chat_title':'Chat da sala','chat_placeholder':'Escreva para a galera…','chat_send':'Enviar','chat_quick':'Reações rápidas','reaction_heart':'Amei','reaction_laugh':'Risada','reaction_cry':'Choro','reaction_mischief':'Travessura'},
+ 'fr':{'chat_title':'Chat de la salle','chat_placeholder':'Écrivez au groupe…','chat_send':'Envoyer','chat_quick':'Réactions rapides','reaction_heart':'J’adore','reaction_laugh':'Rire','reaction_cry':'Pleurer','reaction_mischief':'Malice'},
+ 'ja':{'chat_title':'ルームチャット','chat_placeholder':'みんなにメッセージ…','chat_send':'送信','chat_quick':'クイックリアクション','reaction_heart':'好き','reaction_laugh':'笑い','reaction_cry':'泣き','reaction_mischief':'いたずら'},
+ 'he':{'chat_title':'הצ׳אט של החדר','chat_placeholder':'כתבו לחבורה…','chat_send':'שליחה','chat_quick':'תגובות מהירות','reaction_heart':'אהבה','reaction_laugh':'צחוק','reaction_cry':'בכי','reaction_mischief':'שובבות'}
+}
+for _lang,_extra in CHAT_COPY.items():
+    UI_COPY[_lang].update(_extra)

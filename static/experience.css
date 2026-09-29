@@ -87,3 +87,37 @@ body[data-game-status="playing"] #photoToggle{display:none}body[data-game-status
 #pilotCostReport{font-size:13px;line-height:1.6}#pilotCostReport button{font-size:13px}
 @keyframes mascotBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.15)}}
 @media(prefers-reduced-motion:reduce){.mascotEyes{animation:none}}
+
+/* Photo readiness is a single obvious step with a persistent confirmation. */
+#photoBox #photoInput{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+#photoBox .photoPick{min-height:58px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px #6e3eb52b}
+#photoBox #photoSave{display:none}
+#photoBox.uploadError #photoSave{display:block;background:#7543cf;color:#fff}
+#photoBox.photoSaved #photoStatus{font-size:17px;font-weight:800;color:#28734d}
+#photoBox>label:not(.photoPick){display:flex;align-items:flex-start;gap:10px;line-height:1.45;text-align:start}
+.photoReadyCard{display:flex;align-items:center;gap:14px;padding:13px 15px;margin:12px 0;border:2px solid #8bc9a7;border-radius:17px;background:#f1fbf4;color:#243d30;box-shadow:0 5px 16px #39755214}
+.photoReadyCard img{width:66px;height:66px;border-radius:15px;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 9px #243d3024}
+.photoReadyCard>div{flex:1;min-width:0}.photoReadyCard b{display:block;font-size:17px;line-height:1.35;color:#286646}.photoReadyCard button{margin:7px 0 0;padding:7px 11px;background:#fff;color:#593487;border-color:#cbb3e8}
+
+/* Reveal answers deserve the same visual weight as the question. */
+#guessBoard{margin-top:18px}.guessTitle{font-size:21px;margin-bottom:10px}
+#guessRows .emphasizedGuess{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px;background:#fffdf9;border:2px solid #d8c3ee;box-shadow:0 5px 15px #5e3a8110;color:#342541}
+#guessRows .emphasizedGuess .avatar,#guessRows .emphasizedGuess .avatarFallback{width:48px;height:48px}
+.guessStatement{display:flex;flex-direction:column;gap:4px;min-width:0;text-align:start}.guessStatement>span{font-size:15px;color:#705e7c}.guessStatement>span b{font-size:17px;color:#342541}.guessChoice{font-size:22px;line-height:1.25;overflow-wrap:anywhere;color:#4c296f}.guessResult{font-size:20px;font-weight:900;white-space:nowrap}
+.revealReactions{margin:16px 0;padding:14px;border:1px solid #d8c3ee;border-radius:17px;background:#f5edfd;text-align:center;color:#3c2949}.revealReactions>b{display:block;margin-bottom:10px;font-size:16px}.revealReactions>div{display:flex;justify-content:center;gap:9px}.revealReactions button,.chatQuick button{width:50px;height:46px;padding:5px;margin:0;border-radius:15px;background:#fffdf9;border:1px solid #d7c4ec;font-size:23px;line-height:1}
+#interactiveTwist{display:none!important}
+
+/* In-room chat: lightweight reactions plus optional text. */
+.chatFab{position:fixed;inset-inline-end:max(14px,calc((100vw - 650px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:48;width:auto;min-height:50px;margin:0;padding:10px 15px;display:flex;align-items:center;gap:8px;border:0;border-radius:999px;background:#6335aa;color:#fff;box-shadow:0 8px 25px #3c20594f;font-size:15px}
+.hasScoreDock .chatFab{bottom:calc(82px + env(safe-area-inset-bottom))}.hasScoreDock.hasNextDock .chatFab{bottom:calc(145px + env(safe-area-inset-bottom))}.chatFab>span:first-child{font-size:21px}.chatUnread{position:absolute;top:-7px;inset-inline-start:-5px;display:grid;place-items:center;min-width:23px;height:23px;padding:0 5px;border-radius:999px;background:#cf315f;color:#fff;border:2px solid #faf7f1;font-size:11px;font-style:normal}
+.chatSheet{position:fixed;left:50%;bottom:0;z-index:70;transform:translateX(-50%);width:min(650px,100%);height:min(72dvh,610px);display:flex;flex-direction:column;padding:16px 16px calc(14px + env(safe-area-inset-bottom));border:1px solid #d7c4ec;border-radius:25px 25px 0 0;background:#faf7f1;color:#342541;box-shadow:0 -18px 60px #2e17484d;animation:chatUp .22s ease-out}
+.chatSheet header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px 10px;border-bottom:1px solid #e6daee}.chatSheet header b{font-size:21px}.chatClose{width:42px;height:42px;min-height:42px;padding:0;margin:0;border-radius:50%;font-size:27px;background:#eee4f6;color:#4c296f}
+.chatMessages{flex:1;min-height:120px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:14px 2px;overscroll-behavior:contain}.chatEmpty{margin:auto;color:#756781;text-align:center}.chatMessage{align-self:flex-start;max-width:82%;display:flex;flex-direction:column;gap:3px;padding:9px 12px;border-radius:15px 15px 15px 4px;background:#eee5f8;text-align:start}.chatMessage.mine{align-self:flex-end;border-radius:15px 15px 4px 15px;background:#7040bc;color:#fff}.chatAuthor{font-size:11px;font-weight:800;opacity:.7}.chatBody{font-size:16px;line-height:1.35;overflow-wrap:anywhere}.chatMessage.reaction .chatBody{font-size:29px;line-height:1}.chatQuick{display:flex;justify-content:center;gap:8px;padding:6px 0 9px}.chatForm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.chatForm input{min-width:0;margin:0;background:#fff;border-color:#cdb8df;color:#342541}.chatForm button{width:auto;min-width:78px;margin:0;padding-inline:16px}.chatOpen{overflow:hidden}
+@keyframes chatUp{from{opacity:0;transform:translate(-50%,22px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* New-game choice keeps the current crew only when the host asks for it. */
+.choiceOverlay{position:fixed;inset:0;z-index:85;display:flex;align-items:center;justify-content:center;padding:18px;background:#2515349c;backdrop-filter:blur(7px)}
+.choiceDialog{position:relative;width:min(520px,100%);padding:25px 20px 20px;border:1px solid #d7c4ec;border-radius:24px;background:#fffdf9;color:#342541;box-shadow:0 24px 70px #20102f66;text-align:start}.choiceDialog h2{font-size:25px;line-height:1.25;margin:5px 42px 8px 0}.choiceDialog>p{font-size:16px;line-height:1.5;color:#695d72}.dialogClose{position:absolute;top:12px;inset-inline-end:12px;width:40px;height:40px;min-height:40px;margin:0;padding:0;border-radius:50%;font-size:25px;background:#f0e6f7;color:#4c296f}.gameChoice{display:block;text-align:start;padding:15px;margin:10px 0}.gameChoice b,.gameChoice small{display:block}.gameChoice b{font-size:18px}.gameChoice small{margin-top:5px;font-size:13px;line-height:1.45;font-weight:500;opacity:.82}.textChoice{background:transparent;border:0;color:#674299;margin-bottom:0}
+html[dir="rtl"] .choiceDialog h2{margin:5px 0 8px 42px}
+@media(max-width:480px){.chatFab{inset-inline-end:12px}#chatFabLabel{display:none}.chatSheet{height:min(78dvh,650px)}#guessRows .emphasizedGuess{grid-template-columns:auto minmax(0,1fr)}.guessResult{grid-column:2}.choiceDialog{padding-inline:17px}}
+@media(prefers-reduced-motion:reduce){.chatSheet{animation:none}}
