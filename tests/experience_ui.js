@@ -1,14 +1,14 @@
 // Execute the actual app scripts against a DOM, storage, timers and mocked transport/audio.
 const assert=require('node:assert/strict'),fs=require('node:fs');
 const {JSDOM}=require(process.env.PLOT_JSDOM||'jsdom');
-const page=fs.readFileSync('static/kyc.html','utf8'),inline=page.split('<script>',2)[1].split('</script>',1)[0];
+const page=fs.readFileSync('static/kyc.html','utf8'),inline=page.split('<script>',2)[1].split('</script>',1)[0],experienceCss=fs.readFileSync('static/experience.css','utf8');
 const markup=page.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'');
 const dom=new JSDOM(markup,{url:'https://plot.test/',runScripts:'dangerously',pretendToBeVisual:true});
-const w=dom.window,errors=[];w.addEventListener('error',e=>errors.push(e.message));
+const w=dom.window,errors=[],requests=[];w.addEventListener('error',e=>errors.push(e.message));
 let clock=10000,notes=0,stops=0,intervals=[];w.Date.now=()=>clock;
 w.setInterval=fn=>{intervals.push(fn);return intervals.length};
 w.HTMLElement.prototype.scrollIntoView=function(){};
-w.fetch=async()=>({ok:true,json:async()=>({language:'he',copy:{},topics:{}})});
+w.fetch=async(url,options={})=>{requests.push({url:String(url),options});return {ok:true,json:async()=>String(url).includes('/api/chat/')?({messages:[]}):({language:'he',copy:{},topics:{}})}};
 w.AbortController=AbortController;
 class AudioContext{constructor(){this.currentTime=0;this.state='running'}resume(){this.state='running';return Promise.resolve()}suspend(){this.state='suspended';return Promise.resolve()}createOscillator(){return {frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},start(){notes++},stop(){stops++},disconnect(){}}}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}}}}
 w.AudioContext=AudioContext;
@@ -38,21 +38,32 @@ const $=id=>w.document.getElementById(id);
  assert(!$('shareBtn').classList.contains('hidden'));
  assert($('photoBox').compareDocumentPosition($('sharedSetup'))&w.Node.DOCUMENT_POSITION_FOLLOWING,'photo step before settings');
  assert.equal(w.document.querySelector('.photoPick').htmlFor,'photoInput');
+ assert(experienceCss.includes('#photoBox #photoInput{position:absolute!important'),'native photo input is visually hidden behind one large picker');
  assert(!$('howAge').classList.contains('hidden'));assert(!$('howAgeCheck').checked);
  $('howAgeCheck').checked=true;$('howAgeCheck').dispatchEvent(new w.Event('change'));assert($('playerAgeCheck').checked);
  w.render({...lobby,code:'NEXT1',is_host:false});assert(!$('howAgeCheck').checked,'consent is never carried into a different room');assert(!$('playerAgeCheck').checked);
  assert($('shareBtn').classList.contains('hidden'),'guests cannot see share link');
  w.navigator.clipboard={writeText(){throw Error('guest must not share')}};await w.share();
+ const readyLobby={...lobby,code:'READY',adult_required:false,adults_ready:true,is_host:true,me:{id:1,has_photo:true,adult_confirmed:true},players:[{id:1,name:'ערן',gender:'male',score:0,active:true,connected:true,has_photo:true,photo_url:'/photo/1'},{id:2,name:'אבי',score:0,active:true,connected:true,has_photo:true,photo_url:'/photo/2'}],photo_count:2};
+ w.render(readyLobby);assert(!$('photoReadyCard').classList.contains('hidden'),'saved photo confirmation remains visible');assert($('savedPhotoThumb').src.includes('/photo/1'));assert($('photoInput').offsetParent===null||w.getComputedStyle($('photoInput')).clip!=='auto');
 
  assert.equal(new Set(Object.values(w.PlotLines.he).flat()).size,80);
- let d=data();w.render(d);assert(!$('scoreDock').classList.contains('hidden'));assert($('scoreBar').textContent.includes('אבי'));assert(w.document.querySelector('.nextDock').classList.contains('hidden'));
+ w.eval("s={code:'TEST1',token:'test-token',host:'test-host'}");let d=data();w.render(d);assert(!$('scoreDock').classList.contains('hidden'));assert($('scoreBar').textContent.includes('אבי'));assert(w.document.querySelector('.nextDock').classList.contains('hidden'));assert(!$('gameChat').classList.contains('hidden'));
+ assert($('chatFab').getAttribute('aria-label'));assert([...w.document.querySelectorAll('[data-reaction]')].every(b=>b.getAttribute('aria-label')&&b.title),'emoji reactions have accessible labels');
+ $('chatFab').click();assert(!$('chatSheet').classList.contains('hidden'));w.document.querySelectorAll('#chatSheet [data-reaction]')[1].click();await new Promise(r=>setImmediate(r));assert(requests.some(r=>r.url.endsWith('/api/TEST1/chat')&&JSON.parse(r.options.body).body==='😂'),'quick reaction posts to room chat');$('chatClose').click();assert($('chatSheet').classList.contains('hidden'));
  $('scoreBar').click();assert.equal($('scoreBar').getAttribute('aria-expanded'),'true');assert(notes>0,'gesture activates audio');
  $('closeScores').click();assert.equal($('scoreBar').getAttribute('aria-expanded'),'false');
- clock+=1000;d={...data(1),reveal:true,all_guesses:[{player_id:2,name:'אבי',guess:'כן',correct:true}]};w.render(d);
+ clock+=1000;d={...data(1),reveal:true,interactive_match:{ready:false,participants:[],answers:[]},all_guesses:[{player_id:2,name:'אבי',gender:'male',guess:'כן',correct:true}]};w.render(d);
  assert.equal($('scoreBar').getAttribute('aria-expanded'),'true','scoreboard after two rounds');
  assert(!w.document.querySelector('.nextDock').classList.contains('hidden'));
+ assert($('interactiveTwist').classList.contains('hidden'),'legacy secret Match Twist is removed');assert(!$('next').classList.contains('hidden'),'legacy Match Twist never blocks next');
+ assert(w.document.body.classList.contains('hasNextDock'),'chat button clears the host reveal CTA');assert(experienceCss.includes('.hasScoreDock.hasNextDock .chatFab'));
+ assert(!$('revealReactions').classList.contains('hidden'));assert(w.document.querySelector('.emphasizedGuess .guessChoice').textContent.includes('כן'));assert(w.document.querySelector('.emphasizedGuess').textContent.includes('ניחש'));
+ assert(w.document.querySelector('.emphasizedGuess .genderBadge'),'reveal guess keeps gender badge');
+ w.openNewGameOptions();assert(!$('newGameOverlay').classList.contains('hidden'));assert(!$('keepGameBtn').classList.contains('hidden'));$('newGameCancel').click();
+ let confirmText='';w.confirm=text=>{confirmText=text;return false};await w.dropPlayer(2);assert(confirmText.includes('אבי'),'drop asks for named confirmation');
  const atReveal=notes;w.render(d);assert.equal(notes,atReveal,'poll does not repeat sounds');
- w.render(data(2));assert(w.document.querySelector('.nextDock').classList.contains('hidden'),'no stale next button on question');
+ w.render(data(2));assert(w.document.querySelector('.nextDock').classList.contains('hidden'),'no stale next button on question');assert(!w.document.body.classList.contains('hasNextDock'));
  clock+=1000;$('soundToggle').click();assert.equal(w.localStorage.getItem('plot_sound'),'off');let muted=notes;clock+=2000;$('scoreBar').click();assert.equal(notes,muted);
  clock+=1000;$('soundToggle').click();assert.equal(w.localStorage.getItem('plot_sound'),'on');assert(notes>muted);
  // Repeated loading updates must preserve the line; time-based changes draw without replacement.

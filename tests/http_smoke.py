@@ -1,4 +1,4 @@
-import json, os, sys, tempfile, threading
+import base64, io, json, os, sys, tempfile, threading
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -65,6 +65,36 @@ try:
     assert request(f"/api/state/{code}?token={j1['token']}")['me']['gender']=='unspecified'
     print('HTTP_OPTIONAL_GENDER_PERSISTENCE_AND_AUTH_OK')
 
+    # Room chat is private to active members, idempotent on retry, and bounded.
+    request(f'/api/chat/{code}', expected=403)
+    first_chat = request(f'/api/{code}/chat', {
+        'token': eran_token, 'kind': 'text', 'body': 'Ready?', 'client_msg_id': 'host-1',
+    })['message']
+    duplicate_chat = request(f'/api/{code}/chat', {
+        'token': eran_token, 'kind': 'text', 'body': 'must not replace', 'client_msg_id': 'host-1',
+    })['message']
+    assert duplicate_chat['id'] == first_chat['id'] and duplicate_chat['body'] == 'Ready?'
+    reaction = request(f'/api/{code}/chat', {
+        'token': j1['token'], 'kind': 'reaction', 'body': '😂', 'client_msg_id': 'guest-1',
+    })['message']
+    assert reaction['kind'] == 'reaction'
+    chat = request(f'/api/chat/{code}?token={eran_token}')
+    assert [m['body'] for m in chat['messages']] == ['Ready?', '😂']
+    newer = request(f"/api/chat/{code}?token={eran_token}&after={first_chat['id']}")
+    assert [m['id'] for m in newer['messages']] == [reaction['id']]
+    request(f'/api/{code}/chat', {'token': eran_token, 'kind': 'reaction', 'body': '👍', 'client_msg_id': 'bad-reaction'}, expected=400)
+    request(f'/api/{code}/chat', {'token': eran_token, 'kind': 'text', 'body': 'x'*281, 'client_msg_id': 'too-long'}, expected=400)
+    print('HTTP_AUTHENTICATED_CHAT_OK')
+
+    # Photo acknowledgement reflects the durable save, independently of a later state refresh.
+    from PIL import Image
+    photo_bytes = io.BytesIO(); Image.new('RGB', (32, 32), 'purple').save(photo_bytes, format='PNG')
+    photo_url = 'data:image/png;base64,' + base64.b64encode(photo_bytes.getvalue()).decode()
+    photo_saved = request(f'/api/{code}/photo', {'token': eran_token, 'data_url': photo_url, 'consent': True})
+    assert photo_saved['photo_ready'] and photo_saved['has_photo']
+    assert request(f'/api/state/{code}?token={eran_token}')['me']['has_photo']
+    print('HTTP_PHOTO_DURABLE_ACK_OK')
+
 
     # Start is immediate. First secret answer / prediction is locked server-side.
     request(f'/api/{code}/start', {'host': host_token})
@@ -80,6 +110,8 @@ try:
     st_shai = request(f"/api/state/{code}?token={j1['token']}")
     shai = next(p for p in st_shai['players'] if p['name'] == 'Shai')
     assert st_shai['reveal'] and st_shai['my_guess'] == correct and shai['score'] == 1
+    assert st_shai['interactive'] == '' and st_shai['interactive_match'] is None
+    request(f'/api/{code}/matchanswer', {'token': j1['token'], 'answer': 'legacy'}, expected=403)
     print('HTTP_IDEMPOTENT_SCORE_AND_SUBMIT_OK')
 
     # Once the first reveal has happened, rollback to lobby is intentionally closed.
@@ -152,6 +184,66 @@ try:
         test_game=k.game(c3['code'])
         assert other_label(lang) not in k.qdata(test_game,k.players(g3['id']))[2]
     print('HTTP_NO_GENERIC_OTHER_OPTION_ALL_LANGUAGES_OK')
+
+    # A preserved new room rotates the code and resets only run data. Active
+    # player sessions/photos/settings survive; previously dropped players do not.
+    keep = request('/api/create', {
+        'name': 'KeepHost', 'topics': ['נוסטלגיה'], 'context': 'old friends',
+        'prize': 'Coffee machine', 'spice': 1, 'rounds': 8, 'client_id': 'keep-host',
+    })
+    keep_guest = request('/api/join', {'code': keep['code'], 'name': 'KeepGuest', 'client_id': 'keep-guest'})
+    removed = request('/api/join', {'code': keep['code'], 'name': 'Removed', 'client_id': 'removed-device'})
+    request(f"/api/{keep['code']}/start", {'host': keep['host']})
+    keep_game = k.game(keep['code'])
+    with k.cn() as db:
+        db.execute("UPDATE games SET round_no=3,answer='old',memory='[{}]' WHERE id=?", (keep_game['id'],))
+        db.execute("UPDATE players SET score=7 WHERE game_id=?", (keep_game['id'],))
+        db.execute("UPDATE players SET active=0 WHERE token=?", (removed['token'],))
+    request(f"/api/{keep['code']}/chat", {'token': keep['token'], 'kind': 'text', 'body': 'old run', 'client_msg_id': 'old-run'})
+    old_code = keep['code']
+    rotated = request(f'/api/{old_code}/freshroom', {'host': keep['host']})
+    assert rotated['preserved'] and rotated['code'] != old_code
+    new_code = rotated['code']
+    assert k.game(old_code) is None
+    recovered = request(f"/api/state/{old_code}?token={keep_guest['token']}&host={keep['host']}")
+    assert recovered['code'] == new_code and recovered['status'] == 'lobby' and recovered['history'] == []
+    assert {p['name'] for p in recovered['players']} == {'KeepHost', 'KeepGuest'}
+    assert all(p['score'] == 0 and p['has_photo'] for p in recovered['players'])
+    assert recovered['topics'] == ['נוסטלגיה'] and recovered['context'] == 'old friends' and recovered['prize'] == 'Coffee machine'
+    assert request(f"/api/chat/{old_code}?token={keep_guest['token']}")['messages'] == []
+    moved_chat = request(f'/api/{old_code}/chat', {'token': keep_guest['token'], 'kind': 'reaction', 'body': '❤️', 'client_msg_id': 'new-run'})
+    assert moved_chat['code'] == new_code
+    request(f"/api/state/{old_code}?token={removed['token']}", expected=404)
+    request(f'/api/{new_code}/start', {'host': keep['host']})
+    request(f'/api/{new_code}/start', {'host': keep['host']}, expected=409)
+    request('/api/join', {'code': new_code, 'name': 'TooLate', 'client_id': 'too-late'}, expected=409)
+    with k.cn() as db:db.execute("UPDATE games SET status='finished' WHERE id=?", (keep_game['id'],))
+    request(f'/api/{new_code}/replay', {'host': keep['host']})
+    request(f'/api/{new_code}/replay', {'host': keep['host']}, expected=409)
+    print('HTTP_FRESH_ROOM_PRESERVES_ACTIVE_CREW_OK')
+
+    # Callback rounds advance without the removed Match Twist secret-answer gate.
+    no_match = request('/api/create', {'name': 'Dana', 'topics': [], 'spice': 1, 'rounds': 8, 'client_id': 'no-match-a'})
+    no_match_b = request('/api/join', {'code': no_match['code'], 'name': 'Noa', 'client_id': 'no-match-b'})
+    request(f"/api/{no_match['code']}/start", {'host': no_match['host']})
+    no_match_game = k.game(no_match['code'])
+    callback_memory = [
+        {'round': 0, 'subject': 'Dana', 'question': 'Q0', 'answer': 'טיסה', 'type': 'know'},
+        {'round': 1, 'subject': 'Noa', 'question': 'Q1', 'answer': 'בית', 'type': 'know'},
+        {'round': 2, 'subject': 'Dana', 'question': 'Q2', 'answer': 'ספונטני', 'type': 'know'},
+    ]
+    with k.cn() as db:
+        db.execute("UPDATE games SET round_no=4,answer='',memory=? WHERE id=?", (json.dumps(callback_memory, ensure_ascii=False), no_match_game['id']))
+        db.execute('DELETE FROM guesses WHERE game_id=?', (no_match_game['id'],))
+    callback_state = request(f"/api/state/{no_match['code']}?token={no_match['token']}")
+    assert 'callback' in callback_state['type'] and callback_state['interactive_match'] is None
+    subject_token = no_match['token'] if callback_state['subject']['name'] == 'Dana' else no_match_b['token']
+    guess_token = no_match_b['token'] if subject_token == no_match['token'] else no_match['token']
+    callback_answer = callback_state['options'][0]
+    request(f"/api/{no_match['code']}/answer", {'token': subject_token, 'answer': callback_answer})
+    request(f"/api/{no_match['code']}/guess", {'token': guess_token, 'guess': callback_answer})
+    request(f"/api/{no_match['code']}/next", {'host': no_match['host']})
+    print('HTTP_MATCH_TWIST_GATE_REMOVED_OK')
 
 
     # Adult intimacy is 18+ even when the room is not No Filter.
