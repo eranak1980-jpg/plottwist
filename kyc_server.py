@@ -402,15 +402,10 @@ def qdata(g,ps):
  sub=next((p for p in ps if p['id']==order[(rn-tb['start'])%len(order)]),None) if order else (ps[rn%len(ps)] if ps else None)
  if not sub:sub=ps[rn%len(ps)] if ps else None
  lang=game_language(g)
- if tb:pass
- elif len(ps)==2:
-  cb=duo_callback(g,ps,rn) if lang=='he' else localized_duo_callback(g,ps,rn)
-  cb=novel_callback(cb,g,ps)
-  if cb:return cb
- else:
-  cb=smart_callback(g,ps,rn) if lang=='he' else localized_smart_callback(g,ps,rn)
-  cb=novel_callback(cb,g,ps)
-  if cb:return cb
+ # Live testing showed that the legacy callback merely repeated an earlier
+ # answer and wrapped it in "now it really happens".  That felt confusing and
+ # less interesting than a fresh, grounded question, so it is intentionally
+ # paused until a genuinely new learning mechanic replaces it.
  selected=effective_topics(g);tailored=custom_questions(g)
  if lang=='he':
   focused=[]

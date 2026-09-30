@@ -1,6 +1,7 @@
 // Actual production image gate: no intermediate composite and no early Next.
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const page=fs.readFileSync('static/kyc.html','utf8');
+assert.match(page,/finalImagePending/);assert.match(page,/finalWaitTitle/);
 const source=page.slice(page.indexOf('const visualCache='),page.indexOf('async function makeFinalHero('));
 const elements={},images={},timers=[],frames=[];
 function element(id){return elements[id]||={dataset:{},style:{},classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,v){v?this.add(x):this.remove(x)}}}}
@@ -42,6 +43,7 @@ assert.equal(element('#next').disabled,false,'no photo never blocks');
 sandbox.imageView='final';
 sandbox.renderFinalImage({...d,final_image_eligible:true,final_hero_status:'running'});
 assert.equal(element('#replayBtn').disabled,true);
+assert.match(element('#finalHeroStatus').innerHTML,/winner image|תמונת הניצחון/);
 sandbox.renderFinalImage({...d,final_image_eligible:true,final_hero_status:'ready',final_hero:'/final'});
 images['/final'].onload();paint();
 assert.equal(element('#replayBtn').disabled,false);

@@ -349,7 +349,9 @@
   el('newGameClose').onclick=closeNewGame;el('newGameCancel').onclick=closeNewGame;newGameOverlay.onclick=e=>{if(e.target===newGameOverlay)closeNewGame()};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(chatOpen)closeChat();if(!newGameOverlay.classList.contains('hidden'))closeNewGame()}});
   el('freshGameBtn').onclick=()=>{writeStored('kyc',{});s={};stateSig='';window.lastState=null;location.href='/?new=1'};
-  el('keepGameBtn').onclick=async()=>{const b=el('keepGameBtn');b.disabled=true;const old=el('keepGameLabel').textContent;el('keepGameLabel').textContent=F().creating;try{const oldCode=s.code,result=await window.req('/api/'+encodeURIComponent(oldCode)+'/freshroom',{host:s.host});if(result.code&&result.code!==oldCode){s.code=result.code;save();setChatRoom(result.code);history.replaceState({},'',location.pathname+'?code='+encodeURIComponent(result.code))}stateSig='';heroAsked=-1;sessionStorage.removeItem('how_'+oldCode);sessionStorage.removeItem('how_'+s.code);closeNewGame();toast(F().created);await load();setTimeout(showHowTo,80)}catch(_){toast(F().failed)}finally{b.disabled=false;el('keepGameLabel').textContent=old}};
+  async function createFreshRoom(button,labelNode){const b=button,old=labelNode.textContent;b.disabled=true;labelNode.textContent=F().creating;try{const oldCode=s.code,result=await window.req('/api/'+encodeURIComponent(oldCode)+'/freshroom',{host:s.host});if(result.code&&result.code!==oldCode){s.code=result.code;save();setChatRoom(result.code);history.replaceState({},'',location.pathname+'?code='+encodeURIComponent(result.code))}stateSig='';heroAsked=-1;sessionStorage.removeItem('how_'+oldCode);sessionStorage.removeItem('how_'+s.code);closeNewGame();toast(F().created);await load();setTimeout(showHowTo,80)}catch(_){toast(F().failed)}finally{b.disabled=false;labelNode.textContent=old}}
+  el('keepGameBtn').onclick=()=>createFreshRoom(el('keepGameBtn'),el('keepGameLabel'));
+  el('replayBtn').onclick=()=>createFreshRoom(el('replayBtn'),el('replayBtn'));
   for(const id of ['globalNewGameBtn','newGameBtn'])if(el(id))el(id).onclick=openNewGameOptions;
 
   window.dropPlayer=async function(id){const d=window.lastState,p=d?.players?.find(x=>x.id===id);if(!p||!window.confirm(ft(F().remove,p.name)))return;try{await window.req('/api/'+s.code+'/drop',{host:s.host,player_id:id});stateSig='';toast(ft(F().removed,p.name));await load()}catch(e){toast(e.message==='need_2'?copy.need_two:copy.remove_failed)}};
@@ -365,6 +367,7 @@
       el('guessRows').innerHTML=guesses.map(g=>'<div class="guessRow emphasizedGuess">'+(g.photo_url?'<img class="avatar" src="'+safe(g.photo_url)+'">':'<div class="avatarFallback">'+safe(String(g.name||'?').charAt(0))+'</div>')+'<div class="guessStatement"><span><b>'+playerLabel(g)+'</b> '+safe(F().guessed)+'</span><strong class="guessChoice">'+safe(g.guess)+'</strong></div><span class="guessResult '+(g.correct?'good':'bad')+'">'+(g.correct?'✓ +1':'✕')+'</span></div>').join('');
     }
     el('savedPhotoLabel').textContent=F().photoReady;el('replacePhotoBtn').textContent=F().replace;
+    if(d.status==='finished'&&d.is_host&&!document.body.classList.contains('finalImagePending'))el('replayBtn').textContent='↻ '+F().keep;
   }
   const packages=document.createElement('a');packages.className='pilotPackagesLink';packages.href='/pricing';
   function packageLabel(){packages.textContent=phrase('חבילות ומחירים לקראת ההשקה','Launch packages & pricing');packages.href='/pricing?lang='+encodeURIComponent(lang())}

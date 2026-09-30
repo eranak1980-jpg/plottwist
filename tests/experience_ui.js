@@ -73,6 +73,7 @@ const $=id=>w.document.getElementById(id);
  $('soundToggle').click();muted=notes;clock+=12000;intervals.at(-1)();assert.equal(notes,muted,'muted companion stays silent');
  const final={...data(7),status:'finished',reveal:true,prize:'שמלה חדשה',can_tiebreak:true,final_image_eligible:false};w.render(final);
  assert.equal($('finishTitle').textContent,'יש לנו 2 מנצחים!');assert.equal(($('scores').textContent.match(/🏆/g)||[]).length,2);assert($('finalPrize').textContent.includes('לכל זוכה'));assert(!$('tieChoice').classList.contains('hidden'));
+ assert($('replayBtn').textContent.includes('אותם אנשים'),'end screen exposes a direct same-group new game action');assert(experienceCss.includes('body.finalImagePending #finalHeroStatus'),'final winner wait owns the screen');
  w.render({...final,is_host:false});assert($('tieChoice').classList.contains('hidden'),'host-only tie action');
  w.render({...final,can_tiebreak:false});assert($('tieChoice').classList.contains('hidden'),'bounded tie action');
  assert.equal($('scoreDock').classList.contains('hidden'),true);
