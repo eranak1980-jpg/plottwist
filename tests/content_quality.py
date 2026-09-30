@@ -55,9 +55,15 @@ print('CONTENT_AI_FILTERS_WEAK_AND_DUPLICATE_OK')
 
 hebrew_bad=[dict(item) for item in good]
 hebrew_bad.append({'type':'know','text':'{s} מקבל/ת ארבע הזמנות לאותו ערב וצריך/ה לבחור אחת. לאן הולכים?','options':['למסיבת גג','לארוחה משפחתית','תלוי במצב','להופעה קטנה']})
+hebrew_bad.extend([
+ {'type':'know','text':'{s} מקבל/ת רובוט שמבצע כל בקשה מילולית מדי. מה המשימה הראשונה?','options':['להרים את האווירה','לסגור לי את הפינה','לעשות לי סדר בחיים','להביא קפה']},
+ {'type':'know','text':'{s} בתפקיד קטן בסרט אבל צריך/ה לצעוק המלפפון ברח. מה עושים?','options':['צועק/ת חזק','לוחש/ת','מאלתר/ת','מסרב/ת']},
+ {'type':'know','text':'{s} מגיע/ה עם חולצה זהה למארח שמבקש להחליף. מה עושים?','options':['מחליף/ה','מתווכח/ת','מצטלם/ת','הולך/ת']},
+])
 hebrew_pack=clean_pack(hebrew_bad,'he')
 assert len(hebrew_pack)==8
 assert not any('ארבע הזמנות' in text for _,text,_ in hebrew_pack)
+assert not any('רובוט' in text or 'המלפפון' in text or 'חולצה זהה' in text for _,text,_ in hebrew_pack)
 print('CONTENT_AI_FILTERS_HEBREW_DODGE_OK')
 
 

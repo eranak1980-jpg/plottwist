@@ -27,6 +27,18 @@ _VAGUE_QUESTION_PATTERNS={
  'he':(r'\bמה הכי חשוב ל',r'\bמה .+ הכי מעריכ',r'\bאיזו מילה .+ מתאר',r'\bמה הכי מתאים ל',r'\bהדברים מסתבכים\b',r'\bהבחירה הזאת\b')
 }
 
+# A party question may be heightened, but it still has to feel like something
+# players can picture happening to them.  These patterns cover the recurring
+# "random sketch" setups that tested poorly in live play.
+_CONTRIVED_QUESTION_PATTERNS={
+ 'en':(r'robot .{0,35}(?:every|literal)',r'(?:million|50,?000).{0,45}(?:midnight|24 hours)',r'(?:movie|film).{0,35}(?:shout|yell).{0,30}(?:cucumber|pickle)',r'identical .{0,20}(?:shirt|outfit).{0,35}(?:change|replace)'),
+ 'es':(r'robot .{0,35}(?:cada|literal)',r'(?:millon|50,?000).{0,45}(?:medianoche|24 horas)',r'(?:pelicula|cine).{0,35}(?:gritar).{0,30}(?:pepino)',r'identic.{0,20}(?:camisa|ropa).{0,35}(?:cambiar)'),
+ 'pt-BR':(r'robo .{0,35}(?:toda|literal)',r'(?:milhao|50,?000).{0,45}(?:meia noite|24 horas)',r'(?:filme|cinema).{0,35}(?:gritar).{0,30}(?:pepino)',r'identic.{0,20}(?:camisa|roupa).{0,35}(?:trocar)'),
+ 'fr':(r'robot .{0,35}(?:chaque|litteral)',r'(?:million|50,?000).{0,45}(?:minuit|24 heures)',r'(?:film|cinema).{0,35}(?:crier).{0,30}(?:concombre)',r'identique.{0,20}(?:chemise|tenue).{0,35}(?:changer)'),
+ 'ja':(r'ロボット.{0,25}(?:命令|文字通り)',r'(?:100万|50,?000).{0,30}(?:深夜|24時間)',r'(?:映画|撮影).{0,25}(?:叫).{0,20}(?:きゅうり)',r'同じ.{0,12}(?:服|シャツ).{0,25}(?:着替|変え)'),
+ 'he':(r'רובוט .{0,35}(?:כל בקשה|מילולי)',r'(?:מיליון|50,?000|50 אלף).{0,45}(?:חצות|24 שעות)',r'(?:סרט|צילומים).{0,35}(?:לצעוק|צועק).{0,30}(?:מלפפון)',r'(?:חולצה|בגד).{0,20}(?:זהה|אותו דבר).{0,35}(?:להחליף|תחליף)')
+}
+
 # These tags describe whole scenarios, not isolated keywords.  They catch the
 # common failure mode where the model rewrites the same setup with new wording.
 _SCENARIOS={
@@ -56,6 +68,10 @@ def _dodging_option(option,language):
 def _vague_question(text,language):
  normalized=_normalize(text)
  return any(re.search(pattern,normalized,re.I|re.UNICODE) for pattern in _VAGUE_QUESTION_PATTERNS.get(language,_VAGUE_QUESTION_PATTERNS['en']))
+
+def _contrived_question(text,language):
+ normalized=_normalize(text)
+ return any(re.search(pattern,normalized,re.I|re.UNICODE) for pattern in _CONTRIVED_QUESTION_PATTERNS.get(language,_CONTRIVED_QUESTION_PATTERNS['en']))
 
 def _scenario_fingerprint(text):
  normalized=_normalize(text)
@@ -101,7 +117,7 @@ def clean_pack(data,language='en'):
   typ=q.get('type');text=q.get('text');opts=q.get('options',[])
   if typ not in ('know','room') or not isinstance(text,str):continue
   text=text.strip()
-  if '{s}' not in text or _semantic_duplicate(text,seen_text) or _vague_question(text,language) or len(text)>(160 if language=='ja' else 280):continue
+  if '{s}' not in text or _semantic_duplicate(text,seen_text) or _vague_question(text,language) or _contrived_question(text,language) or len(text)>(160 if language=='ja' else 280):continue
   if language!='ja' and (len(text.split())<7 or len(text.split())>35):continue
   if not isinstance(opts,list):continue
   if typ=='know':
@@ -137,6 +153,9 @@ or
 For room questions the answer will be one of the other players.
 
 Editorial standard:
+- REAL-LIFE FIRST: at least 9 of the 12 questions must be recognizable everyday moments that could plausibly happen this week: group chats, arriving late, ordering food, splitting a bill, family WhatsApp, getting ready, hosting, dating apps, work messages, travel planning, lending things, shopping, chores, calls, photos or ordinary nights out. Players should instantly think "that is so them".
+- Use no more than 2 heightened hypotheticals in the whole pack. Never build random sketch-comedy worlds just to sound creative: no magical or overly literal robots, bizarre movie lines, forced costume coincidences, sudden viral fame, celebrity encounters, or fortunes that must be spent by midnight. Funny comes from a believable human reaction, not an absurd setup.
+- Prefer observed habits and small social frictions over fantasy stakes. A good question exposes what the person actually tends to do: ignore a message, arrive late, avoid a bill, overpack, call a friend, change plans, order the same meal, or pretend everything is fine.
 - A player must understand the question on the FIRST read. Use one concrete situation and one direct question. Aim for 12–24 words; never exceed two sentences or 35 words (140 characters in Japanese). Name what went wrong; never say only "things get complicated". Avoid stacked conditions, metaphors, wordplay and vague references like "this choice".
 - Every answer must directly answer that exact question in at most 8 words (35 characters in Japanese). Four distinct actions, not overlapping categories. Never use a request for "something else", another answer, a skip, or a joke about the questionnaire as an answer option. If asking what someone would NOT do, ensure all options and the question use that meaning consistently.
 - Before returning, silently read each question with EACH answer. Rewrite unclear setups and answers that need explanation. Remove rhetorical fluff such as "the photo will forgive". Replace generic chemistry/value checklists with a specific awkward date or funny decision.
@@ -149,7 +168,7 @@ Editorial standard:
 - If the group has only two players, never create room questions. Every question must give the spotlight player 4 plausible choices so the other person has something real to predict.
 - Write like a sharp party-game writer, not a therapist, survey, HR form, or personality test. Use short, conversational, native-sounding phrasing in the requested language. Concrete scenes, awkward choices, funny stakes, and recognizable real-life moments.
 - Reject bland prompts such as generic 'what is most important to X', 'what would X prefer', or abstract self-development language unless the scenario makes it funny.
-- At least half the pack should contain a vivid setup, dilemma, social consequence, money/time pressure, travel/nightlife/date situation, or a choice involving another player.
+- At least half the pack should involve a familiar social consequence or a choice involving another player, but keep the setup ordinary and believable. Do not add artificial deadlines, large sums or fantasy stakes merely to make it vivid.
 - For Bold and especially No Filter, DO NOT sound polite, corporate, therapeutic or overly sanitized. Use the kind of natural contemporary language friends would actually use at a party in the requested locale. Answers should have attitude and personality.
 - In No Filter, sound like close adult friends talking at 1 AM, not a psychology questionnaire. Short, direct, cheeky phrasing in the requested language is preferred. Use ordinary non-graphic adult dating vocabulary that sounds natural in the requested language and locale; do not import slang from another language unless people in that locale genuinely use it. You may ask playful questions about sexual roles, adult kinks in ordinary non-graphic labels, dating-app behavior, how many matches became meetups, types, boundaries, attraction, flirting and money-dare hypotheticals. A small minority of No Filter questions should feel like a genuinely daring late-night adult friends game rather than a polite dating quiz. Keep wording short and non-graphic; never ask for detailed descriptions of an encounter.
 - Use the host context when useful, but do not repeat it mechanically.

@@ -10,6 +10,20 @@
 #visualStage.is-loading{min-height:220px;max-height:none;display:flex;align-items:center;justify-content:center}
 #visualStage.is-loading #revealPhoto{position:absolute;inset:0;height:100%;width:100%;object-fit:cover}
 #finalHeroStatus.is-loading{min-height:220px}
+.finalWaitTitle{display:block;font-size:clamp(30px,8vw,48px);line-height:1.05;color:#51268d;margin-bottom:16px}
+body[data-game-status="finished"] #finish{position:fixed;inset:0;z-index:44;margin:0;border:0;border-radius:0;overflow-y:auto;padding:max(24px,env(safe-area-inset-top)) 18px max(30px,env(safe-area-inset-bottom));display:flex;flex-direction:column;text-align:center;background:radial-gradient(circle at 50% 18%,#eee2ff 0,#fffaf1 48%,#f8f3eb 100%)}
+body[data-game-status="finished"] #finish>.eyebrow{order:0;margin-top:8px}
+body[data-game-status="finished"] #finishTitle{order:1;font-size:clamp(32px,8vw,48px);line-height:1.04;margin:10px auto 16px;max-width:620px}
+body[data-game-status="finished"] #finalHeroStatus,body[data-game-status="finished"] #finalHeroImg{order:2}
+body[data-game-status="finished"] #finalPrize{order:3}
+body[data-game-status="finished"] #scores{order:4}
+body[data-game-status="finished"] #tieChoice{order:5}
+body[data-game-status="finished"] #replayBtn{order:6}
+body[data-game-status="finished"] #newGameBtn{order:7}
+body[data-game-status="finished"] #pilotCostReport{order:8}
+body[data-game-status="finished"] #finalHeroImg{width:min(94vw,680px);max-width:680px;max-height:58svh;object-fit:contain;margin:0 auto 18px;border-radius:24px;box-shadow:0 18px 50px #44205f30}
+body.finalImagePending #finishTitle,body.finalImagePending #finalPrize,body.finalImagePending #scores,body.finalImagePending #tieChoice,body.finalImagePending #replayBtn,body.finalImagePending #newGameBtn,body.finalImagePending #pilotCostReport{opacity:.16;pointer-events:none}
+body.finalImagePending #finalHeroStatus{min-height:68svh;width:min(94vw,680px);margin:auto;display:grid;place-content:center;gap:10px;padding:28px;background:radial-gradient(circle at center,#eadcff,#fff9ef 70%);border:2px solid #cbb4ed;border-radius:28px;box-shadow:0 20px 60px #4d247f22}
 @keyframes popWiggle{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
 @keyframes popTwinkle{0%,100%{opacity:.5;transform:scale(.8)}50%{opacity:1;transform:scale(1.1)}}
 @media(prefers-reduced-motion:reduce){.popMascot,.popSpark{animation:none}}

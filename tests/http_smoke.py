@@ -222,7 +222,7 @@ try:
     request(f'/api/{new_code}/replay', {'host': keep['host']}, expected=409)
     print('HTTP_FRESH_ROOM_PRESERVES_ACTIVE_CREW_OK')
 
-    # Callback rounds advance without the removed Match Twist secret-answer gate.
+    # Old callback slots now serve a fresh grounded question and still advance.
     no_match = request('/api/create', {'name': 'Dana', 'topics': [], 'spice': 1, 'rounds': 8, 'client_id': 'no-match-a'})
     no_match_b = request('/api/join', {'code': no_match['code'], 'name': 'Noa', 'client_id': 'no-match-b'})
     request(f"/api/{no_match['code']}/start", {'host': no_match['host']})
@@ -236,14 +236,15 @@ try:
         db.execute("UPDATE games SET round_no=4,answer='',memory=? WHERE id=?", (json.dumps(callback_memory, ensure_ascii=False), no_match_game['id']))
         db.execute('DELETE FROM guesses WHERE game_id=?', (no_match_game['id'],))
     callback_state = request(f"/api/state/{no_match['code']}?token={no_match['token']}")
-    assert 'callback' in callback_state['type'] and callback_state['interactive_match'] is None
+    assert 'callback' not in callback_state['type'] and callback_state['interactive_match'] is None
+    assert 'עכשיו זה באמת קורה' not in callback_state['question']
     subject_token = no_match['token'] if callback_state['subject']['name'] == 'Dana' else no_match_b['token']
     guess_token = no_match_b['token'] if subject_token == no_match['token'] else no_match['token']
     callback_answer = callback_state['options'][0]
     request(f"/api/{no_match['code']}/answer", {'token': subject_token, 'answer': callback_answer})
     request(f"/api/{no_match['code']}/guess", {'token': guess_token, 'guess': callback_answer})
     request(f"/api/{no_match['code']}/next", {'host': no_match['host']})
-    print('HTTP_MATCH_TWIST_GATE_REMOVED_OK')
+    print('HTTP_LEGACY_CALLBACK_REMOVED_OK')
 
 
     # Adult intimacy is 18+ even when the room is not No Filter.

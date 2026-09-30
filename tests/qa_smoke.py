@@ -23,7 +23,7 @@ for rn in range(8):
  typ,text,opts,sub=k.qdata(g,ps)
  assert sub is not None and text and len(opts)>=2, (rn,typ,text,opts)
 
-# Memory-based PlotTwist should stay playable and produce concrete options.
+# Prior answers must not trigger the retired "now it really happens" callback.
 with k.cn() as c:
  c.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
   {'round':0,'subject':'Eran','question':'עם מי Eran היה יוצא לחופשה?','answer':'Shai','type':'room'},
@@ -31,8 +31,8 @@ with k.cn() as c:
   {'round':2,'subject':'Avi','question':'מי Avi סומך עליו?','answer':'Eran','type':'room'}
  ]),g['id']))
 g=k.game('QA123');typ,text,opts,sub=k.qdata(g,ps)
-assert str(typ).startswith('callback') and len(opts)>=2
-assert k.interactive_prompt(g,typ,text,opts[0],sub) is not None
+assert 'callback' not in str(typ) and len(opts)>=2
+assert 'עכשיו זה באמת קורה' not in text
 print('QA_SMOKE_OK')
 
 # Two-player / couples mode: every round must remain guessable.
