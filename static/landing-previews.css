@@ -1,0 +1,48 @@
+/* Faithful English flow previews; the AI scene comes from a real playtest. */
+.preview-screen{height:100%;overflow:hidden;padding:20px 15px 38px;display:flex;flex-direction:column;align-items:stretch;gap:9px;background:#fffcf8;color:#2d213b;text-align:center;font-size:13px}
+.preview-kicker{font-size:11px;letter-spacing:.14em;color:#6534c2;font-weight:900;text-align:right}
+.preview-avatar{width:54px;height:54px;margin:6px auto 4px;border-radius:17px;background:#e8daf9;border:2px solid #c4aae8;display:grid;place-items:center;color:#5829af;font-size:24px;font-weight:900}
+.preview-question{font-size:17px;line-height:1.25;font-weight:850;letter-spacing:-.02em}
+.preview-hint{color:#74677e;font-size:12px;line-height:1.35;margin-bottom:4px}
+.preview-option{background:#eee5f9;border:1px solid #d0baea;border-radius:11px;padding:8px 10px;text-align:left;font-weight:750;color:#4b346d;box-shadow:0 2px 0 #d7c2ec}
+.preview-reveal{background:linear-gradient(150deg,#f5edff,#fffcf7 72%);align-items:center;justify-content:flex-start}
+.preview-reveal strong{font-size:18px;line-height:1.2}
+.preview-reveal .preview-option{width:100%}
+.preview-ai-photo{display:block;width:100%;height:62%;max-height:215px;object-fit:cover;object-position:center 56%;border-radius:15px;margin:5px 0 3px;background:#e9e1f2}
+.preview-result{background:#f1ecfa}
+.preview-confetti{font-size:43px;color:#753bd0;margin:19px 0}
+.preview-chat{background:#fbf8ff;gap:12px}
+.chat-bubble{max-width:91%;padding:13px;border-radius:14px 14px 14px 3px;background:#eee5fb;text-align:left;color:#3c2b54;font-weight:650}
+.chat-bubble.from-me{align-self:flex-end;background:#733ddb;color:white;border-radius:14px 14px 3px 14px}
+.chat-reactions{margin-top:auto;border-radius:30px;background:white;border:1px solid #e3d4f5;padding:10px;font-size:19px;letter-spacing:.08em}
+.chat-input{border:1px solid #d6c4eb;background:white;border-radius:12px;text-align:left;padding:10px;color:#93879f;font-weight:500;font-size:12px;display:flex;justify-content:space-between}
+.chat-input span{color:#733ddb}
+.phone .preview-screen{padding-top:23px}
+.phone .preview-question{font-size:18px}
+.phone .preview-ai-photo{height:59%;max-height:250px}
+.shot .preview-screen{padding:17px 12px 13px;gap:7px}
+.shot .preview-question{font-size:16px}
+.shot .preview-ai-photo{height:64%;max-height:none}
+.shot .preview-reveal strong{font-size:17px}
+.shot .preview-confetti{margin:10px 0;font-size:35px}
+@media(max-width:620px){
+ .phone .preview-screen{padding:12px 8px 25px;gap:5px}
+ .phone .preview-kicker{font-size:8px}
+ .phone .preview-avatar{width:33px;height:33px;border-radius:11px;font-size:16px;margin:1px auto}
+ .phone .preview-question{font-size:11px}
+ .phone .preview-hint{font-size:8px}
+ .phone .preview-option{padding:5px;font-size:9px;border-radius:7px}
+ .phone .preview-ai-photo{height:62%;margin:1px 0}
+ .phone .preview-reveal strong{font-size:11px}
+ .shot .preview-screen{padding:12px 8px;gap:5px}
+ .shot .preview-kicker{font-size:8px}
+ .shot .preview-avatar{width:31px;height:31px;font-size:15px;border-radius:9px;margin:1px auto}
+ .shot .preview-question{font-size:11px}
+ .shot .preview-hint{font-size:8px}
+ .shot .preview-option{font-size:9px;padding:5px}
+ .shot .preview-reveal strong{font-size:11px}
+ .shot .preview-confetti{font-size:24px;margin:8px 0}
+ .shot .chat-bubble{font-size:10px;padding:8px}
+ .shot .chat-reactions{font-size:13px;padding:6px}
+ .shot .chat-input{font-size:9px;padding:6px}
+}
