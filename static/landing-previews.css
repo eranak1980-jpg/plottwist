@@ -46,3 +46,7 @@
  .shot .chat-reactions{font-size:13px;padding:6px}
  .shot .chat-input{font-size:9px;padding:6px}
 }
+.photo-window{width:100%;height:60%;max-height:250px;overflow:hidden;border-radius:15px;margin:5px 0 3px;background:#e9e1f2;flex:0 0 auto}
+.photo-window .preview-ai-photo{width:100%;height:100%;max-height:none;margin:0;border-radius:0;object-fit:cover;object-position:center 56%;transform:scale(1.8)}
+.shot .photo-window{height:64%;max-height:none}
+@media(max-width:620px){.phone .photo-window{height:62%;margin:1px 0}}
