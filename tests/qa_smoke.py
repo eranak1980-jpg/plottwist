@@ -10,6 +10,7 @@ def make_game(rounds=8,spice=1):
  with k.cn() as c:
   cur=c.execute("INSERT INTO games(code,host,status,round_no,topics,custom_context,spice,custom_questions,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",('QA123','host','playing',0,'[]','',spice,'[]','QA Prize',rounds,k.now()))
   gid=cur.lastrowid
+  c.execute("UPDATE games SET language='he' WHERE id=?",(gid,))
   for name in ['Eran','Shai','Avi']:
    c.execute("INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)",(gid,name,name.lower(),k.now()))
  return k.game('QA123')
@@ -26,7 +27,7 @@ for rn in range(8):
 # Prior answers must not trigger the retired "now it really happens" callback.
 with k.cn() as c:
  c.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
-  {'round':0,'subject':'Eran','question':'עם מי Eran היה יוצא לחופשה?','answer':'Shai','type':'room'},
+  {'round':0,'subject':'Eran','question':'מי Eran מכיר?','answer':'Shai','type':'room'},
   {'round':1,'subject':'Shai','question':'מה Shai היה עושה בדייט?','answer':'זורם','type':'know'},
   {'round':2,'subject':'Avi','question':'מי Avi סומך עליו?','answer':'Eran','type':'room'}
  ]),g['id']))
@@ -39,6 +40,7 @@ print('QA_SMOKE_OK')
 with k.cn() as db:
  cur=db.execute("INSERT INTO games(code,host,status,round_no,topics,custom_context,spice,custom_questions,prize,rounds,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",('DUO12','host','playing',0,'[]','couple',1,'[]','',8,k.now()))
  gid=cur.lastrowid
+ db.execute("UPDATE games SET language='he' WHERE id=?",(gid,))
  for name in ['Dana','Noa']:
   db.execute("INSERT INTO players(game_id,name,token,joined) VALUES(?,?,?,?)",(gid,name,name.lower(),k.now()))
 duo=k.game('DUO12');dps=k.players(duo['id'])
@@ -73,18 +75,20 @@ g=k.game('QA123');typ2,text2,opts2,sub2=k.qdata(g,ps)
 assert text2!=text,(text,text2)
 print('QA_NO_REPEAT_OK')
 
-# Duo callback prompts themselves must not repeat a previously played callback.
+# A follow-up must add a concrete new decision, and never replay its source.
 duo=k.game('DUO12');dps=k.players(duo['id'])
 with k.cn() as db:
  db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(4,json.dumps([
   {'round':0,'subject':dps[0]['name'],'question':'Q0','answer':'טיסה וחופשה מטורפת','type':'know'},
   {'round':1,'subject':dps[1]['name'],'question':'Q1','answer':'שבוע של בית ומנוחה','type':'know'},
-  {'round':2,'subject':dps[0]['name'],'question':'Q2','answer':'אי טרופי','type':'know'}
+  {'round':2,'subject':dps[0]['name'],'question':f'במסעדה הזמינו חשבון משותף, אבל {dps[0]["name"]} הזמין/ה הרבה יותר מכולם. איך מחלקים?','answer':'מתחלקים שווה','type':'know'}
  ],ensure_ascii=False),duo['id']))
 duo=k.game('DUO12');cb=k.duo_callback(duo,dps,4)
+assert cb, 'Expected a specific consequence from the earlier bill choice'
 if cb:
  first=cb[1]
- assert 'Q2' in first and 'אי טרופי' in first and '\n' in first,first
+ assert 'בקשה להחזיר כסף' in first and 'מתחלקים שווה' in first,first
+ assert 'עכשיו זה באמת קורה' not in first,first
  first_match=k.interactive_match_data(duo,cb[0],cb[1],cb[3])
  mm=k.mem(duo)+[{'round':4,'subject':cb[3]['name'],'question':first,'answer':cb[2][0],'type':'duo_callback'}]
  with k.cn() as db:db.execute("UPDATE games SET round_no=?,memory=? WHERE id=?",(6,json.dumps(mm,ensure_ascii=False),duo['id']))
@@ -95,6 +99,25 @@ if cb:
   second_match=k.interactive_match_data(duo,cb2[0],cb2[1],cb2[3])
   assert first_match and second_match and first_match['prompt']!=second_match['prompt'],(first_match,second_match,k.mem(duo))
 print('QA_DUO_CALLBACK_NO_REPEAT_OK')
+
+# The group's heightened question names real players, and its sequel changes
+# the stakes instead of asking for the original choice again.
+g=k.game('QA123');ps=k.players(g['id'])
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=2,memory='[]' WHERE id=?",(g['id'],))
+g=k.game('QA123');typ,text,opts,sub=k.qdata(g,ps)
+assert typ=='room' and len(opts)==2 and any(w in text for w in ('רכב','רפסודה','הופעה','תוכנית טלוויזיה','חופשה')),(typ,text,opts)
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
+  {'round':0,'subject':'Eran','question':'הודעה בקבוצה','answer':'עונה','type':'know'},
+  {'round':1,'subject':'Shai','question':'ארוחת ערב','answer':'מזמין','type':'know'},
+  {'round':2,'subject':sub['name'],'question':text,'answer':opts[0],'type':'room'},
+  {'round':3,'subject':'Eran','question':'נסיעה בבוקר','answer':'אוטובוס','type':'know'},
+ ],ensure_ascii=False),g['id']))
+g=k.game('QA123');cb=k.smart_callback(g,ps,4)
+assert cb and cb[0]=='callback' and opts[0] in cb[1] and 'עכשיו זה באמת קורה' not in cb[1],cb
+assert len(set(cb[2]))==4,cb
+print('QA_SOCIAL_SPARK_CALLBACK_OK')
 
 # Scoring must be idempotent and survive a state/reveal race.
 with k.cn() as db:
