@@ -137,7 +137,7 @@ def generate_pack(topics,context,spice,language='en'):
  names={'en':'English','es':'Spanish','pt-BR':'Brazilian Portuguese','fr':'French','ja':'Japanese','he':'Hebrew'}
  natural={'en':'natural contemporary English used by friends at a party','es':'natural contemporary Spanish that sounds native and social, not translated','pt-BR':'natural contemporary Brazilian Portuguese, casual and social, not European Portuguese','fr':'natural contemporary French used by friends, not literal translation','ja':'natural contemporary Japanese used by friends at a casual party, lively and idiomatic, not a literal translation','he':'natural contemporary Hebrew used by friends at a party'}
  display_topics=topic_labels(topics,language)
- prompt=f"""You design premium social party-game questions for PlotTwist: Know Your Crew.
+ prompt=f"""You design premium social party-game questions for MIPO: The Social Guessing Game.
 Write DIRECTLY in {names[language]}. Do not translate from Hebrew or English. Think and write natively in {natural[language]}.
 All player-facing question text and answer options must be in {names[language]}. Player names stay unchanged.
 All players are adults when spice=3.
