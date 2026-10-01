@@ -1,4 +1,4 @@
-# Native-language copy and fallback question packs for PlotTwist.
+# Native-language copy and fallback question packs for MIPO.
 # Canonical topic keys remain Hebrew internally so multilingual support does not
 # require a risky migration of existing rooms/history.
 
@@ -321,7 +321,7 @@ UI_COPY = {
 'en':{
  'home_title':'Who really knows the crew?','home_sub':'One person answers in secret. Everyone else guesses. The game learns your group as you play.',
  'create':'Create game','join':'Join game','create_title':'What kind of night are you having?','name':'Your name','topics':'What do you want to play about?','topics_hint':'Pick a few topics. Open more if you want.',
- 'more':'More topics +','less':'Fewer topics −','rounds':'How many rounds?','spice':'How bold?','prize':'Winner prize (optional)','context':'Tell PlotTwist who you are (optional)','create_room':'Create room',
+ 'more':'More topics +','less':'Fewer topics −','rounds':'How many rounds?','spice':'How bold?','prize':'Winner prize (optional)','context':'Tell MIPO who you are (optional)','create_room':'Create room',
  'join_title':'Join the crew','room_code':'Room code','join_room':'Join','waiting_host':'Waiting for the host to start','start':'Start game','share':'Share link',
  'answer_saved':'Your answer is saved','guess_saved':'Your guess is saved','waiting_others':'Waiting for the other players','waiting_subject':'Waiting for {name} to answer in secret','reveal':'REVEAL','next':'Next question →',
  'finish':'Who knows the crew best?','play_again':'Play again with the same crew','new_game':'New game','how_title':'How to play','how1':'One player answers in secret.','how2':'Everyone else predicts their answer.','how3':'Correct guess = 1 point.','how4':'Do not reveal the answer before the Reveal.','got_it':'Got it — start',
@@ -331,7 +331,7 @@ UI_COPY = {
 'es':{
  'home_title':'¿Quién conoce de verdad al grupo?','home_sub':'Una persona responde en secreto. Los demás adivinan. El juego aprende cómo sois mientras jugáis.',
  'create':'Crear partida','join':'Unirse','create_title':'¿Qué tipo de noche os apetece?','name':'Tu nombre','topics':'¿Sobre qué queréis jugar?','topics_hint':'Elige varios temas. Puedes abrir más cuando quieras.',
- 'more':'Más temas +','less':'Menos temas −','rounds':'¿Cuántas rondas?','spice':'¿Qué tan atrevido?','prize':'Premio para quien gane (opcional)','context':'Cuéntale a PlotTwist quiénes sois (opcional)','create_room':'Crear sala',
+ 'more':'Más temas +','less':'Menos temas −','rounds':'¿Cuántas rondas?','spice':'¿Qué tan atrevido?','prize':'Premio para quien gane (opcional)','context':'Cuéntale a MIPO quiénes sois (opcional)','create_room':'Crear sala',
  'join_title':'Únete al grupo','room_code':'Código de sala','join_room':'Entrar','waiting_host':'Esperando a que el anfitrión empiece','start':'Empezar','share':'Compartir enlace',
  'answer_saved':'Tu respuesta está guardada','guess_saved':'Tu apuesta está guardada','waiting_others':'Esperando al resto','waiting_subject':'Esperando a que {name} responda en secreto','reveal':'REVEAL','next':'Siguiente pregunta →',
  'finish':'¿Quién conoce mejor al grupo?','play_again':'Jugar otra vez con el mismo grupo','new_game':'Nueva partida','how_title':'¿Cómo se juega?','how1':'Una persona responde en secreto.','how2':'Los demás intentan adivinar qué eligió.','how3':'Acierto = 1 punto.','how4':'No reveléis la respuesta antes del Reveal.','got_it':'Entendido — empezar',
@@ -341,7 +341,7 @@ UI_COPY = {
 'pt-BR':{
  'home_title':'Quem conhece a galera de verdade?','home_sub':'Uma pessoa responde em segredo. Todo mundo tenta adivinhar. O jogo aprende sobre vocês enquanto rola.',
  'create':'Criar jogo','join':'Entrar no jogo','create_title':'Que tipo de noite vocês querem?','name':'Seu nome','topics':'Sobre o que vocês querem jogar?','topics_hint':'Escolha alguns temas. Dá pra abrir mais quando quiser.',
- 'more':'Mais temas +','less':'Menos temas −','rounds':'Quantas rodadas?','spice':'Qual o nível de ousadia?','prize':'Prêmio do vencedor (opcional)','context':'Conte ao PlotTwist quem vocês são (opcional)','create_room':'Criar sala',
+ 'more':'Mais temas +','less':'Menos temas −','rounds':'Quantas rodadas?','spice':'Qual o nível de ousadia?','prize':'Prêmio do vencedor (opcional)','context':'Conte ao MIPO quem vocês são (opcional)','create_room':'Criar sala',
  'join_title':'Entre na galera','room_code':'Código da sala','join_room':'Entrar','waiting_host':'Esperando o anfitrião começar','start':'Começar jogo','share':'Compartilhar link',
  'answer_saved':'Sua resposta foi salva','guess_saved':'Seu palpite foi salvo','waiting_others':'Esperando o resto da galera','waiting_subject':'Esperando {name} responder em segredo','reveal':'REVEAL','next':'Próxima pergunta →',
  'finish':'Quem conhece melhor a galera?','play_again':'Jogar de novo com a mesma galera','new_game':'Novo jogo','how_title':'Como jogar?','how1':'Uma pessoa responde em segredo.','how2':'Todo mundo tenta prever a resposta.','how3':'Acertou = 1 ponto.','how4':'Não revele a resposta antes do Reveal.','got_it':'Entendi — começar',
@@ -351,7 +351,7 @@ UI_COPY = {
 'fr':{
  'home_title':'Qui connaît vraiment le groupe ?','home_sub':'Une personne répond en secret. Les autres devinent. Le jeu apprend à vous connaître au fil des manches.',
  'create':'Créer une partie','join':'Rejoindre','create_title':'Vous voulez quelle ambiance ce soir ?','name':'Ton prénom','topics':'Vous voulez jouer sur quoi ?','topics_hint':'Choisissez quelques thèmes. Vous pourrez en afficher davantage.',
- 'more':'Plus de thèmes +','less':'Moins de thèmes −','rounds':'Combien de manches ?','spice':'Quel niveau d’audace ?','prize':'Prix du gagnant (optionnel)','context':'Dites à PlotTwist qui vous êtes (optionnel)','create_room':'Créer la salle',
+ 'more':'Plus de thèmes +','less':'Moins de thèmes −','rounds':'Combien de manches ?','spice':'Quel niveau d’audace ?','prize':'Prix du gagnant (optionnel)','context':'Dites à MIPO qui vous êtes (optionnel)','create_room':'Créer la salle',
  'join_title':'Rejoins le groupe','room_code':'Code de la salle','join_room':'Rejoindre','waiting_host':'En attente du lancement par l’hôte','start':'Commencer','share':'Partager le lien',
  'answer_saved':'Ta réponse est enregistrée','guess_saved':'Ton pronostic est enregistré','waiting_others':'On attend les autres joueurs','waiting_subject':'On attend que {name} réponde en secret','reveal':'REVEAL','next':'Question suivante →',
  'finish':'Qui connaît le mieux le groupe ?','play_again':'Rejouer avec le même groupe','new_game':'Nouvelle partie','how_title':'Comment jouer ?','how1':'Une personne répond en secret.','how2':'Les autres essaient de deviner sa réponse.','how3':'Bonne réponse = 1 point.','how4':'Ne révélez rien avant le Reveal.','got_it':'Compris — on joue',
@@ -361,7 +361,7 @@ UI_COPY = {
 'ar':{
  'home_title':'مين فعلاً يعرف المجموعة؟','home_sub':'شخص واحد يجاوب بالسر، والباقي يحاولون يخمنون. اللعبة تتعلم عنكم مع كل جولة.',
  'create':'أنشئ لعبة','join':'انضم للعبة','create_title':'أي جو تبغونه الليلة؟','name':'اسمك','topics':'عن إيش تبغون تلعبون؟','topics_hint':'اختاروا كم موضوع، وتقدرون تفتحون مواضيع أكثر.',
- 'more':'مواضيع أكثر +','less':'مواضيع أقل −','rounds':'كم جولة؟','spice':'قد إيش تبغونها جريئة؟','prize':'جائزة الفائز (اختياري)','context':'قولوا لـ PlotTwist مين أنتم (اختياري)','create_room':'أنشئ الغرفة',
+ 'more':'مواضيع أكثر +','less':'مواضيع أقل −','rounds':'كم جولة؟','spice':'قد إيش تبغونها جريئة؟','prize':'جائزة الفائز (اختياري)','context':'قولوا لـ MIPO مين أنتم (اختياري)','create_room':'أنشئ الغرفة',
  'join_title':'ادخل مع المجموعة','room_code':'رمز الغرفة','join_room':'انضم','waiting_host':'ننتظر المضيف يبدأ','start':'ابدأ اللعبة','share':'شارك الرابط',
  'answer_saved':'تم حفظ إجابتك','guess_saved':'تم حفظ تخمينك','waiting_others':'ننتظر باقي اللاعبين','waiting_subject':'ننتظر {name} يجاوب بالسر','reveal':'الكشف','next':'السؤال التالي ←',
  'finish':'مين يعرف المجموعة أكثر؟','play_again':'العبوا مرة ثانية بنفس المجموعة','new_game':'لعبة جديدة','how_title':'كيف نلعب؟','how1':'لاعب واحد يجاوب بالسر.','how2':'الباقي يحاولون يخمنون اختياره.','how3':'تخمين صحيح = نقطة.','how4':'لا تكشفون الإجابة قبل مرحلة الكشف.','got_it':'فهمت — نبدأ',
@@ -371,7 +371,7 @@ UI_COPY = {
 'he':{
  'home_title':'מי באמת מכיר את החבורה?','home_sub':'אחד עונה בסוד. כולם מנחשים. המשחק לומד אתכם תוך כדי.',
  'create':'צור משחק','join':'הצטרף למשחק','create_title':'איזה ערב בא לכם?','name':'השם שלך','topics':'על מה בא לכם לשחק?','topics_hint':'בחרו כמה נושאים. אפשר לפתוח עוד.',
- 'more':'עוד נושאים +','less':'פחות נושאים −','rounds':'כמה סיבובים?','spice':'רמת החריפות','prize':'פרס למנצח (אופציונלי)','context':'ספרו ל־PlotTwist מי אתם (אופציונלי)','create_room':'צור חדר',
+ 'more':'עוד נושאים +','less':'פחות נושאים −','rounds':'כמה סיבובים?','spice':'רמת החריפות','prize':'פרס למנצח (אופציונלי)','context':'ספרו ל־MIPO מי אתם (אופציונלי)','create_room':'צור חדר',
  'join_title':'נכנסים לחבורה','room_code':'קוד חדר','join_room':'הצטרף','waiting_host':'מחכים למארח להתחיל','start':'מתחילים','share':'שתף לינק',
  'answer_saved':'התשובה נשמרה','guess_saved':'הניחוש נשמר','waiting_others':'מחכים לשאר השחקנים','waiting_subject':'מחכים ל־{name} לענות בסוד','reveal':'REVEAL','next':'לשאלה הבאה →',
  'finish':'מי מכיר את החבורה הכי טוב?','play_again':'עוד משחק עם אותה חבורה','new_game':'משחק חדש','how_title':'איך משחקים?','how1':'אחד השחקנים עונה בסוד.','how2':'האחרים מנסים לנחש מה הוא בחר.','how3':'ניחוש נכון = נקודה.','how4':'לא מגלים את התשובה לפני ה־Reveal.','got_it':'הבנתי — מתחילים',
@@ -434,7 +434,7 @@ CALLBACK_COPY['ja'] = {
 UI_COPY['ja'] = {
  'home_title':'本当にみんなのことを知ってるのは誰？','home_sub':'1人が秘密で答える。みんながその答えを予想する。遊ぶほど、グループのことが見えてくる。',
  'create':'ゲームを作る','join':'ゲームに参加','create_title':'今日はどんな夜にする？','name':'あなたの名前','topics':'何について遊ぶ？','topics_hint':'いくつかテーマを選んでください。必要ならもっと表示できます。',
- 'more':'テーマをもっと見る +','less':'テーマを減らす −','rounds':'何ラウンド？','spice':'どこまで攻める？','prize':'勝者への賞品（任意）','context':'あなたたちのことをPlotTwistに教えて（任意）','create_room':'ルームを作る',
+ 'more':'テーマをもっと見る +','less':'テーマを減らす −','rounds':'何ラウンド？','spice':'どこまで攻める？','prize':'勝者への賞品（任意）','context':'あなたたちのことをMIPOに教えて（任意）','create_room':'ルームを作る',
  'join_title':'グループに参加','room_code':'ルームコード','join_room':'参加する','waiting_host':'ホストが始めるのを待っています','start':'ゲーム開始','share':'リンクを共有',
  'answer_saved':'答えを保存しました','guess_saved':'予想を保存しました','waiting_others':'ほかのプレイヤーを待っています','waiting_subject':'{name}が秘密で答えるのを待っています','reveal':'REVEAL','next':'次の質問 →',
  'finish':'一番みんなを知っていたのは誰？','play_again':'同じメンバーでもう一度','new_game':'新しいゲーム','how_title':'遊び方','how1':'1人が秘密で答えます。','how2':'ほかの人はその答えを予想します。','how3':'正解 = 1ポイント。','how4':'Revealまでは答えを言わないでください。','got_it':'OK — スタート',
