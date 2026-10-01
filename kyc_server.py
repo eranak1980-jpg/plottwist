@@ -5,7 +5,7 @@ from datetime import datetime,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
-from kyc_questions import GENERAL,EVERYDAY_CORE,TOPICS,SPICY,BOLD_COMEDY
+from kyc_questions import GENERAL,EVERYDAY_CORE,TOPICS,SPICY,BOLD_COMEDY,SOCIAL_SPARK
 from kyc_visuals import generate_many,decode_image,MODEL,warm_image_runtime
 import kyc_image_jobs as image_jobs
 import kyc_budget as budget
@@ -283,33 +283,49 @@ def _callback_source_text(entry):
  # Callback cards must stay readable on a phone and must not quote malformed data.
  if len(question)>220 or len(answer)>90:return None
  return question,answer
-def smart_callback(g,ps,rn):
- m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'];total=total_rounds(g);marks=sorted(set([max(4,total//3),max(6,(total*2)//3),max(7,total-2)]))
- if rn not in marks or len(m)<3:return None
- names=[p['name'] for p in ps]
- room=[e for e in m if e.get('answer') in names and e.get('answer')!=e.get('subject')]
- if room:
-  e=room[-1];sub=next((p for p in ps if p['name']==e.get('subject')),None);friend=e.get('answer');q=(e.get('question') or '').lower()
-  if sub:
-   if any(k in q for k in ['טיול','חופשה','אי בודד','טיסה','מדינה']):
-    text=f'⚡ PLOT TWIST: {sub["name"]} כבר בחר/ה ב־{friend} כשותף/ה להרפתקה. הטיסה יוצאת בעוד שעתיים ואין שום תוכנית. מה {sub["name"]} חושב/ת ש־{friend} יעשה/תעשה ראשון?'
-    opts=['אומר/ת “יאללה, מזמינים”','פותח/ת מיד מפות ומלונות','נלחץ/ת ומתחיל/ה לשאול שאלות','דואג/ת קודם לדרינק ואז נראה']
-   elif any(k in q for k in ['דייט','גריינדר','היכרויות','crush']):
-    text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה ב־{friend}. עכשיו מגיע דייט שנראה כמו צרות מהשנייה הראשונה. איזו עצה {sub["name"]} חושב/ת ש־{friend} ייתן/תיתן?'
-    opts=['לך/י על זה — חיים פעם אחת','תברח/י עכשיו','תן/י לזה דרינק אחד','שלח/י לי לייב מה קורה']
-   elif any(k in q for k in ['עסק','50%','כסף','תקציב']):
-    text=f'⚡ PLOT TWIST: {sub["name"]} כבר שם/ה את האמון ב־{friend}. עכשיו נוחתים עליכם 50,000 ₪ שחייבים להוציא יחד עד חצות. על מה {sub["name"]} חושב/ת ש־{friend} ישרוף/תשרוף אותם?'
-    opts=['טיסה ברגע האחרון','מסיבה מוגזמת','משהו יוקרתי ומיותר','חוויה לכל החבורה']
-   else:
-    text=f'⚡ PLOT TWIST: קודם {sub["name"]} בחר/ה ב־{friend}. עכשיו שניהם תקועים יחד בסיטואציה שלא תכננו. מי {sub["name"]} חושב/ת שייקח/תיקח פיקוד ראשון?'
-    opts=[sub['name'],friend]
-   return 'callback',text,opts,sub
- e=next((x for x in reversed(m[:-1] or m) if _callback_source_text(x)),None);sub=next((p for p in ps if e and p['name']==e.get('subject')),None)
- if sub:
-  old_question,old=_callback_source_text(e)
-  text=f'⚡ PLOT TWIST\nהשאלה הקודמת: „{old_question}”\n{sub["name"]} ענה/תה: „{old}”\nעכשיו זה באמת קורה. מה {sub["name"]} עושה קודם?'
-  return 'callback',text,['לזרום עם זה מיד','לבדוק קודם מה באמת קורה','לשנות את התוכנית','לצרף מישהו לעזרה'],sub
+def meaningful_callback(g,ps,rn,duo=False):
+ """Build a new social decision from a real earlier choice, never a replay."""
+ if game_language(g)!='he' or tie_data(g):return None
+ total=total_rounds(g)
+ marks=([max(4,total//2)] if total<=8 else [max(4,total//3),max(7,2*total//3)] if total<=12 else [max(4,total//4),max(8,total//2),max(12,3*total//4)])
+ if rn not in marks:return None
+ history=mem(g)
+ if len(history)<3:return None
+ used_sources={e.get('callback_source_round') for e in history if e.get('callback_source_round') is not None}
+ # The source must give the sequel a specific consequence. Other prior
+ # answers are deliberately ignored; generic callbacks were the complaint.
+ for e in reversed(history):
+  source=_callback_source_text(e)
+  if not source or e.get('round') in used_sources:continue
+  sub=next((p for p in ps if p['name']==e.get('subject')),None)
+  if not sub:continue
+  question,answer=source;q=question.lower();name=sub['name']
+  if any('callback' in str(prior.get('type','')) and name in str(prior.get('question','')) and answer in str(prior.get('question','')) for prior in history):continue
+  friend=answer if answer in [p['name'] for p in ps if p['id']!=sub['id']] else None
+  if friend and ('שני מושבים' in q or 'רכב ספורט' in q):
+   text=f'⚡ קודם {name} בחר/ה לקחת את {friend} ראשון/ה ברכב החדש. {friend} מעלה תמונה וכותב/ת: “הרכב שלנו!” איך {name} מגיב/ה?'
+   options=['זורם/ת עם הבדיחה','מגיב/ה: “שלי, בעצם”','מעלה תמונה לבד עם הרכב','מבקש/ת למחוק את הכיתוב']
+  elif friend and ('רפסודה' in q or 'כרישים' in q):
+   text=f'⚡ קודם {name} משך/ה את {friend} ראשון/ה מהרפסודה. על החוף {friend} מספר/ת לכולם שהוא/היא הציל/ה את {name}. מה התגובה?'
+   options=['נותן/ת לו/לה את הקרדיט','מתקן/ת את הסיפור מול כולם','צוחק/ת ושואל/ת מי הבא בתור','מבקש/ת ממנו/ה לספר שוב']
+  elif friend and ('כרטיס זוגי' in q or 'הופעה' in q):
+   text=f'⚡ קודם {name} הזמין/ה את {friend} להופעה. {friend} רוצה למכור את הכרטיס שלו/ה ברווח ולהשאיר את {name} לבד. מה {name} עושה?'
+   options=['הולך/ת לבד ונהנה/ית','מבקש/ת לבחור אורח/ת אחר/ת','מציע/ה להתחלק ברווח','מנסה לשכנע אותו/ה לבוא']
+  elif friend and ('חופשה' in q or 'טיול' in q):
+   text=f'⚡ קודם {name} בחר/ה את {friend} לחופשה. ביום הראשון {friend} רוצה להישאר במלון ו־{name} רוצה לצאת. מה {name} מציע/ה?'
+   options=['יוצא/ת לבד','נשאר/ת עם החבר/ה','קובע/ת להיפגש בערב','משכנע/ת לעשר דקות בחוץ']
+  elif 'תמונה לא מחמיאה' in q and answer in ('צוחק/ת ומגיב/ה','שולח/ת תמונה גרועה יותר','מתעלם/ת'):
+   text=f'⚡ קודם {name} בחר/ה להגיב לתמונה הלא מחמיאה ב־“{answer}”. עכשיו מישהו שולח אותה לקבוצת המשפחה. מה עושים?'
+   options=['מבקש/ת שימחקו','מעלה תמונה טובה לפיצוי','צוחק/ת עם המשפחה','שואל/ת מי שלח אותה']
+  elif 'חשבון משותף' in q and answer in ('מתחלקים שווה','מחכה שמישהו יעלה את זה'):
+   text=f'⚡ קודם {name} בחר/ה: “{answer}” בחשבון המסעדה. אחר כך חבר/ה שולח/ת לו/לה בקשה להחזיר כסף. מה התגובה?'
+   options=['משלם/ת בלי ויכוח','מבקש/ת לחשב מחדש','שולח/ת צילום של החשבון','מציע/ה לשלם בפעם הבאה']
+  else:continue
+  cb=('duo_callback' if duo else 'callback',text,options,sub)
+  if novel_callback(cb,g,ps):return cb
  return None
+def smart_callback(g,ps,rn):
+ return meaningful_callback(g,ps,rn)
 def interactive_match_data(g,typ,text,sub):
  if tie_data(g) or 'callback' not in str(typ) or not sub:return None
  ps=players(g['id']);active=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1];by_name={p['name']:p for p in active}
@@ -382,30 +398,15 @@ def match_equal(a,b):
   return SequenceMatcher(None,ka,kb).ratio()>=0.9
  except:return False
 def duo_callback(g,ps,rn):
- m=[e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED']
- if len(ps)!=2 or rn<4 or rn not in (4,6,9,12,15) or len(m)<3:return None
- sub=ps[rn%2];mine=[e for e in reversed(m) if e.get('subject')==sub['name'] and _callback_source_text(e)]
- if not mine:return None
- used={question_key(e.get('question',''),ps) for e in m};old_question,old=_callback_source_text(mine[0])
- variants=[
-  ('⚡ PLOT TWIST\nהשאלה הקודמת: „{question}”\n{name} ענה/תה: „{old}”\nעכשיו זה באמת קורה. מה {name} עושה קודם?',['זורם/ת עם זה מיד','בודק/ת קודם מה באמת קורה','משנה את התוכנית','מצרף/ת מישהו לעזרה']),
-  ('⚡ PLOT TWIST\nקודם שאלנו: „{question}”\nהתשובה של {name}: „{old}”\nעכשיו צריך להחליט באמת. מה {name} בוחר/ת?',['נשאר/ת עם הבחירה','מבקש/ת עוד פרטים','בוחר/ת משהו אחר','מעלה את הרף']),
-  ('⚡ PLOT TWIST\n{name} ענה/תה „{old}” על השאלה: „{question}”\nעכשיו מציעים לעשות את זה במציאות. איך {name} מגיב/ה?',['יאללה, הולכים על זה','רק אחרי שבודקים הכול','רק אם מישהו מצטרף','עדיף להשאיר את זה בתיאוריה'])
- ]
- seed=(rn+sum(ord(x) for x in str(g['code'])))%len(variants)
- for off in range(len(variants)):
-  template,opts=variants[(seed+off)%len(variants)];text=template.format(name=sub['name'],question=old_question,old=old)
-  if not too_similar(question_key(text,ps),used):return 'duo_callback',text,opts,sub
- return None
+ return meaningful_callback(g,ps,rn,duo=True) if len(ps)==2 else None
 def qdata(g,ps):
  rn=int(g['round_no']);tb=tie_data(g);order=tb.get('order',[])
  sub=next((p for p in ps if p['id']==order[(rn-tb['start'])%len(order)]),None) if order else (ps[rn%len(ps)] if ps else None)
  if not sub:sub=ps[rn%len(ps)] if ps else None
  lang=game_language(g)
- # Live testing showed that the legacy callback merely repeated an earlier
- # answer and wrapped it in "now it really happens".  That felt confusing and
- # less interesting than a fresh, grounded question, so it is intentionally
- # paused until a genuinely new learning mechanic replaces it.
+ if lang=='he' and not tb:
+  cb=duo_callback(g,ps,rn) if len(ps)==2 else smart_callback(g,ps,rn)
+  if cb:return cb
  selected=effective_topics(g);tailored=custom_questions(g)
  if lang=='he':
   focused=[]
@@ -441,6 +442,13 @@ def qdata(g,ps):
  used={question_key(e.get('question',''),ps) for e in mem(g)}
  used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
+ if lang=='he' and len(ps)>2 and not tb and rn%4==2:
+  spark=[q for q in SOCIAL_SPARK if not ('רפסודה' in q[1] and any(word in str(g['custom_context'] or '').lower() for word in ('ילדים','children','kids')))]
+  for step in range(len(spark)):
+   typ,text,opts=spark[(seed//7+step)%len(spark)]
+   formatted=text.format(s=sub['name'])
+   if not too_similar(question_key(formatted,ps),used):
+    return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']],sub
  chosen=None
  for step in range(len(base)):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])

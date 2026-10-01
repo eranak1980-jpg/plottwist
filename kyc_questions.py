@@ -63,6 +63,16 @@ GENERAL=[
 # Prefer the grounded pack in every mode; the legacy entries remain as a
 # reserve for longer games and for topic combinations that exhaust the core.
 GENERAL = EVERYDAY_CORE + GENERAL
+
+# A small dose of playful, heightened dilemmas. Their payoff is the choice
+# between real people in the room, not a complicated fantasy setup.
+SOCIAL_SPARK=[
+('room','{s} קנה/תה רכב ספורט עם שני מושבים. את מי מהחבורה הוא/היא לוקח/ת לנסיעה הראשונה?',[]),
+('room','כל החבורה על רפסודה, וכרישים מתקרבים. ל־{s} יש מקום למשוך אדם אחד ראשון. את מי הוא/היא מושך/ת?',[]),
+('room','{s} זוכה בכרטיס זוגי להופעה שכל החבורה אוהבת. את מי הוא/היא מזמין/ה?',[]),
+('room','{s} מקבל/ת הזדמנות לבחור שותף/ה לתוכנית טלוויזיה על החבורה. את מי הוא/היא לוקח/ת?',[]),
+('room','{s} יכול/ה לבחור רק אדם אחד מהחבורה לחופשה בהפתעה. מי מקבל/ת את הכרטיס השני?',[]),
+]
 TOPICS={
 'דייטים':[
 ('room','אם {s} נותן/ת למישהו כאן לנהל לו/לה את פרופיל הדייטינג לשבוע — במי הוא/היא בוחר/ת?',[]),
