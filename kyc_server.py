@@ -5,7 +5,7 @@ from datetime import datetime,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
-from kyc_questions import GENERAL,TOPICS,SPICY,BOLD_COMEDY
+from kyc_questions import GENERAL,EVERYDAY_CORE,TOPICS,SPICY,BOLD_COMEDY
 from kyc_visuals import generate_many,decode_image,MODEL,warm_image_runtime
 import kyc_image_jobs as image_jobs
 import kyc_budget as budget
@@ -410,13 +410,24 @@ def qdata(g,ps):
  if lang=='he':
   focused=[]
   for t in selected:focused+=TOPICS.get(t,[])
+  def grounded(text):
+   # Retire the remaining sketch-comedy fallbacks from live selection. The
+   # question should be funny because of a recognizable social moment, not a
+   # robot, celebrity, magic object or impossible stunt.
+   bad=('רובוט','מלפפון','מיליון','תוכי','קריין','גביע עובד','תפקיד קטן בסרט','פנקייק נחת','אדם מפורסם','כרטיס אשראי בלי הגבלה','דלת בבית שמובילה','שש פיצות','ורוד וזוהר','שלוש דקות למלא עגלה','יום אחד שבו אף החלטה','כפתור שמאפשר לחזור שעה','מוזיקת כניסה של נבל')
+   return not any(word in str(text) for word in bad)
+  focused=[q for q in focused if grounded(q[1])]
   if int(g['spice'] or 1)==2:
    broad=not selected or any(t in THEME_ONLY for t in selected)
-   comic=[('know',text,opts) for topic,text,opts in BOLD_COMEDY if (broad or topic in selected) and (topic not in ADULT_TOPICS or topic in selected)]
+   comic=[('know',text,opts) for topic,text,opts in BOLD_COMEDY if grounded(text) and (broad or topic in selected) and (topic not in ADULT_TOPICS or topic in selected)]
    if comic:focused=comic+focused
   if int(g['spice'] or 1)>=3:focused+=SPICY
+  # Ground every game in recognizable daily moments. Topic packs add flavor,
+  # but a narrow topic must not force the fallback into abstract or cartoonish
+  # prompts when the curated everyday pack is available.
   themed=len(selected)==1 and selected[0] in THEME_ONLY
-  base=(tailored+focused) if themed and (tailored or focused) else (tailored+focused+GENERAL if (tailored or focused) else GENERAL)
+  general=[q for q in GENERAL if grounded(q[1])]
+  base=tailored+focused+EVERYDAY_CORE if (tailored or focused) else EVERYDAY_CORE
  else:
   native=general_pack(lang);spicy=spicy_pack(lang) if int(g['spice'] or 1)>=3 else []
   base=tailored+spicy+native
@@ -424,7 +435,7 @@ def qdata(g,ps):
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if q[0]=='know']
  if lang=='he' and int(g['spice'] or 1)==2 and comic:
-  preferred=[q for q in tailored+comic if len(ps)!=2 or q[0]!='room']
+  preferred=[q for q in tailored+comic+EVERYDAY_CORE if len(ps)!=2 or q[0]!='room']
   used_now={question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
   if any(not too_similar(question_key(q[1].format(s=sub['name']),ps),used_now) for q in preferred):base=preferred
  used={question_key(e.get('question',''),ps) for e in mem(g)}
@@ -435,7 +446,7 @@ def qdata(g,ps):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
-  fallback=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if not (len(ps)==2 and q[0]=='room')]
+  fallback=[q for q in (general if lang=='he' else general_pack(lang)) if not (len(ps)==2 and q[0]=='room')]
   for q in fallback:
    typ,text,opts=q;formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break

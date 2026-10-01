@@ -24,7 +24,7 @@ _VAGUE_QUESTION_PATTERNS={
  'pt-BR':(r'\bo que e mais importante para\b',r'\bo que .+ mais valoriza\b',r'\bqual palavra descreve\b',r'\bo que mais combina com\b',r'\bas coisas ficam complicadas\b',r'\bessa escolha\b'),
  'fr':(r'\bqu est ce qui compte le plus pour\b',r'\bque valorise .+ le plus\b',r'\bquel mot decrit\b',r'\bqu est ce qui correspond le mieux\b',r'\bles choses se compliquent\b',r'\bce choix\b'),
  'ja':(r'一番大切なのは',r'最も大事なのは',r'どんな言葉で表す',r'一番合うのは',r'事態が複雑',r'この選択'),
- 'he':(r'\bמה הכי חשוב ל',r'\bמה .+ הכי מעריכ',r'\bאיזו מילה .+ מתאר',r'\bמה הכי מתאים ל',r'\bהדברים מסתבכים\b',r'\bהבחירה הזאת\b')
+ 'he':(r'\bמה הכי חשוב ל',r'\bמה .+ הכי מעריכ',r'\bאיזו מילה .+ מתאר',r'\bמה הכי מתאים ל',r'\bהדברים מסתבכים\b',r'\bהבחירה הזאת\b',r'\bאמיתי\b')
 }
 
 # A party question may be heightened, but it still has to feel like something
