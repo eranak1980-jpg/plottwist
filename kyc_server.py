@@ -603,6 +603,7 @@ class H(BaseHTTPRequestHandler):
    if not g or not host or not secrets.compare_digest(host,g['host']):return self.J({'error':'forbidden'},403)
    with cn() as c:return self.J(budget.report(c,g['id']))
   if p=='/pricing':return self.F(STATIC/'pricing.html')
+  if p=='/play-mipo':return self.F(STATIC/'landing.html')
   if p=='/sw.js':return self.F(STATIC/'sw.js')
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
