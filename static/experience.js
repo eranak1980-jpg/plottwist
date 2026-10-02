@@ -1,5 +1,27 @@
 /* Local companion, audio and accessible score dock. Never delays game actions. */
 (() => {
+  // Commerce guard: server enforcement remains authoritative. This wrapper only
+  // gives the host a clear route to checkout instead of a generic retry toast.
+  const commerceReq=window.req;
+  if(typeof commerceReq==='function'){
+    window.req=async function(path,body){
+      try{
+        const result=await commerceReq(path,body);
+        if(/^\/api\/state\//.test(path)&&result?.is_host&&result.status==='lobby'&&result.access_kind==='paid'&&Number(result.max_rounds||18)<30){
+          setTimeout(()=>{
+            const host=document.getElementById('host');if(!host||document.getElementById('extendGameBtn'))return;
+            const button=document.createElement('button');button.id='extendGameBtn';button.className='mini';button.textContent='✨ Extend to 30 questions · $2.99';
+            button.onclick=()=>{try{sessionStorage.setItem('mipo_extension_auth',JSON.stringify({code:result.code,host:s.host}))}catch(_){}location.href='/checkout?product=extension'};host.appendChild(button);
+          },0);
+        }
+        return result;
+      }catch(error){
+        if(error?.message==='payment_required'||error?.message==='trial_already_used')setTimeout(()=>{location.href='/play-mipo#pricing'},250);
+        throw error;
+      }
+    };
+    try{req=window.req}catch(_){}
+  }
   const labels={
     he:['השתק צלילים','הפעל צלילים','ניקוד','סגור','יש לנו {n} מנצחים!','המנצח: {name}','הפרס לכל זוכה: ','רוצים להכריע?','שובר שוויון: מחזור תורות מלא לכולם. עד 3 מחזורים.','שובר שוויון','חוגגים את התיקו!','תיקו במקום הראשון','הכללים'],
     en:['Mute sounds','Enable sounds','Scores','Close','We have {n} winners!','Winner: {name}','Prize for each winner: ','Break the tie?','A full turn cycle for everyone. Up to 3 cycles.','Tie-break','Celebrate the tie!','Tied for first','Rules'],

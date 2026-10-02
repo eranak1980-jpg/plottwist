@@ -99,7 +99,5 @@ def report(c,gid):
     return {'calls':len(rows),'measured_usd':round(known/1e6,6),'unpriced_calls':len(unknown),'estimated_usd':round((known+sum(r['reserved_micro'] for r in unknown))/1e6,6),'provisional':True,'image_calls':sum(r['kind']=='image' for r in rows),'text_calls':sum(r['kind']=='text' for r in rows)}
 
 def pricing(rounds=18,games=1):
-    if games not in (1,2) or not 8<=rounds<=30:raise ValueError('invalid_quote')
-    base=799 if games==1 else 1299
-    extra=max(0,rounds-18)*49
-    return {'currency':'USD','checkout_enabled':False,'stage':'pilot','single_cents':799,'duo_cents':1299,'included_rounds':18,'extra_question_cents':49,'free_rounds':8,'max_rounds':30,'max_players':6,'games':games,'rounds':rounds,'base_cents':base,'extra_cents':extra,'total_cents':base+extra,'extra_applies_to':'one_game'}
+    from mipo_commerce import quote
+    return quote(rounds,games)

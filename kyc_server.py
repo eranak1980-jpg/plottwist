@@ -1,7 +1,7 @@
 import json,os,random,secrets,sqlite3,mimetypes
 from threading import Thread,Lock,local
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
@@ -10,10 +10,23 @@ from kyc_visuals import generate_many,decode_image,MODEL,warm_image_runtime
 import kyc_image_jobs as image_jobs
 import kyc_budget as budget
 import kyc_instant as instant
+import mipo_commerce as commerce
+import mipo_analytics as analytics
 from kyc_ai import generate_pack
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
 def now():return datetime.now(timezone.utc).isoformat()
+def retention_cleanup(c):
+ """Remove personal gameplay payloads after 30 days; keep minimal room rows."""
+ game_cutoff=(datetime.now(timezone.utc)-timedelta(days=30)).isoformat()
+ analytics_cutoff=(datetime.now(timezone.utc)-timedelta(days=426)).isoformat()
+ old=[r['id'] for r in c.execute('SELECT id FROM games WHERE created<?',(game_cutoff,)).fetchall()]
+ for gid in old:
+  c.execute("UPDATE games SET answer='',memory='[]',custom_context='',custom_questions='[]',prize='' WHERE id=?",(gid,))
+  c.execute("UPDATE players SET photo_data='',name='Player ' || id WHERE game_id=?",(gid,))
+  for table in ('guesses','hero_scenes','instant_scenes','image_jobs','chat_messages','match_answers'):
+   c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
+ c.execute('DELETE FROM analytics_events WHERE created<?',(analytics_cutoff,))
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
 def recently_seen(p,timeout=PRESENCE_TIMEOUT):
  raw=(p['last_seen'] if 'last_seen' in p.keys() else '') or (p['joined'] if 'joined' in p.keys() else '')
@@ -99,23 +112,28 @@ def init():
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS image_run INTEGER DEFAULT 0")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS tiebreak TEXT DEFAULT '{}'")
-   image_jobs.init_jobs(c);instant.init(c);budget.init(c)
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS owner_key TEXT DEFAULT ''")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS access_kind TEXT DEFAULT 'pilot'")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS entitlement_id TEXT DEFAULT ''")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS max_rounds INTEGER DEFAULT 30")
+   image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c);retention_cleanup(c)
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
   c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,language TEXT DEFAULT 'en',created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,client_id TEXT DEFAULT '');CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key));CREATE TABLE IF NOT EXISTS match_answers(game_id INTEGER,round_no INTEGER,player_id INTEGER,answer TEXT,created TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS match_scores(game_id INTEGER,round_no INTEGER,matched INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS chat_messages(id INTEGER PRIMARY KEY,game_id INTEGER,player_id INTEGER,kind TEXT,body TEXT,client_msg_id TEXT DEFAULT '',created TEXT);CREATE INDEX IF NOT EXISTS chat_messages_game_id ON chat_messages(game_id,id);CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_idempotency ON chat_messages(game_id,player_id,client_msg_id) WHERE client_msg_id<>'';""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
-  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'")]:
+  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'"),('owner_key',"TEXT DEFAULT ''"),('access_kind',"TEXT DEFAULT 'pilot'"),('entitlement_id',"TEXT DEFAULT ''"),('max_rounds','INTEGER DEFAULT 30')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   if 'tiebreak' not in gc:c.execute("ALTER TABLE games ADD COLUMN tiebreak TEXT DEFAULT '{}'")
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
-  image_jobs.init_jobs(c);instant.init(c);budget.init(c)
+  image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('adult_confirmed','INTEGER DEFAULT 0'),('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
   c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
+  retention_cleanup(c)
 def game(code):
  with cn() as c:return c.execute('SELECT * FROM games WHERE code=?',(str(code or '').upper(),)).fetchone()
 def _players(c,gid,include_photos=False):
@@ -235,12 +253,15 @@ def final_image_eligible(g,ps):
  return bool(ws and all(p['photo_data'] and p['photo_consent'] for p in ws) and sum(bool(p['photo_data'] and p['photo_consent']) for p in ps)<=16)
 def can_tiebreak(g,ps):
  ws=winners(g,ps);active=[p for p in ps if p['active']]
- return bool(g['status']=='finished' and len(ws)>1 and len(active)>=2 and
+ return bool(g['status']=='finished' and g['access_kind']!='trial' and len(ws)>1 and len(active)>=2 and
              all(p['active'] for p in ws) and tie_data(g).get('sets',0)<3 and
              total_rounds(g)+len(active)<99)
 def total_rounds(g):
  try:return int(tie_data(g).get('end') or max(6,min(30,int(g['rounds'] or 12))))
  except:return 12
+def record_game_completion(c,g):
+ analytics.record(c,'game_completed',g['owner_key'] or g['host'],g['id'],{'access':g['access_kind']})
+ if g['access_kind']=='trial':analytics.record(c,'trial_completed',g['owner_key'],g['id'])
 def game_language(g):
  try:return normalize_language(g['language'])
  except:return 'en'
@@ -596,14 +617,24 @@ class H(BaseHTTPRequestHandler):
   u=urlparse(self.path);p=u.path
   if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'hybrid-v1','release':'pilot-budget-v6','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p=='/api/pricing':
-   try:return self.J(budget.pricing(int(parse_qs(u.query).get('rounds',['18'])[0]),int(parse_qs(u.query).get('games',['1'])[0])))
+   try:return self.J(commerce.quote(int(parse_qs(u.query).get('rounds',['18'])[0]),int(parse_qs(u.query).get('games',['1'])[0])))
    except (ValueError,TypeError):return self.J({'error':'invalid_quote'},400)
+  if p=='/api/access':
+   with cn() as c:return self.J(commerce.available(c,parse_qs(u.query).get('client_id',[''])[0]))
+  if p.startswith('/api/order/'):
+   try:
+    with cn() as c:return self.J(commerce.order_status(c,p.rsplit('/',1)[-1],parse_qs(u.query).get('client_id',[''])[0]))
+   except commerce.CommerceError as e:return self.J({'error':e.code},e.status)
   if p.startswith('/api/costs/'):
    g=game(p.rsplit('/',1)[-1]);host=parse_qs(u.query).get('host',[''])[0]
    if not g or not host or not secrets.compare_digest(host,g['host']):return self.J({'error':'forbidden'},403)
    with cn() as c:return self.J(budget.report(c,g['id']))
   if p=='/pricing':return self.F(STATIC/'pricing.html')
   if p=='/play-mipo':return self.F(STATIC/'landing.html')
+  if p=='/checkout' or p.startswith('/checkout/'):return self.F(STATIC/'checkout.html')
+  if p=='/privacy':return self.F(STATIC/'privacy.html')
+  if p=='/terms':return self.F(STATIC/'terms.html')
+  if p=='/refund':return self.F(STATIC/'refund.html')
   if p=='/sw.js':return self.F(STATIC/'sw.js')
   if p in ('/','/index.html'):return self.F(STATIC/'kyc.html')
   if p.startswith('/static/'):return self.F(STATIC/p[8:])
@@ -719,15 +750,39 @@ class H(BaseHTTPRequestHandler):
     'topics':state_topics,'topics_display':topic_labels(state_topics,game_language(g)),'direction':direction(game_language(g)),
     'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(ps)==2 else 'group',
     'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
-    'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),
+    'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
     'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]
    })
   return self.J({'error':'not_found'},404)
  def do_POST(self):
   try:return self.post_impl()
   except budget.BudgetLimit as e:return self.J({'error':str(e)},429)
+  except commerce.CommerceError as e:return self.J({'error':e.code},e.status)
  def post_impl(self):
-  p=urlparse(self.path).path;d=self.B()
+  p=urlparse(self.path).path
+  if p=='/api/payplus/callback':
+   raw=self.rfile.read(int(self.headers.get('Content-Length','0')))
+   with cn() as c:
+    result=commerce.process_callback(c,raw,self.headers)
+    if result.get('status')=='paid':analytics.record(c,'purchase_completed',result.get('order_id'),metadata={'provider':'payplus'})
+   return self.J(result)
+  d=self.B()
+  if p=='/api/analytics':
+   with cn() as c:ok=analytics.record(c,str(d.get('event','')),str(d.get('client_id','')),metadata=d.get('metadata') if isinstance(d.get('metadata'),dict) else {})
+   return self.J({'ok':ok},200 if ok else 400)
+  if p=='/api/checkout':
+   target=None
+   if d.get('product')=='extension':
+    target=game(d.get('code'))
+    if not target or not d.get('host') or not secrets.compare_digest(str(d.get('host')),str(target['host'])):raise commerce.CommerceError('forbidden',403)
+   with cn() as c:
+    result=commerce.create_checkout(c,str(d.get('product','')),d.get('client_id'),target)
+    analytics.record(c,'checkout_started',d.get('client_id'),target['id'] if target else None,{'product':d.get('product')})
+   return self.J(result,201)
+  if p=='/api/refund':
+   auth=str(self.headers.get('Authorization',''))
+   bearer=auth[7:] if auth.lower().startswith('bearer ') else ''
+   with cn() as c:return self.J(commerce.refund(c,d.get('order_id'),bearer,d.get('amount_cents')))
   if p=='/api/create':
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
@@ -737,6 +792,9 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
+    if commerce.enabled(USE_PG):
+     access=commerce.allocate_new_game(c,client_id,d.get('access'),gid);rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
+     c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid)
     c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(gid,name,pt,now(),now(),client_id,normalize_gender(d.get('gender'))))
    if adult:
@@ -811,11 +869,13 @@ class H(BaseHTTPRequestHandler):
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not current or current['code']!=old_code:return self.J({'error':'stale_room'},409)
     if not secrets.compare_digest(str(d.get('host','')),current['host']):return self.J({'error':'forbidden'},403)
+    entitlement=''
+    if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True)
     # A preserved room means the currently active crew. Players already removed
     # from the run stay removed; photos, tokens, profiles and consents remain.
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
-    c.execute("UPDATE games SET code=?,status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1 WHERE id=? AND code=?",(new_code,g['id'],old_code))
+    c.execute("UPDATE games SET code=?,status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1,access_kind=CASE WHEN ?<>'' THEN 'paid' ELSE access_kind END,entitlement_id=CASE WHEN ?<>'' THEN ? ELSE entitlement_id END,max_rounds=CASE WHEN ?<>'' THEN 18 ELSE max_rounds END,rounds=CASE WHEN ?<>'' AND rounds>18 THEN 18 ELSE rounds END WHERE id=? AND code=?",(new_code,entitlement,entitlement,entitlement,entitlement,entitlement,g['id'],old_code))
     c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),g['id']))
     for table in ('guesses','round_scores','match_answers','match_scores','image_jobs','hero_scenes','instant_scenes','chat_messages'):
      c.execute('DELETE FROM '+table+' WHERE game_id=?',(g['id'],))
@@ -843,12 +903,14 @@ class H(BaseHTTPRequestHandler):
     with cn() as c:
      c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
      c.execute("UPDATE games SET status='finished',answer='' WHERE id=?",(g['id'],))
+     record_game_completion(c,g)
     return self.J({'ok':True,'name':target['name'],'finished':True})
    if g['status']=='playing' and sub and target['id']==sub['id'] and not g['answer']:
     mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':'SKIPPED','type':'disconnect_skip'});rn=int(g['round_no'])+1;remember_question(ps,text)
     with cn() as c:
      c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']));c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
-     if rn>=total_rounds(g):c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+     if rn>=total_rounds(g):
+      c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
      else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
     return self.J({'ok':True,'name':target['name'],'advanced':True})
    with cn() as c:
@@ -876,8 +938,10 @@ class H(BaseHTTPRequestHandler):
     if not USE_PG:c.execute('BEGIN IMMEDIATE')
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not current or current['status']!='finished':return self.J({'error':'not_finished'},409)
+    entitlement=''
+    if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True)
-    c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1 WHERE id=? AND status='finished'",(g['id'],))
+    c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1,access_kind=CASE WHEN ?<>'' THEN 'paid' ELSE access_kind END,entitlement_id=CASE WHEN ?<>'' THEN ? ELSE entitlement_id END,max_rounds=CASE WHEN ?<>'' THEN 18 ELSE max_rounds END,rounds=CASE WHEN ?<>'' AND rounds>18 THEN 18 ELSE rounds END WHERE id=? AND status='finished'",(entitlement,entitlement,entitlement,entitlement,entitlement,g['id']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],));c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),g['id']))
     for table in ('guesses','image_jobs','hero_scenes','instant_scenes','round_scores','match_answers','match_scores','chat_messages'):
      c.execute('DELETE FROM '+table+' WHERE game_id=?',(g['id'],))
@@ -889,7 +953,7 @@ class H(BaseHTTPRequestHandler):
    ts=d.get('topics',[])
    if not isinstance(ts,list):ts=[]
    ts=[str(x)[:60] for x in ts[:12]]
-   ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',g['rounds']) or 12)));language=normalize_language(d.get('language',game_language(g)))
+   ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180];round_limit=int(g['max_rounds'] or 30);rounds=max(6,min(round_limit,int(d.get('rounds',g['rounds']) or 12)));language=normalize_language(d.get('language',game_language(g)))
    try:sp=max(1,min(3,int(d.get('spice',g['spice']) or 1)))
    except:sp=int(g['spice'] or 1)
    adult=adult_required(ts,sp)
@@ -956,6 +1020,7 @@ class H(BaseHTTPRequestHandler):
     if getattr(cur,'rowcount',0)!=1:return self.J({'error':'already_started'},409)
     for table in ('guesses','image_jobs','hero_scenes','instant_scenes','round_scores','match_answers','match_scores'):
      c.execute('DELETE FROM '+table+' WHERE game_id=?',(g['id'],))
+    analytics.record(c,'game_started',g['owner_key'] or g['host'],g['id'],{'access':g['access_kind'],'rounds':total_rounds(current)})
    return self.J({'ok':True,'tailored_questions':len(pack)})
   if act=='answer':
    me=next((x for x in ps if x['token']==d.get('token')),None);ans=str(d.get('answer',''))[:160]
@@ -1009,7 +1074,8 @@ class H(BaseHTTPRequestHandler):
     c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
-    if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+    if rn>=total_rounds(g) or remaining<2:
+     c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    return self.J({'ok':True,'skipped':True})
   if act=='next':
@@ -1021,10 +1087,18 @@ class H(BaseHTTPRequestHandler):
     clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
-    if rn>=total_rounds(g) or remaining<2:c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']))
+    if rn>=total_rounds(g) or remaining<2:
+     c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
    remember_question(ps,text)
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
-def run():init();instant.warm();warm_image_runtime();image_jobs.recover(cn,generate_many);ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H).serve_forever()
+def _background_startup():
+ try:instant.warm();warm_image_runtime();image_jobs.recover(cn,generate_many)
+ except Exception as e:print('background startup failed',type(e).__name__,flush=True)
+def run():
+ # Bind the HTTP port before loading the optional image runtime. On Render this
+ # makes /health and the landing page available while the heavy model warms.
+ init();server=ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H)
+ Thread(target=_background_startup,daemon=True).start();server.serve_forever()
