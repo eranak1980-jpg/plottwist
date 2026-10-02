@@ -14,7 +14,7 @@
   <header class="site-header">
     <div class="wrap nav">
       <a class="mark" href="#top" aria-label="MIPO home"><img src="/static/branding/mipo-logo.png" alt="MIPO" width="150" height="64"></a>
-      <a class="nav-cta" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a>
+      <a class="nav-cta" data-event="click_play_mipo" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a>
     </div>
   </header>
   <main id="main">
@@ -24,8 +24,8 @@
         <h1>How well do you <em>really</em> know each other?</h1>
         <p class="lede">One person answers in secret. Everyone else guesses. Then comes the reveal—and you find out who really knows who.</p>
         <div class="actions">
-          <a class="btn btn-main" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a>
-          <a class="btn btn-outline" href="#trial">Try 8 Questions Free</a>
+          <a class="btn btn-main" data-event="click_play_mipo" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-outline" data-event="click_free_trial" href="/?new=1&amp;access=trial">Try 8 Questions Free</a>
         </div>
         <p class="hero-note">One link. Everyone plays. <span aria-hidden="true">✦</span> 2–6 players</p>
       </div>
@@ -76,30 +76,30 @@
       <div class="wrap section">
         <p class="eyebrow">SIMPLE PRICING</p>
         <h2>Choose your game.</h2>
-        <p class="pricing-status">Launch pricing preview. Purchases and the public free trial are not open yet.</p>
+        <p class="pricing-status" id="pricingStatus">The 8-question trial is open. Paid checkout availability is checked securely.</p>
         <div class="price-grid">
           <article class="price-card" id="trial">
             <p class="plan">FREE TRIAL</p><p class="price">$0</p><h3>8 Questions</h3>
             <p>A first taste of the game for your group.</p>
-            <a class="btn btn-soft" href="#availability">Play Free <span aria-hidden="true">↗</span></a>
-            <small>Opens at launch</small>
+            <a class="btn btn-soft" data-event="click_free_trial" href="/?new=1&amp;access=trial">Play Free <span aria-hidden="true">↗</span></a>
+            <small>One trial per host browser</small>
           </article>
           <article class="price-card featured">
             <p class="plan">ONE GAME</p><p class="price">$7.99</p><h3>Up to 18 Questions</h3>
             <p>One full game for everyone in the room.</p>
-            <a class="btn btn-main" href="#availability">Buy 1 Game <span aria-hidden="true">↗</span></a>
-            <small>Purchases opening soon</small>
+            <a class="btn btn-main buy-link" href="/checkout?product=one_game">Buy 1 Game <span aria-hidden="true">↗</span></a>
+            <small>Secure checkout</small>
           </article>
           <article class="price-card">
             <p class="plan">TWO GAMES</p><p class="price">$12.99</p><h3>Up to 18 Questions per game</h3>
             <p>Keep the fun going with another game.</p>
-            <a class="btn btn-soft" href="#availability">Buy 2 Games <span aria-hidden="true">↗</span></a>
-            <small>Purchases opening soon</small>
+            <a class="btn btn-soft buy-link" href="/checkout?product=two_games">Buy 2 Games <span aria-hidden="true">↗</span></a>
+            <small>Secure checkout</small>
           </article>
         </div>
         <div class="extension"><div><strong>Game Extension</strong><span>Extend one game from 18 to 30 Questions. With the Two Games pack, it applies to one game only.</span></div><b>+$2.99</b></div>
         <p class="group-note">One purchase unlocks the game for the whole group. No subscription.</p>
-        <div class="availability" id="availability" tabindex="-1"><strong>We’re still in pilot.</strong> Checkout and the public 8-question free trial are not active yet. You can <a href="/?new=1">play the current pilot</a> now. No purchase can be completed here.</div>
+        <div class="availability" id="availability" tabindex="-1"><strong>No subscription.</strong> Payment is completed on PayPlus. A verified payment unlocks the game in this browser.</div>
       </div>
     </section>
 
@@ -122,7 +122,7 @@
         <details><summary>How many people can play?</summary><p>2–6 players.</p></details>
         <details><summary>Do we need to download an app?</summary><p>No. Open the link in your browser.</p></details>
         <details><summary>Can we play remotely?</summary><p>Yes. Everyone joins from their own device.</p></details>
-        <details><summary>Can we play again?</summary><p>Yes. Start another game with a new game purchase or your second game if you bought the Two Games pack. Purchases are not available during the current pilot.</p></details>
+        <details><summary>Can we play again?</summary><p>Yes. Start another game with a new game purchase or your second game if you bought the Two Games pack.</p></details>
         <details><summary>What languages are available?</summary><p>English, Spanish, Brazilian Portuguese, French, Japanese, and Hebrew.</p></details>
       </div>
     </section>
@@ -131,10 +131,13 @@
       <div class="wrap">
         <p class="eyebrow">YOUR TURN</p>
         <h2>Ready to find out who really knows who?</h2>
-        <div class="actions"><a class="btn btn-white" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a><a class="btn btn-light-outline" href="#trial">Try 8 Questions Free</a></div>
+        <div class="actions"><a class="btn btn-white" data-event="click_play_mipo" href="/?new=1">Play MIPO <span aria-hidden="true">↗</span></a><a class="btn btn-light-outline" data-event="click_free_trial" href="/?new=1&amp;access=trial">Try 8 Questions Free</a></div>
       </div>
     </section>
   </main>
-  <footer class="wrap footer"><span>MIPO — The Social Guessing Game</span><span>Play together. Reveal everything.</span></footer>
+  <footer class="wrap footer"><span>MIPO — The Social Guessing Game</span><span><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/refund">Refunds</a></span></footer>
+  <script>
+  (()=>{function id(){try{let v=JSON.parse(localStorage.getItem('plot_device_id_safe')||'null');if(v)return v}catch(_){}let v=(crypto.randomUUID?crypto.randomUUID():'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2));localStorage.setItem('plot_device_id_safe',JSON.stringify(v));return v}const client_id=id(),send=(event,metadata={})=>fetch('/api/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,client_id,metadata}),keepalive:true}).catch(()=>{});send('landing_page_view');document.querySelectorAll('[data-event]').forEach(a=>a.addEventListener('click',()=>send(a.dataset.event)));fetch('/api/pricing').then(r=>r.json()).then(p=>{if(!p.commerce_enabled){document.getElementById('pricingStatus').textContent='Public trial and checkout activation are pending final payment verification.';document.querySelectorAll('[data-event="click_free_trial"],.buy-link').forEach(a=>{a.href='#availability';a.setAttribute('aria-disabled','true')});document.getElementById('availability').innerHTML='<strong>Not open yet.</strong> No public trial or purchase can be completed until payment verification is finished.'}else if(!p.checkout_enabled){document.getElementById('pricingStatus').textContent='The free trial is open. Paid checkout is temporarily unavailable.';document.querySelectorAll('.buy-link').forEach(a=>a.setAttribute('aria-disabled','true'))}}).catch(()=>{})})();
+  </script>
 </body>
 </html>

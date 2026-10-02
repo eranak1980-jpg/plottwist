@@ -1,6 +1,6 @@
 # Launch pilot — September 28, 2026
 
-Accepted pricing: USD 7.99 / one game, USD 12.99 / two games, up to 18 questions each; 0.49 per extra question for the extended game. Quotes are server-calculated and restricted to 8–30 questions, 1–2 games. Six players maximum. Checkout is deliberately disabled until a payment provider and verified entitlements exist. `/pricing` is a preview, not a purchase flow. The site's name is unchanged pending final naming decision.
+Accepted MIPO pricing: USD 7.99 / one game, USD 12.99 / two games, up to 18 questions each; USD 2.99 extends one selected game from 18 to 30 questions. Quotes are server-calculated and restricted to 8–30 questions, 1–2 games. Six players maximum. Checkout uses PayPlus hosted payment pages when the required environment credentials are configured. Entitlements are granted only by a verified callback.
 
 ## Budget and measurement
 
@@ -12,4 +12,4 @@ This is **not a guaranteed provider-dollar hard cap**: actual token usage is kno
 
 ## Before paid/public launch
 
-Connect payment provider with signed webhooks and idempotent game entitlements. Add verified host identity and one-trial-per-host rules; the current pilot is globally bounded, not an identity-verified public free offer. Free launch mode must enforce eight questions server-side; pilot testers may currently use 6–30. Measure real costs across 2–6 players, final/tied posters, 8/18/30 rounds and errors. Do not publish an unlimited free offer. No provider billing settings or paid subscriptions were changed in this update.
+Before public launch, configure and verify PayPlus production credentials, callback delivery, the merchant/card descriptor, receipt and refund behavior. The public trial is bound to a persistent host-browser identity and enforced at eight questions server-side. Measure real costs across 2–6 players, final/tied posters, 8/18/30 rounds and errors. No paid provider plan or merchant setting is changed by this repository.
