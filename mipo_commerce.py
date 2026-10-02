@@ -166,7 +166,37 @@ def _provider_post(path, payload):
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             raw = response.read();headers = response.headers
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+    except urllib.error.HTTPError as exc:
+        # PayPlus returns useful validation details for rejected requests. Log a
+        # small, sanitized diagnostic (never credentials or the submitted body)
+        # and expose only a stable category to the browser.
+        provider_code = None
+        description = ''
+        try:
+            provider_error = json.loads(exc.read())
+            results = provider_error.get('results') or {}
+            provider_code = results.get('code')
+            description = str(results.get('description') or '')[:240]
+        except Exception:
+            pass
+        print(json.dumps({
+            'event': 'payplus_checkout_http_error',
+            'http_status': exc.code,
+            'provider_code': provider_code,
+            'description': description,
+        }, ensure_ascii=False), flush=True)
+        if exc.code in (401, 403):
+            code = 'checkout_provider_auth_or_api_access'
+        elif exc.code == 422:
+            code = 'checkout_provider_request_rejected'
+        else:
+            code = 'checkout_provider_http_error'
+        raise CommerceError(code, 503) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print(json.dumps({
+            'event': 'payplus_checkout_network_error',
+            'error_type': type(exc).__name__,
+        }), flush=True)
         raise CommerceError('checkout_provider_unavailable', 503) from exc
     supplied = str(headers.get('hash', ''))
     expected = base64.b64encode(hmac.new(os.environ['PAYPLUS_SECRET_KEY'].encode(), raw, hashlib.sha256).digest()).decode()
