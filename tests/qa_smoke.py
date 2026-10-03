@@ -164,6 +164,18 @@ assert len(k.live_players(g2['id']))==2
 assert k.ensure_round_score(g2,ps2,{guessers[0]['id']:'טיסה וחופשה מטורפת'})
 print('QA_DROPPED_PLAYER_DOES_NOT_BLOCK_OK')
 
+# A dropped player must also be excluded from every future subject rotation and
+# from room-answer choices. Previously the room froze when that player's turn
+# came up a couple of rounds later.
+with k.cn() as db:
+ db.execute("UPDATE games SET round_no=2,answer='',memory='[]' WHERE id=?",(g['id'],))
+g3=k.game('QA123');ps3=k.players(g3['id']);typ3,text3,opts3,sub3=k.qdata(g3,ps3)
+inactive={p['id'] for p in ps3 if not p['active']}
+assert sub3 and sub3['id'] not in inactive,(sub3,inactive)
+assert all(p['name'] not in opts3 for p in ps3 if not p['active']),(opts3,ps3)
+assert len(k.active_players(ps3))==2
+print('QA_DROPPED_PLAYER_EXCLUDED_FROM_FUTURE_ROUNDS_OK')
+
 # Newly added themed categories are real server topics.
 for topic in ['מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף']:
  assert topic in k.TOPICS and len(k.TOPICS[topic])>=6, topic
