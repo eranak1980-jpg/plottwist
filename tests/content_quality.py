@@ -59,11 +59,13 @@ hebrew_bad.extend([
  {'type':'know','text':'{s} מקבל/ת רובוט שמבצע כל בקשה מילולית מדי. מה המשימה הראשונה?','options':['להרים את האווירה','לסגור לי את הפינה','לעשות לי סדר בחיים','להביא קפה']},
  {'type':'know','text':'{s} בתפקיד קטן בסרט אבל צריך/ה לצעוק המלפפון ברח. מה עושים?','options':['צועק/ת חזק','לוחש/ת','מאלתר/ת','מסרב/ת']},
  {'type':'know','text':'{s} מגיע/ה עם חולצה זהה למארח שמבקש להחליף. מה עושים?','options':['מחליף/ה','מתווכח/ת','מצטלם/ת','הולך/ת']},
+ {'type':'know','text':'{s} מגלה שאמא הפכה לוויראלית עם סרטון מביך שלו/ה. מה עושים?','options':['דורש/ת אחוזים','מעלה סרטון תגובה','מכריז/ה שהיא הסוכנת','מבקש/ת לפחות תיוג']},
+ {'type':'know','text':'{s} השאיר/ה אצל חבר מעיל או מטען ונזכר/ה רק בבית. מה עושים?','options':['שולח/ת מיקום אחרון','מבקש/ת מטען מזר','לוקח/ת מונית למלון','מתקשר/ת לפני שהסוללה נגמרת']},
 ])
 hebrew_pack=clean_pack(hebrew_bad,'he')
 assert len(hebrew_pack)==8
 assert not any('ארבע הזמנות' in text for _,text,_ in hebrew_pack)
-assert not any('רובוט' in text or 'המלפפון' in text or 'חולצה זהה' in text for _,text,_ in hebrew_pack)
+assert not any('רובוט' in text or 'המלפפון' in text or 'חולצה זהה' in text or 'ויראלית' in text or 'מעיל או מטען' in text for _,text,_ in hebrew_pack)
 print('CONTENT_AI_FILTERS_HEBREW_DODGE_OK')
 
 
