@@ -51,6 +51,21 @@
     try{
       clearTimeout(pendingSound);
       unlock();if(!context)return;
+      const spoken={
+        hum:['Hmm…','Mmm-hmm…'],peek:['Oh!','Well, well…'],oops:['Oops!','Uh-oh…'],
+        wow:['Whoa!','Oh wow!'],tie:['Ooh…','Interesting…'],taDa:['Ta-da!','There it is!'],
+        snicker:['Heh heh…','Ha! Knew it.'],wink:['Mm-hmm!','Nice one!'],
+        mischief:['Heh heh…','Oh, this is good…'],hmm:['Hmm…','Come on…'],gasp:['Oh!','No way!']
+      };
+      // Companion moments should sound like a character, not an arcade. Native
+      // speech is tiny, works offline on most phones and falls back to WebAudio.
+      if(spoken[kind]&&window.speechSynthesis&&window.SpeechSynthesisUtterance){
+        const lines=spoken[kind],utterance=new SpeechSynthesisUtterance(lines[Math.floor(Math.random()*lines.length)]);
+        utterance.lang='en-US';utterance.rate=kind==='snicker'||kind==='mischief'?1.2:.95;
+        utterance.pitch=kind==='hmm'?.72:kind==='gasp'?1.28:1.05;utterance.volume=.32;
+        window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
+        busyUntil=Date.now()+900;return;
+      }
       const melodies={tap:[560],saved:[660,880],next:[440,600],ready:[523,659,784],win:[523,659,784,1046]};
       const voice={
         hum:[[300,350,.24],[350,270,.18]],peek:[[420,690,.12],[560,340,.16]],oops:[[510,260,.32]],wow:[[300,740,.24],[740,440,.14]],tie:[[360,520,.15],[520,360,.20]],taDa:[[420,560,.12],[590,830,.30]],
@@ -256,6 +271,9 @@
     section.querySelector('summary').textContent=phrase('אפשרויות לערב של מבוגרים · 18+','Adult evening options · 18+');
     let hint=el('adultOptionsHint');if(!hint){hint=document.createElement('span');hint.id='adultOptionsHint';section.querySelector('summary').appendChild(hint)}hint.textContent=guideText()[5];
     const family=audienceType==='family';section.classList.toggle('hidden',family);
+    // The age choice lives on the preceding guide screen. Honour it every time
+    // topics are rebuilt so mobile re-renders cannot collapse the 18+ controls.
+    if(!family&&(el('hostIntroAge')?.checked||el('adultConfirm').checked))section.open=true;
     const target=section.querySelector('div');if(content.querySelector('[data-topic="דייטים"]'))target.querySelectorAll('[data-topic]').forEach(b=>b.remove());
     for(const b of document.querySelectorAll('#topics [data-topic]'))if(adultTopics.has(b.dataset.topic)){
       target.appendChild(b);b.dataset.extra='0';b.classList.remove('hidden');

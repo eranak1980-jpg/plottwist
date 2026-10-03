@@ -31,12 +31,12 @@ _VAGUE_QUESTION_PATTERNS={
 # players can picture happening to them.  These patterns cover the recurring
 # "random sketch" setups that tested poorly in live play.
 _CONTRIVED_QUESTION_PATTERNS={
- 'en':(r'robot .{0,35}(?:every|literal)',r'(?:million|50,?000).{0,45}(?:midnight|24 hours)',r'(?:movie|film).{0,35}(?:shout|yell).{0,30}(?:cucumber|pickle)',r'identical .{0,20}(?:shirt|outfit).{0,35}(?:change|replace)'),
+ 'en':(r'robot .{0,35}(?:every|literal)',r'(?:million|50,?000).{0,45}(?:midnight|24 hours)',r'(?:movie|film).{0,35}(?:shout|yell).{0,30}(?:cucumber|pickle)',r'identical .{0,20}(?:shirt|outfit).{0,35}(?:change|replace)',r'(?:mom|dad|mother|father).{0,30}(?:viral|goes viral)'),
  'es':(r'robot .{0,35}(?:cada|literal)',r'(?:millon|50,?000).{0,45}(?:medianoche|24 horas)',r'(?:pelicula|cine).{0,35}(?:gritar).{0,30}(?:pepino)',r'identic.{0,20}(?:camisa|ropa).{0,35}(?:cambiar)'),
  'pt-BR':(r'robo .{0,35}(?:toda|literal)',r'(?:milhao|50,?000).{0,45}(?:meia noite|24 horas)',r'(?:filme|cinema).{0,35}(?:gritar).{0,30}(?:pepino)',r'identic.{0,20}(?:camisa|roupa).{0,35}(?:trocar)'),
  'fr':(r'robot .{0,35}(?:chaque|litteral)',r'(?:million|50,?000).{0,45}(?:minuit|24 heures)',r'(?:film|cinema).{0,35}(?:crier).{0,30}(?:concombre)',r'identique.{0,20}(?:chemise|tenue).{0,35}(?:changer)'),
  'ja':(r'ロボット.{0,25}(?:命令|文字通り)',r'(?:100万|50,?000).{0,30}(?:深夜|24時間)',r'(?:映画|撮影).{0,25}(?:叫).{0,20}(?:きゅうり)',r'同じ.{0,12}(?:服|シャツ).{0,25}(?:着替|変え)'),
- 'he':(r'רובוט .{0,35}(?:כל בקשה|מילולי)',r'(?:מיליון|50,?000|50 אלף).{0,45}(?:חצות|24 שעות)',r'(?:סרט|צילומים).{0,35}(?:לצעוק|צועק).{0,30}(?:מלפפון)',r'(?:חולצה|בגד).{0,20}(?:זהה|אותו דבר).{0,35}(?:להחליף|תחליף)')
+ 'he':(r'רובוט .{0,35}(?:כל בקשה|מילולי)',r'(?:מיליון|50,?000|50 אלף).{0,45}(?:חצות|24 שעות)',r'(?:סרט|צילומים).{0,35}(?:לצעוק|צועק).{0,30}(?:מלפפון)',r'(?:חולצה|בגד).{0,20}(?:זהה|אותו דבר).{0,35}(?:להחליף|תחליף)',r'(?:אמא|אבא).{0,30}(?:ויראל|וויראל)',r'(?:השאיר|שכח).{0,35}(?:מעיל|מטען).{0,12}או.{0,12}(?:מעיל|מטען)')
 }
 
 # These tags describe whole scenarios, not isolated keywords.  They catch the
@@ -158,6 +158,7 @@ Editorial standard:
 - Prefer observed habits and small social frictions over fantasy stakes. A good question exposes what the person actually tends to do: ignore a message, arrive late, avoid a bill, overpack, call a friend, change plans, order the same meal, or pretend everything is fine.
 - A player must understand the question on the FIRST read. Use one concrete situation and one direct question. Aim for 12–24 words; never exceed two sentences or 35 words (140 characters in Japanese). Name what went wrong; never say only "things get complicated". Avoid stacked conditions, metaphors, wordplay and vague references like "this choice".
 - Every answer must directly answer that exact question in at most 8 words (35 characters in Japanese). Four distinct actions, not overlapping categories. Never use a request for "something else", another answer, a skip, or a joke about the questionnaire as an answer option. If asking what someone would NOT do, ensure all options and the question use that meaning consistently.
+- Keep every noun and location consistent across the question and all four answers. Never combine alternative objects (for example "a coat or charger") into one setup. Never let an answer suddenly introduce a hotel, taxi, stranger or different location that was not part of the incident. If the setup is "the charger was left at a friend's house", all four answers must be plausible reactions to that exact forgotten charger.
 - Before returning, silently read each question with EACH answer. Rewrite unclear setups and answers that need explanation. Remove rhetorical fluff such as "the photo will forgive". Replace generic chemistry/value checklists with a specific awkward date or funny decision.
 - Bold level means sharper COMEDY, not just more personal questions. Give each setup a specific comic problem and four funny, believable reactions. Avoid filler choices like "both", "depends", "balance" or "stay home" that dodge the dilemma.
 - Reject moral no-brainers (a wonderful real evening versus a fake social-media evening), generic values comparisons and abstract tradeoffs. Each option should have its own tempting upside and comic cost.

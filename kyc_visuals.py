@@ -8,7 +8,7 @@ import time
 
 MODEL = os.getenv('PLOT_IMAGE_MODEL','gpt-image-2.5-flare').strip() or 'gpt-image-2.5-flare'
 QUALITY = os.getenv('PLOT_IMAGE_QUALITY','low').strip() or 'low'
-SIZE = os.getenv('PLOT_IMAGE_SIZE','832x832').strip() or '832x832'
+SIZE = os.getenv('PLOT_IMAGE_SIZE','720x912').strip() or '720x912'
 MAX_IMAGE_BYTES = 4_200_000
 
 
@@ -152,7 +152,7 @@ def generate_many(items, question, answer, focus, selected='', final=False, winn
                 result = client.images.edit(
                     model=MODEL, image=files, prompt=prompt,
                     size=SIZE, quality=QUALITY,
-                    output_format='jpeg', output_compression=82, n=1,
+                    output_format='jpeg', output_compression=72, n=1,
                 )
                 budget.finish(ticket, getattr(result, 'usage', None))
                 if not result.data or not result.data[0].b64_json:
