@@ -5,6 +5,9 @@
   const commerceReq=window.req;
   if(typeof commerceReq==='function'){
     window.req=async function(path,body){
+      if(path==='/api/create'&&body&&new URLSearchParams(location.search).get('access')==='trial'){
+        body={...body,access:'trial'};
+      }
       try{
         const result=await commerceReq(path,body);
         if(/^\/api\/state\//.test(path)&&result?.is_host&&result.status==='lobby'&&result.access_kind==='paid'&&Number(result.max_rounds||18)<30){
@@ -16,7 +19,11 @@
         }
         return result;
       }catch(error){
-        if(error?.message==='payment_required'||error?.message==='trial_already_used')setTimeout(()=>{location.href='/play-mipo#pricing'},250);
+        if(error?.message==='payment_required'||error?.message==='trial_already_used'){
+          try{sessionStorage.setItem('mipo_commerce_notice',error.message)}catch(_){}
+          location.href='/play-mipo#pricing';
+          return new Promise(()=>{});
+        }
         throw error;
       }
     };
