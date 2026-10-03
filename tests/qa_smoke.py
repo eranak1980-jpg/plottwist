@@ -348,9 +348,16 @@ print('QA_GUIDED_SETUP_HIERARCHY_OK')
 # A used browser trial must not bounce forever between create and pricing.
 experience=(Path(__file__).resolve().parents[1]/'static'/'experience.js').read_text()
 landing=(Path(__file__).resolve().parents[1]/'static'/'landing.html').read_text()
-assert "path==='/api/create'" in experience and "get('access')==='trial'" in experience
-assert "body={...body,access:'trial'}" in experience
+assert "path==='/api/create'" in experience and "params.get('access')" in experience
+assert "body={...body,access:requestedAccess}" in experience
 assert "/api/access?client_id=" in landing
 assert 'Free trial already used' in landing
 assert "if(!a.trial_available)markTrialUsed()" in landing
 print('QA_TRIAL_LOOP_GUARD_OK')
+
+# The private owner QA link carries a server-verified token and never consumes a public trial.
+assert "requestedAccess==='qa'" in experience
+assert "body.qa_key=params.get('qa')" in experience
+server=(Path(__file__).resolve().parents[1]/'kyc_server.py').read_text()
+assert "d.get('qa_key')" in server
+print('QA_OWNER_TEST_LINK_OK')
