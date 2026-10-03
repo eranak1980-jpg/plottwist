@@ -236,7 +236,9 @@ class PipelineTests(unittest.TestCase):
         with patch.object(jobs.POOL,'submit'):
             self.reveal(expect_start=False)
         self.assertEqual(self.calls,[])
-        self.assertEqual(self.state()['hero_status'],'queued')
+        # Queue creation happens on the app's non-blocking visual executor; wait
+        # for that hand-off instead of racing the background scheduler.
+        self.wait_status('queued')
         jobs.recover(k.cn,k.generate_many);jobs.recover(k.cn,k.generate_many)
         self.assertTrue(self.entered.wait(1));self.release.set();self.wait_status('ready')
         self.assertEqual(len(self.calls),1)

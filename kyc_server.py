@@ -242,15 +242,18 @@ def pool(g):
 def tie_data(g):
  try:return json.loads(g['tiebreak'] or '{}')
  except (KeyError,IndexError,TypeError,ValueError):return {}
+def active_players(ps):
+ return [p for p in ps if int(p['active'] if p['active'] is not None else 1)==1]
 def winners(g,ps):
  ids=tie_data(g).get('contenders',[])
- eligible=[p for p in ps if not ids or p['id'] in ids]
+ eligible=[p for p in active_players(ps) if not ids or p['id'] in ids]
  if not eligible:return []
  top=max(p['score'] for p in eligible)
  return [p for p in eligible if p['score']==top]
 def final_image_eligible(g,ps):
  ws=winners(g,ps)
- return bool(ws and all(p['photo_data'] and p['photo_consent'] for p in ws) and sum(bool(p['photo_data'] and p['photo_consent']) for p in ps)<=16)
+ active=active_players(ps)
+ return bool(ws and all(p['photo_data'] and p['photo_consent'] for p in ws) and sum(bool(p['photo_data'] and p['photo_consent']) for p in active)<=16)
 def can_tiebreak(g,ps):
  ws=winners(g,ps);active=[p for p in ps if p['active']]
  return bool(g['status']=='finished' and g['access_kind']!='trial' and len(ws)>1 and len(active)>=2 and
@@ -327,7 +330,7 @@ def meaningful_callback(g,ps,rn,duo=False):
    text=f'⚡ קודם {name} בחר/ה לקחת את {friend} ראשון/ה ברכב החדש. {friend} מעלה תמונה וכותב/ת: “הרכב שלנו!” איך {name} מגיב/ה?'
    options=['זורם/ת עם הבדיחה','מגיב/ה: “שלי, בעצם”','מעלה תמונה לבד עם הרכב','מבקש/ת למחוק את הכיתוב']
   elif friend and ('רפסודה' in q or 'כרישים' in q):
-   text=f'⚡ קודם {name} משך/ה את {friend} ראשון/ה מהרפסודה. על החוף {friend} מספר/ת לכולם שהוא/היא הציל/ה את {name}. מה התגובה?'
+   text=f'⚡ קודם {name} משך/ה את {friend} ראשון/ה מהמים אל הרפסודה. על החוף {friend} מספר/ת לכולם שהוא/היא הציל/ה את {name}. מה התגובה?'
    options=['נותן/ת לו/לה את הקרדיט','מתקן/ת את הסיפור מול כולם','צוחק/ת ושואל/ת מי הבא בתור','מבקש/ת ממנו/ה לספר שוב']
   elif friend and ('כרטיס זוגי' in q or 'הופעה' in q):
    text=f'⚡ קודם {name} הזמין/ה את {friend} להופעה. {friend} רוצה למכור את הכרטיס שלו/ה ברווח ולהשאיר את {name} לבד. מה {name} עושה?'
@@ -421,6 +424,10 @@ def match_equal(a,b):
 def duo_callback(g,ps,rn):
  return meaningful_callback(g,ps,rn,duo=True) if len(ps)==2 else None
 def qdata(g,ps):
+ # Removed/disconnected players stay in the room history, but must never be
+ # selected as a future subject or answer option. Otherwise the room eventually
+ # waits forever for a secret answer that the removed player cannot submit.
+ ps=active_players(ps)
  rn=int(g['round_no']);tb=tie_data(g);order=tb.get('order',[])
  sub=next((p for p in ps if p['id']==order[(rn-tb['start'])%len(order)]),None) if order else (ps[rn%len(ps)] if ps else None)
  if not sub:sub=ps[rn%len(ps)] if ps else None
@@ -514,7 +521,7 @@ def image_payload(g,ps,final=False):
   ws=winners(g,ps)
   if not final_image_eligible(g,ps):return None
   winner_ids={p['id'] for p in ws}
-  available=ws+[p for p in ps if p['id'] not in winner_ids and p['photo_data'] and p['photo_consent']]
+  available=ws+[p for p in active_players(ps) if p['id'] not in winner_ids and p['photo_data'] and p['photo_consent']]
   prize=g['prize'] or 'bragging rights'
   names=[p['name'] for p in ws]
   return dict(items=[(p['name'],p['photo_data']) for p in available],
@@ -546,7 +553,7 @@ def prepare_hero_async(gid,rn,expected_run=None):
   # Image generation takes tens of seconds, so waiting for every prediction means
   # the Reveal is usually over before the image is ready. Guesses are not needed
   # to build the visual payload and remain private from the image prompt.
-  sub=ps[int(rn)%len(ps)] if ps else None
+  _,_,_,sub=qdata(g,ps)
   if not sub:return 'not_ready'
  payload=image_payload(g,ps,final)
  if not payload:return 'no_photo'
@@ -577,9 +584,11 @@ def _portrait_worker(pid,data):
  try:
   with cn() as c:instant.save_portrait(c,pid,data)
  except Exception as e:print('portrait preprocess failed',type(e).__name__,flush=True)
-def ensure_round_score(g,ps,guessed):
- sub=ps[int(g['round_no'])%len(ps)] if ps else None
- active_guessers=[p for p in ps if int(p['active'] if p['active'] is not None else 1)==1 and (not sub or p['id']!=sub['id'])]
+def ensure_round_score(g,ps,guessed,sub=None):
+ active=active_players(ps)
+ if sub is None:
+  _,_,_,sub=qdata(g,active)
+ active_guessers=[p for p in active if not sub or p['id']!=sub['id']]
  if not g['answer'] or len([p for p in active_guessers if p['id'] in guessed])<len(active_guessers):return False
  with cn() as c:
   if USE_PG:
@@ -715,7 +724,7 @@ class H(BaseHTTPRequestHandler):
     vote_rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall();state_votes={r['topic']:r['n'] for r in vote_rows}
     my_votes=[r['topic'] for r in c.execute('SELECT topic FROM topic_votes WHERE game_id=? AND player_id=?',(g['id'],me['id'] if me else -1)).fetchall()] if me else []
    guessed={r['player_id']:r['guess'] for r in gs};active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);ready=bool(g['answer']) and len([pid for pid in guessed if pid in active_ids and (not sub or pid!=sub['id'])])>=need
-   if ready and ensure_round_score(g,ps,guessed):
+   if ready and ensure_round_score(g,ps,guessed,sub):
     ps=players(g['id']);me=next((x for x in ps if x['token']==tok),None)
    hero=g['round_no'] in hero_rounds;finalhero=99 in hero_rounds
    hero_status='ready' if hero else jobs.get(g['round_no'],'idle');final_hero_status='ready' if finalhero else jobs.get(99,'idle')
@@ -748,7 +757,7 @@ class H(BaseHTTPRequestHandler):
     'hero':image_url(g,g['round_no']) if hero and reveal else None,
     'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,
     'topics':state_topics,'topics_display':topic_labels(state_topics,game_language(g)),'direction':direction(game_language(g)),
-    'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(ps)==2 else 'group',
+    'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(active_ids)==2 else 'group',
     'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
     'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
     'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]
