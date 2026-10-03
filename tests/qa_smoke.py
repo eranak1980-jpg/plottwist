@@ -343,3 +343,14 @@ assert 'גייז / LGBTQ+' not in html[const_start:const_end]
 assert "if(id==='kids'){spice=1" in html
 assert "adult.classList.remove('on')" in html
 print('QA_GUIDED_SETUP_HIERARCHY_OK')
+
+
+# A used browser trial must not bounce forever between create and pricing.
+experience=(Path(__file__).resolve().parents[1]/'static'/'experience.js').read_text()
+landing=(Path(__file__).resolve().parents[1]/'static'/'landing.html').read_text()
+assert "path==='/api/create'" in experience and "get('access')==='trial'" in experience
+assert "body={...body,access:'trial'}" in experience
+assert "/api/access?client_id=" in landing
+assert 'Free trial already used' in landing
+assert "if(!a.trial_available)markTrialUsed()" in landing
+print('QA_TRIAL_LOOP_GUARD_OK')
