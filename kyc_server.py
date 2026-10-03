@@ -802,7 +802,7 @@ class H(BaseHTTPRequestHandler):
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
     if commerce.enabled(USE_PG):
-     access=commerce.allocate_new_game(c,client_id,d.get('access'),gid);rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
+     access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'));rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid)
     c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(gid,name,pt,now(),now(),client_id,normalize_gender(d.get('gender'))))
