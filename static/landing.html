@@ -137,7 +137,21 @@
   </main>
   <footer class="wrap footer"><span>MIPO — The Social Guessing Game</span><span><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/refund">Refunds</a></span></footer>
   <script>
-  (()=>{function id(){try{let v=JSON.parse(localStorage.getItem('plot_device_id_safe')||'null');if(v)return v}catch(_){}let v=(crypto.randomUUID?crypto.randomUUID():'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2));localStorage.setItem('plot_device_id_safe',JSON.stringify(v));return v}const client_id=id(),send=(event,metadata={})=>fetch('/api/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,client_id,metadata}),keepalive:true}).catch(()=>{});send('landing_page_view');document.querySelectorAll('[data-event]').forEach(a=>a.addEventListener('click',()=>send(a.dataset.event)));fetch('/api/pricing').then(r=>r.json()).then(p=>{if(!p.commerce_enabled){document.getElementById('pricingStatus').textContent='Public trial and checkout activation are pending final payment verification.';document.querySelectorAll('[data-event="click_free_trial"],.buy-link').forEach(a=>{a.href='#availability';a.setAttribute('aria-disabled','true')});document.getElementById('availability').innerHTML='<strong>Not open yet.</strong> No public trial or purchase can be completed until payment verification is finished.'}else if(!p.checkout_enabled){document.getElementById('pricingStatus').textContent='The free trial is open. Paid checkout is temporarily unavailable.';document.querySelectorAll('.buy-link').forEach(a=>a.setAttribute('aria-disabled','true'))}}).catch(()=>{})})();
+  (()=>{
+    function id(){try{let v=JSON.parse(localStorage.getItem('plot_device_id_safe')||'null');if(v)return v}catch(_){}let v=(crypto.randomUUID?crypto.randomUUID():'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2));localStorage.setItem('plot_device_id_safe',JSON.stringify(v));return v}
+    const client_id=id(),send=(event,metadata={})=>fetch('/api/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,client_id,metadata}),keepalive:true}).catch(()=>{});
+    const freeLinks=[...document.querySelectorAll('[data-event="click_free_trial"]')];
+    function disableLinks(links,href){links.forEach(a=>{a.href=href;a.setAttribute('aria-disabled','true');a.addEventListener('click',event=>{event.preventDefault();document.querySelector(href)?.scrollIntoView({behavior:'smooth',block:'center'})})})}
+    function markTrialUsed(){document.getElementById('pricingStatus').textContent='Your free trial has already been used on this browser. Choose a game package to keep playing.';freeLinks.forEach(a=>{a.textContent='Free trial already used';a.href='#pricing';a.setAttribute('aria-disabled','true');a.addEventListener('click',event=>{event.preventDefault();document.getElementById('pricing')?.scrollIntoView({behavior:'smooth',block:'start'})})})}
+    send('landing_page_view');
+    document.querySelectorAll('[data-event]').forEach(a=>a.addEventListener('click',()=>send(a.dataset.event)));
+    Promise.all([fetch('/api/pricing').then(r=>r.json()),fetch('/api/access?client_id='+encodeURIComponent(client_id),{cache:'no-store'}).then(r=>r.json())]).then(([p,a])=>{
+      if(!p.commerce_enabled){document.getElementById('pricingStatus').textContent='Public trial and checkout activation are pending final payment verification.';disableLinks([...freeLinks,...document.querySelectorAll('.buy-link')],'#availability');document.getElementById('availability').innerHTML='<strong>Not open yet.</strong> No public trial or purchase can be completed until payment verification is finished.';return}
+      if(!a.trial_available)markTrialUsed();
+      else if(!p.checkout_enabled)document.getElementById('pricingStatus').textContent='The free trial is open. Paid checkout is temporarily unavailable.';
+      if(!p.checkout_enabled)document.querySelectorAll('.buy-link').forEach(a=>a.setAttribute('aria-disabled','true'));
+    }).catch(()=>{});
+  })();
   </script>
 </body>
 </html>
