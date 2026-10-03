@@ -21,7 +21,7 @@ function readStored(key,fallback={}){try{return JSON.parse(localStorage.getItem(
 function writeStored(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(e){}}
 function savedRoom(code){let rooms=readStored('plot_rooms');return rooms[String(code||'').toUpperCase()]||null}
 function rememberRoom(room){if(!room.code||!room.token)return;let rooms=readStored('plot_rooms');delete rooms[room.code];rooms[room.code]=room;let keys=Object.keys(rooms);while(keys.length>10)delete rooms[keys.shift()];writeStored('plot_rooms',rooms)}
-const bootParams=new URLSearchParams(location.search);let previousSession=readStored('kyc');rememberRoom(previousSession);
+const bootParams=new URLSearchParams(location.search);globalThis.mipoBootAccess={access:bootParams.get('access')||'',qa:bootParams.get('qa')||''};let previousSession=readStored('kyc');rememberRoom(previousSession);
 let s=bootParams.get('new')==='1'?{}:(bootParams.get('code')?(savedRoom(bootParams.get('code'))||{}):previousSession);
 if(bootParams.get('new')==='1'){writeStored('kyc',{});history.replaceState({},'',location.pathname)}
 let deviceId=readStored('plot_device_id_safe','')||readLegacy('plot_device_id')||((window.crypto&&crypto.randomUUID)?crypto.randomUUID():'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2));writeStored('plot_device_id_safe',deviceId);
