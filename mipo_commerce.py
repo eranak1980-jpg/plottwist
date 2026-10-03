@@ -23,6 +23,7 @@ PRODUCTS = {
 }
 PAYPLUS_PROD = 'https://restapi.payplus.co.il/api/v1.0'
 PAYPLUS_TEST = 'https://restapidev.payplus.co.il/api/v1.0'
+DEFAULT_QA_TOKEN_HASH = '53182be7a527def1eb224ddffb183a0c83d62245fba0668aefc69a91df8e8220'
 
 
 class CommerceError(Exception):
@@ -121,8 +122,14 @@ def _paid_credit(c, key):
     return row['id']
 
 
-def allocate_new_game(c, client_id, requested_access, game_id):
+def allocate_new_game(c, client_id, requested_access, game_id, qa_key=''):
     key = owner_key(client_id)
+    if str(requested_access or '').lower() == 'qa':
+        expected = os.getenv('MIPO_QA_TOKEN_HASH', DEFAULT_QA_TOKEN_HASH).strip().lower()
+        supplied = hashlib.sha256(str(qa_key or '').encode()).hexdigest()
+        if not expected or not secrets.compare_digest(supplied, expected):
+            raise CommerceError('invalid_qa_access', 403)
+        return {'owner_key': key, 'access_kind': 'qa', 'max_rounds': 8, 'entitlement_id': ''}
     if str(requested_access or '').lower() == 'trial':
         claim_trial(c, key, game_id)
         return {'owner_key': key, 'access_kind': 'trial', 'max_rounds': 8, 'entitlement_id': ''}
