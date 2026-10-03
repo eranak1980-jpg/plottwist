@@ -5,8 +5,10 @@
   const commerceReq=window.req;
   if(typeof commerceReq==='function'){
     window.req=async function(path,body){
-      if(path==='/api/create'&&body&&new URLSearchParams(location.search).get('access')==='trial'){
-        body={...body,access:'trial'};
+      const params=new URLSearchParams(location.search),requestedAccess=params.get('access');
+      if(path==='/api/create'&&body&&(requestedAccess==='trial'||requestedAccess==='qa')){
+        body={...body,access:requestedAccess};
+        if(requestedAccess==='qa')body.qa_key=params.get('qa')||'';
       }
       try{
         const result=await commerceReq(path,body);

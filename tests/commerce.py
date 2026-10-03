@@ -34,6 +34,17 @@ try:
 except commerce.CommerceError as exc:
     assert exc.code == 'trial_already_used'
 
+qa_token = 'test-owner-qa-token'
+os.environ['MIPO_QA_TOKEN_HASH'] = hashlib.sha256(qa_token.encode()).hexdigest()
+qa = commerce.allocate_new_game(c, 'qa-device-identity', 'qa', 20, qa_token)
+assert qa['access_kind'] == 'qa' and qa['max_rounds'] == 8
+assert commerce.allocate_new_game(c, 'qa-device-identity', 'qa', 21, qa_token)['access_kind'] == 'qa'
+try:
+    commerce.allocate_new_game(c, 'qa-device-identity', 'qa', 22, 'wrong-token')
+    raise AssertionError('invalid owner QA token was accepted')
+except commerce.CommerceError as exc:
+    assert exc.code == 'invalid_qa_access' and exc.status == 403
+
 key = commerce.owner_key('paid-device-identity')
 c.execute("INSERT INTO commerce_entitlements(id,order_id,owner_key,games_total,games_remaining,created) VALUES('ent','paid-order',?,2,2,'2026-01-01')", (key,))
 assert commerce.allocate_new_game(c, 'paid-device-identity', '', 3)['access_kind'] == 'paid'
