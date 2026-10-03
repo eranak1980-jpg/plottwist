@@ -358,6 +358,9 @@ print('QA_TRIAL_LOOP_GUARD_OK')
 # The private owner QA link carries a server-verified token and never consumes a public trial.
 assert "requestedAccess==='qa'" in experience
 assert "body.qa_key=params.get('qa')" in experience
+assert "globalThis.mipoBootAccess={access:bootParams.get('access')||'',qa:bootParams.get('qa')||''}" in html
+assert "requestedAccess=params.get('access')||bootAccess.access" in experience
+assert "body.qa_key=params.get('qa')||bootAccess.qa||''" in experience
 server=(Path(__file__).resolve().parents[1]/'kyc_server.py').read_text()
 assert "d.get('qa_key')" in server
 print('QA_OWNER_TEST_LINK_OK')

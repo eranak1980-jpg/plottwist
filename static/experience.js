@@ -5,10 +5,10 @@
   const commerceReq=window.req;
   if(typeof commerceReq==='function'){
     window.req=async function(path,body){
-      const params=new URLSearchParams(location.search),requestedAccess=params.get('access');
+      const params=new URLSearchParams(location.search),bootAccess=globalThis.mipoBootAccess||{},requestedAccess=params.get('access')||bootAccess.access;
       if(path==='/api/create'&&body&&(requestedAccess==='trial'||requestedAccess==='qa')){
         body={...body,access:requestedAccess};
-        if(requestedAccess==='qa')body.qa_key=params.get('qa')||'';
+        if(requestedAccess==='qa')body.qa_key=params.get('qa')||bootAccess.qa||'';
       }
       try{
         const result=await commerceReq(path,body);
