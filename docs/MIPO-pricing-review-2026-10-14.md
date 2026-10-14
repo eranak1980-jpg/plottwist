@@ -1,9 +1,9 @@
 # MIPO — pricing readiness review
 Date: 2026-10-14. Status: DRAFT / DO NOT MERGE OR DEPLOY.
-Owner approval required: Eran. Proposed prices remain unapproved.
+Eran approved preparation of $5.99/$9.99 on 2026-10-14. Final production publication and real-payment approval are still required.
 
 ## Decision
-Prepare $5.99 for one group game and $9.99 for two, but HOLD production approval until measured usage, contractual payment fees and the payment-to-entitlement path are verified. No live payment was made. No gameplay, AI model, question count, access rights or pilot budget was changed.
+Prepare $5.99 for one group game and $9.99 for two. Per Eran's final execution brief, a perfect AI cost calculation is NOT a launch gate. Basic cost review is complete; report material uncertainty and monitor actual usage. HOLD publication until final Eran approval and payment/access readiness. No live payment was made. No gameplay, AI model, question count, access rights or pilot budget was changed.
 
 ## Verified evidence
 - Reviewed main commit 3a80afff5e8ee53074d740cf75b4247f1f9f35e1.
@@ -76,15 +76,17 @@ Passed locally with SQLite and a fake provider, no external charges:
 - Trial configuration remains 8.
 - JavaScript syntax for changed HTML passes node --check.
 
-Not yet completed: browser/mobile visual QA, full free-trial gameplay and trial enforcement, spent-credit rejection, concurrent requests/callbacks, actual provider callbacks/receipts, Israeli-card USD payment, refund behavior, live deployment consistency. Local idempotent callback tests do not prove prevention of duplicate user-submitted charges.
+Additional local validation on 2026-10-14: tests/commerce.py, budget.py, http_smoke.py, qa_smoke.py and new_backend_contract.py pass. Updated existing test expectations for the approved preparation prices. Added tests/launch_flow.py: complete 8-round trial with 4 players; complete 18-round paid game with 4 players; two-game package consumed over 18-round and 30-round extended games with 2 players. Signed fake-provider callbacks grant correct access; repeated callbacks do not duplicate entitlements. Duplicate trials and exhausted paid credits are rejected by existing commerce tests. HTTP start races and stale actions pass existing tests. No production state was changed.
+
+All tests use temporary SQLite, test-only payment credentials, a fake payment provider, no OpenAI key and fixture photos. Image generation/final-poster rendering, real provider authorization/callbacks/receipts, PostgreSQL callback concurrency, mobile/browser visual QA, Israeli-card USD payment, refund behavior and live deployment consistency remain unverified. Local idempotent callback tests do not prove prevention of duplicate user-submitted charges. No external API requests or real charges were made.
 
 ## Release gate
-1. Render access and current $0 hosting bill are verified. Obtain historical AI ledger through an authorized database export or OpenAI usage export; Shell is unavailable on the existing free compute plan.
+1. Render access and current $0 hosting bill are verified. Historical AI data is optional follow-up, not a release gate under Eran's updated brief. No significant API spend is required to prepare launch.
 2. Confirm merchant/USD/API permissions and chosen payment integration; resolve pilot-budget blocker.
-3. Recalculate contribution for both prices, including trial allocation and measured retries.
-4. Present final figures and request Eran's explicit approval of $5.99/$9.99 and deployment.
+3. Record basic provisional costs and missing fees; monitor actual costs after launch. Do not delay solely for a perfect cost estimate.
+4. Request Eran's final publication approval once operational blockers are resolved. Price preparation is already approved.
 5. Run sandbox end-to-end and mobile/desktop QA; real charge only with separate explicit authorization.
 6. Coordinate server, assets and PayPlus release; stop if any displayed/requested/charged amount differs. Preserve correct amounts for existing orders.
 7. Measure visitors → trial started → trial completed → checkout started → payment completed using deduplicated, joinable events; revenue and variable costs by product. Do not claim improved conversion without data.
 
-Final approval request: RESERVED until evidence above is complete. This draft is reviewable now, but is not recommended for production publication yet.
+Current readiness: price/copy preparation and basic local game/payment-contract tests COMPLETE. Production unchanged. NOT yet ready to certify real sales: merchant/USD permissions, API-based checkout and actual callback-to-entitlement need verification; the existing pilot admission cap also needs an operational decision/remaining-capacity check. A $150 empty ledger admits at most 16 sessions because it reserves $9.30 each without release. Do not raise/reset limits without a reviewed budget decision. Actual costs, missing fee details and free-host cold starts remain explicitly disclosed risks, not demands for additional research.
