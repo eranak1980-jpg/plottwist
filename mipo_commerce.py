@@ -17,8 +17,8 @@ from decimal import Decimal, InvalidOperation
 
 
 PRODUCTS = {
-    'one_game': {'name': 'MIPO — One Game', 'amount_cents': 799, 'games': 1, 'extension': False},
-    'two_games': {'name': 'MIPO — Two Games', 'amount_cents': 1299, 'games': 2, 'extension': False},
+    'one_game': {'name': 'MIPO — One Game', 'amount_cents': 599, 'games': 1, 'extension': False},
+    'two_games': {'name': 'MIPO — Two Games', 'amount_cents': 999, 'games': 2, 'extension': False},
     'extension': {'name': 'MIPO — Game Extension (18 to 30 Questions)', 'amount_cents': 299, 'games': 0, 'extension': True},
 }
 PAYPLUS_PROD = 'https://restapi.payplus.co.il/api/v1.0'
@@ -87,7 +87,7 @@ def pricing_payload():
     return {
         'currency': 'USD', 'checkout_enabled': bool(active and checkout_configured()), 'commerce_enabled': active,
         'stage': 'launch' if active and checkout_configured() else 'configuration_required',
-        'single_cents': 799, 'duo_cents': 1299, 'extension_cents': 299,
+        'single_cents': price('one_game')['amount_cents'], 'duo_cents': price('two_games')['amount_cents'], 'extension_cents': price('extension')['amount_cents'],
         'included_rounds': 18, 'free_rounds': 8, 'extended_rounds': 30,
         'max_players': 6, 'extension_applies_to': 'one_game',
     }
@@ -97,8 +97,8 @@ def quote(rounds=18, games=1):
     rounds, games = int(rounds), int(games)
     if games not in (1, 2) or rounds not in range(8, 31):
         raise ValueError('invalid_quote')
-    base = 799 if games == 1 else 1299
-    extension = 299 if rounds > 18 else 0
+    base = price('one_game' if games == 1 else 'two_games')['amount_cents']
+    extension = price('extension')['amount_cents'] if rounds > 18 else 0
     return dict(pricing_payload(), games=games, rounds=rounds, base_cents=base,
                 extra_cents=extension, total_cents=base + extension)
 
