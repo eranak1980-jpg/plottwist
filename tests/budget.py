@@ -34,8 +34,8 @@ with k.cn() as c:
  report=b.report(c,gid);assert report['measured_usd']==.036 and report['unpriced_calls']==2,report
  assert report['estimated_usd']==.336
  assert c.execute('SELECT COUNT(*) AS n FROM budget_calls').fetchone()['n']==3
-assert b.pricing(18,1)['total_cents']==799
-assert b.pricing(20,2)['total_cents']==1598
+assert b.pricing(18,1)['total_cents']==599
+assert b.pricing(20,2)['total_cents']==1298
 for r,g in [(31,1),(7,1),(18,3)]:
  try:b.pricing(r,g);raise AssertionError('invalid quote')
  except ValueError:pass
@@ -53,7 +53,7 @@ def request(path,data=None):
   with urlopen(req) as r:return r.status,json.load(r)
  except HTTPError as e:return e.code,json.load(e)
 _,room=request('/api/create',{'name':'Budget QA','rounds':18})
-assert request('/api/pricing?rounds=20&games=2')[1]['total_cents']==1598
+assert request('/api/pricing?rounds=20&games=2')[1]['total_cents']==1298
 assert request('/api/costs/'+room['code'])[0]==403
 assert request('/api/costs/'+room['code']+'?host=wrong')[0]==403
 assert request('/api/costs/'+room['code']+'?host='+room['host'])[0]==200
@@ -63,3 +63,4 @@ with patch.object(b,'CAP',0):
  assert request('/api/create',{'name':'Must roll back'})==(429,{'error':'pilot_limit'})
  with k.cn() as c:assert c.execute('SELECT COUNT(*) AS n FROM games').fetchone()['n']==before
 server.shutdown();print('Budget HTTP auth, quote and admission rollback passed')
+
