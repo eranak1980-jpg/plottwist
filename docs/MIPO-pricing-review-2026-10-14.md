@@ -16,7 +16,10 @@ Prepare $5.99 for one group game and $9.99 for two, but HOLD production approval
 - kyc_budget.py records usage in budget_calls. Only Flare images with sufficient token detail get actual_micro; text calls currently remain unpriced. Cached-token discounts are not applied by its image calculation. Reconcile usage with provider billing before calling it actual expenditure.
 - OpenAI standard rates checked 2026-10-14: Luna input $0.20 / cached $0.02 / output $1.20 per million tokens; Flare text input $5 / cached $1.25, image input $8 / cached $2, output $30 per million tokens.
   Sources: https://developers.openai.com/api/docs/models/gpt-5.6-luna and https://developers.openai.com/api/docs/models/gpt-image-2.5-flare
-- Render logs access reached Sign In. No authenticated ledger, invoices, current launch-budget balance or fixed-service bills were retrieved.
+- Authenticated access to the target production service srv-dam0n57qj5pc73bd6ovg was restored on 2026-10-14. Render workspace billing shows Hobby, no card on file, September invoice paid $0.00, October month-to-date and projected total $0.00 USD (services/datastores/pipeline each $0.00). Current usage: 30.1/750 free instance hours, 368 MB/5 GB bandwidth, 7/500 pipeline minutes, 2 services. This verifies current Render expense only, not future production hosting or other providers.
+- Target service uses free compute; Render warns inactivity can delay requests by 50 seconds or more. No plan upgrade was made.
+- Last-7-days application-log search for ai_cost returned one visible successful text-call record (Oct 10 in dashboard timezone), actual_usd=null, provisional_usd=0.1. This is not measured cost and does not establish total usage; no complete per-game image/text ledger was retrieved.
+- Render Shell explicitly requires a paid compute plan. No shell command, upgrade, deployment or charge was performed. Historical database usage and current pilot-budget balance remain unverified.
 
 ## Cost calculation — not verified profit
 Internal reserve assumptions are $0.15 per image attempt and $0.10 per text attempt. They are NOT unit prices, measured averages or guaranteed upper bounds.
@@ -76,7 +79,7 @@ Passed locally with SQLite and a fake provider, no external charges:
 Not yet completed: browser/mobile visual QA, full free-trial gameplay and trial enforcement, spent-credit rejection, concurrent requests/callbacks, actual provider callbacks/receipts, Israeli-card USD payment, refund behavior, live deployment consistency. Local idempotent callback tests do not prove prevention of duplicate user-submitted charges.
 
 ## Release gate
-1. Reconnect Render to read existing usage/bills and close the missing cost inputs.
+1. Render access and current $0 hosting bill are verified. Obtain historical AI ledger through an authorized database export or OpenAI usage export; Shell is unavailable on the existing free compute plan.
 2. Confirm merchant/USD/API permissions and chosen payment integration; resolve pilot-budget blocker.
 3. Recalculate contribution for both prices, including trial allocation and measured retries.
 4. Present final figures and request Eran's explicit approval of $5.99/$9.99 and deployment.
