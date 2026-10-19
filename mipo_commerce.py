@@ -12,13 +12,14 @@ import os
 import secrets
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 
 PRODUCTS = {
-    'one_game': {'name': 'MIPO — One Game', 'amount_cents': 799, 'games': 1, 'extension': False},
-    'two_games': {'name': 'MIPO — Two Games', 'amount_cents': 1299, 'games': 2, 'extension': False},
+    'one_game': {'name': 'MIPO — One Game', 'amount_cents': 599, 'games': 1, 'extension': False},
+    'two_games': {'name': 'MIPO — Two Games', 'amount_cents': 999, 'games': 2, 'extension': False},
     'extension': {'name': 'MIPO — Game Extension (18 to 30 Questions)', 'amount_cents': 299, 'games': 0, 'extension': True},
 }
 PAYPLUS_PROD = 'https://restapi.payplus.co.il/api/v1.0'
@@ -46,7 +47,36 @@ def enabled(use_pg=False):
     return False
 
 
+STATIC_LINK_KEYS = {'one_game': 'PAYPLUS_ONE_GAME_LINK', 'two_games': 'PAYPLUS_TWO_GAMES_LINK', 'extension': 'PAYPLUS_EXTENSION_LINK'}
+
+
+def static_link_mode():
+    return os.getenv('MIPO_CHECKOUT_MODE', '').strip().lower() == 'static_link'
+
+
+def static_payment_link(product, order_id):
+    raw = os.getenv(STATIC_LINK_KEYS[product], '').strip()
+    parsed = urlsplit(raw)
+    # Only PayPlus's reusable-link route may receive our private order ID.
+    if parsed.scheme != 'https' or parsed.netloc != 'payments.payplus.co.il' or not parsed.path.startswith('/l/') or parsed.fragment:
+        raise CommerceError('checkout_not_configured', 503)
+    if not parsed.path[3:] or '/' in parsed.path[3:]:
+        raise CommerceError('checkout_not_configured', 503)
+    query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k not in ('more_info', 'more_info_1')]
+    query.extend([('more_info', order_id), ('more_info_1', product)])
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ''))
+
+
 def checkout_configured():
+    if static_link_mode():
+        if not all(os.getenv(k, '').strip() for k in ('PAYPLUS_SECRET_KEY', 'PUBLIC_BASE_URL')):
+            return False
+        try:
+            for product in STATIC_LINK_KEYS:
+                static_payment_link(product, 'configuration-check')
+        except CommerceError:
+            return False
+        return True
     return all(os.getenv(k, '').strip() for k in ('PAYPLUS_API_KEY', 'PAYPLUS_SECRET_KEY', 'PAYPLUS_PAYMENT_PAGE_UID', 'PUBLIC_BASE_URL'))
 
 
@@ -58,6 +88,7 @@ def init(c):
         provider_transaction_uid TEXT, target_game_id BIGINT, checkout_url TEXT,
         created TEXT NOT NULL, updated TEXT NOT NULL, raw_callback TEXT DEFAULT '')''')
     c.execute('CREATE INDEX IF NOT EXISTS commerce_orders_owner ON commerce_orders(owner_key,created)')
+    c.execute('CREATE TABLE IF NOT EXISTS commerce_transactions(transaction_uid TEXT PRIMARY KEY, order_id TEXT UNIQUE NOT NULL)')
     c.execute('''CREATE TABLE IF NOT EXISTS commerce_entitlements(
         id TEXT PRIMARY KEY, order_id TEXT UNIQUE NOT NULL, owner_key TEXT NOT NULL,
         games_total INTEGER NOT NULL DEFAULT 0, games_remaining INTEGER NOT NULL DEFAULT 0,
@@ -87,7 +118,7 @@ def pricing_payload():
     return {
         'currency': 'USD', 'checkout_enabled': bool(active and checkout_configured()), 'commerce_enabled': active,
         'stage': 'launch' if active and checkout_configured() else 'configuration_required',
-        'single_cents': 799, 'duo_cents': 1299, 'extension_cents': 299,
+        'single_cents': price('one_game')['amount_cents'], 'duo_cents': price('two_games')['amount_cents'], 'extension_cents': price('extension')['amount_cents'],
         'included_rounds': 18, 'free_rounds': 8, 'extended_rounds': 30,
         'max_players': 6, 'extension_applies_to': 'one_game',
     }
@@ -97,8 +128,8 @@ def quote(rounds=18, games=1):
     rounds, games = int(rounds), int(games)
     if games not in (1, 2) or rounds not in range(8, 31):
         raise ValueError('invalid_quote')
-    base = 799 if games == 1 else 1299
-    extension = 299 if rounds > 18 else 0
+    base = price('one_game' if games == 1 else 'two_games')['amount_cents']
+    extension = price('extension')['amount_cents'] if rounds > 18 else 0
     return dict(pricing_payload(), games=games, rounds=rounds, base_cents=base,
                 extra_cents=extension, total_cents=base + extension)
 
@@ -229,6 +260,10 @@ def create_checkout(c, product, client_id, target_game=None):
     order_id, stamp = secrets.token_urlsafe(18), utcnow()
     c.execute('INSERT INTO commerce_orders(id,owner_key,product,amount_cents,currency,status,target_game_id,created,updated) VALUES(?,?,?,?,?,?,?,?,?)',
               (order_id, key, product, item['amount_cents'], 'USD', 'created', target_id, stamp, stamp))
+    if static_link_mode():
+        link = static_payment_link(product, order_id)
+        c.execute("UPDATE commerce_orders SET status='pending',checkout_url=?,updated=? WHERE id=?", (link, stamp, order_id))
+        return {'order_id': order_id, 'checkout_url': link, 'amount_cents': item['amount_cents'], 'currency': 'USD'}
     payload = {
         'payment_page_uid': os.environ['PAYPLUS_PAYMENT_PAGE_UID'], 'charge_method': 1,
         'amount': item['amount_cents'] / 100, 'currency_code': 'USD',
@@ -293,21 +328,42 @@ def process_callback(c, raw, headers):
         raise CommerceError('invalid_callback_payload', 400) from exc
     order_id = str(_walk(payload, 'more_info') or '')
     request_uid = str(_walk(payload, 'payment_request_uid', 'page_request_uid') or '')
-    order = c.execute('SELECT * FROM commerce_orders WHERE id=? OR provider_request_uid=?', (order_id, request_uid)).fetchone()
+    # Lock the order before checking/granting credit (also serializes PG callbacks).
+    if order_id:
+        c.execute('UPDATE commerce_orders SET updated=updated WHERE id=?', (order_id,))
+        order = c.execute('SELECT * FROM commerce_orders WHERE id=?', (order_id,)).fetchone()
+    elif request_uid:
+        c.execute('UPDATE commerce_orders SET updated=updated WHERE provider_request_uid=?', (request_uid,))
+        order = c.execute('SELECT * FROM commerce_orders WHERE provider_request_uid=?', (request_uid,)).fetchone()
+    else:
+        order = None
     if not order:
         raise CommerceError('order_not_found', 404)
+    if order['provider_request_uid'] and request_uid != order['provider_request_uid']:
+        raise CommerceError('callback_order_mismatch', 409)
     if order['status'] in ('paid', 'refunded'):
         return {'ok': True, 'status': order['status'], 'order_id': order['id'], 'idempotent': True}
     success = _callback_success(payload)
     status = 'paid' if success else 'failed'
     transaction_uid = str(_walk(payload, 'transaction_uid') or '')
     if success:
+        if not transaction_uid:
+            raise CommerceError('callback_transaction_missing', 400)
         amount = _walk(payload, 'amount', 'transaction_amount', 'amount_total')
         currency = str(_walk(payload, 'currency_code', 'currency') or '').upper()
         try: callback_cents = int((Decimal(str(amount)) * 100).quantize(Decimal('1')))
         except (InvalidOperation, ValueError, TypeError): raise CommerceError('callback_amount_missing', 400)
         if callback_cents != int(order['amount_cents']) or currency != str(order['currency']).upper():
             raise CommerceError('callback_order_mismatch', 409)
+        prior = c.execute('SELECT id FROM commerce_orders WHERE provider_transaction_uid=? AND id<>?', (transaction_uid, order['id'])).fetchone()
+        if prior:
+            raise CommerceError('callback_transaction_reused', 409)
+        c.execute('INSERT INTO commerce_transactions(transaction_uid,order_id) VALUES(?,?) ON CONFLICT DO NOTHING', (transaction_uid, order['id']))
+        binding = c.execute('SELECT order_id FROM commerce_transactions WHERE transaction_uid=?', (transaction_uid,)).fetchone()
+        if not binding or binding['order_id'] != order['id']:
+            raise CommerceError('callback_transaction_reused', 409)
+        if request_uid and not order['provider_request_uid']:
+            c.execute('UPDATE commerce_orders SET provider_request_uid=? WHERE id=?', (request_uid, order['id']))
     c.execute('UPDATE commerce_orders SET status=?,provider_transaction_uid=?,raw_callback=?,updated=? WHERE id=?',
               (status, transaction_uid, raw.decode('utf-8', 'replace')[:12000], utcnow(), order['id']))
     if not success:
@@ -355,3 +411,4 @@ def refund(c, order_id, bearer, amount_cents=None):
         raise CommerceError('refund_provider_failed', 502)
     c.execute("UPDATE commerce_orders SET status='refunded',updated=? WHERE id=?", (utcnow(), order['id']))
     return {'ok': True, 'status': 'refunded', 'order_id': order['id'], 'amount_cents': cents}
+

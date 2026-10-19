@@ -769,6 +769,16 @@ class H(BaseHTTPRequestHandler):
   except commerce.CommerceError as e:return self.J({'error':e.code},e.status)
  def post_impl(self):
   p=urlparse(self.path).path
+  if p in ('/checkout/success','/checkout/failure','/checkout/cancel'):
+   # Provider redirects are navigation only. Never grant access from their data.
+   raw=self.rfile.read(min(int(self.headers.get('Content-Length','0')),65536))
+   try:
+    data=json.loads(raw) if 'application/json' in self.headers.get('Content-Type','') else {k:v[0] for k,v in parse_qs(raw.decode('utf-8')).items()}
+    order=str(commerce._walk(data,'more_info','order') or '')
+   except Exception:order=''
+   from urllib.parse import urlencode
+   destination=p+('?' + urlencode({'order':order}) if order and len(order)<=160 else '')
+   self.send_response(303);self.send_header('Location',destination);self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Length','0');self.end_headers();return
   if p=='/api/payplus/callback':
    raw=self.rfile.read(int(self.headers.get('Content-Length','0')))
    with cn() as c:
@@ -1111,3 +1121,4 @@ def run():
  # makes /health and the landing page available while the heavy model warms.
  init();server=ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H)
  Thread(target=_background_startup,daemon=True).start();server.serve_forever()
+

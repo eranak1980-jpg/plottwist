@@ -21,9 +21,9 @@ c.row_factory = sqlite3.Row
 c.execute("CREATE TABLE games(id INTEGER PRIMARY KEY,status TEXT,access_kind TEXT,max_rounds INTEGER,rounds INTEGER)")
 commerce.init(c)
 
-assert commerce.quote(18, 1)['total_cents'] == 799
-assert commerce.quote(30, 1)['total_cents'] == 1098
-assert commerce.quote(30, 2)['total_cents'] == 1598
+assert commerce.quote(18, 1)['total_cents'] == 599
+assert commerce.quote(30, 1)['total_cents'] == 898
+assert commerce.quote(30, 2)['total_cents'] == 1298
 assert commerce.quote(19, 1)['extra_cents'] == 299
 
 trial = commerce.allocate_new_game(c, 'device-identity-0001', '', 1)
@@ -79,9 +79,9 @@ def fake_post(path, payload):
     return {'data': {'page_request_uid': 'checkout-request', 'payment_page_link': 'https://pay.example/checkout'}}
 commerce._provider_post = fake_post
 checkout = commerce.create_checkout(c, 'one_game', 'checkout-device-001')
-assert checkout['amount_cents'] == 799 and checkout['currency'] == 'USD'
+assert checkout['amount_cents'] == 599 and checkout['currency'] == 'USD'
 assert captured['path'].endswith('/PaymentPages/generateLink')
-assert captured['payload']['amount'] == 7.99 and captured['payload']['currency_code'] == 'USD'
+assert captured['payload']['amount'] == 5.99 and captured['payload']['currency_code'] == 'USD'
 assert captured['payload']['sendEmailApproval'] is True
 commerce._provider_post = original_post
 
@@ -128,3 +128,4 @@ try:
 finally:
     server.shutdown()
 print('Commerce HTTP trial and paid entitlement enforcement passed')
+
