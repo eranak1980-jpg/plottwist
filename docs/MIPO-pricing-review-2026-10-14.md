@@ -101,3 +101,22 @@ Current readiness: price/copy preparation and basic local game/payment-contract 
 - Landing/pricing price consistency and all inline JavaScript syntax checks passed. Checkout uses server-generated order links rather than the legacy fixed link.
 - Production remains unchanged. Do not publish only the new page prices while the legacy $7.99 link remains active. Keep the release coordinated with working order creation and verified purchase entitlement.
 - Prior pilot-budget capacity concern remains open; no budget reset or limit increase authorized or performed.
+
+
+## Reusable-link integration preparation — 2026-10-19
+Status: prepared and tested locally; NOT deployed. Eran clarified the intended integration is existing PayPlus reusable links, without merchant API link creation.
+
+Live checks: account API key matches Render. Active MIPO payment-page UID differs from the configured UID; no configuration changed. Existing one-game link is $7.99, with empty callback/success/failure URLs. API-settings screen says activation is required; reusable links operate separately.
+
+PayPlus public frontend /js/32.9f70296e.js (PaymentLinkRedirect) explicitly forwards URL query more_info through more_info_5. This supports unique order IDs on reusable links; actual provider propagation and signed callback still require a controlled purchase test. Official signature reference: https://docs.payplus.co.il/reference/validate-requests-received-from-payplus .
+
+Prepared: MIPO_CHECKOUT_MODE=static_link plus PAYPLUS_ONE_GAME_LINK, PAYPLUS_TWO_GAMES_LINK and PAYPLUS_EXTENSION_LINK. Static mode requires all three HTTPS PayPlus /l/ URLs and existing signing secret/base URL, but no merchant API key or payment-page UID. It creates a pending order and appends more_info=order ID and more_info_1=product. Existing API mode remains default. Signed callback matches exact order/amount/currency, records the first request UID, serializes per-order processing and binds transaction IDs once across orders. Browser return never grants access; owner check remains required. GET more_info and POST returns are supported.
+
+Passed: commerce.py, launch_flow.py, static_links.py, Python compilation and checkout inline JS syntax. Static tests include all prices, forged/unknown callbacks, wrong amount/currency, duplicate callback, cross-order transaction reuse, owner isolation, extension and HTTP return before signed confirmation. No external AI/provider calls or real charges. Fixture photo decode warnings do not validate image generation. PostgreSQL callback concurrency and real provider callback method/headers remain unverified.
+
+Coordinated release after final publication approval:
+- Existing single link -> $5.99. Prepare two-game $9.99 and extension $2.99 reusable links, without quantity selection or recurring charges.
+- Link callback: https://plottwist-b1du.onrender.com/api/payplus/callback ; success/failure: /checkout/success and /checkout/failure on the same origin. Verify return method; draft supports POST navigation. Do not change card/merchant/FX permissions.
+- Configure the three link variables and static_link mode on Render, retaining signing/owner secrets. Publish code/prices together, verify all displayed amounts and callback-to-entitlement, then perform an explicitly approved real test purchase.
+
+Read-only pilot-budget result: 10 admissions, reserved_micro=93000000, 6 more session reservations fit under the unchanged $150 cap. Reservation capacity is not actual invoiced AI spend. No reset/increase/release performed. Use a controlled test only until a budget decision is reviewed; do not certify broad marketing readiness yet.
