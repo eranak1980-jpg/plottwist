@@ -90,3 +90,14 @@ All tests use temporary SQLite, test-only payment credentials, a fake payment pr
 7. Measure visitors → trial started → trial completed → checkout started → payment completed using deduplicated, joinable events; revenue and variable costs by product. Do not claim improved conversion without data.
 
 Current readiness: price/copy preparation and basic local game/payment-contract tests COMPLETE. Production unchanged. NOT yet ready to certify real sales: merchant/USD permissions, API-based checkout and actual callback-to-entitlement need verification; the existing pilot admission cap also needs an operational decision/remaining-capacity check. A $150 empty ledger admits at most 16 sessions because it reserves $9.30 each without release. Do not raise/reset limits without a reviewed budget decision. Actual costs, missing fee details and free-host cold starts remain explicitly disclosed risks, not demands for additional research.
+
+
+## Readiness update — 2026-10-19
+- Eran reports Max confirmed merchant/foreign-currency setup is fixed. This is user-reported provider confirmation; no successful card charge has yet been observed.
+- Live browser check: /play-mipo still displays $7.99/$12.99 and +$2.99. One-game checkout opens a PayPlus hosted page showing $7.99. No card details were entered and no payment submitted.
+- Live two-game checkout fails to open. A matching fresh application log at 2026-10-19T07:59:32Z records payplus_checkout_http_error, HTTP 403, provider_code=null, empty description. Root cause is unresolved: verify API entitlement, configured credentials and provider-side request restrictions; do not assume Max merchant setup fixes API access.
+- Current draft endpoint and api-key/secret-key header names match the official PayPlus generateLink documentation. No authentication or callback verification was weakened.
+- Recovered draft commit de189cc5e4e984ec181b7b004eddf96197159662 and reran commerce.py and launch_flow.py locally. Passed 8/18/18/30-round flows, correct 599/999/299-cent payloads and signed fake callbacks. Tests use fixture photo data, so expected image decode warnings do not verify actual image generation. External AI calls=0; real charges=0.
+- Landing/pricing price consistency and all inline JavaScript syntax checks passed. Checkout uses server-generated order links rather than the legacy fixed link.
+- Production remains unchanged. Do not publish only the new page prices while the legacy $7.99 link remains active. Keep the release coordinated with working order creation and verified purchase entitlement.
+- Prior pilot-budget capacity concern remains open; no budget reset or limit increase authorized or performed.
