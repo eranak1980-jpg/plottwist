@@ -10,6 +10,7 @@ import hmac
 import json
 import os
 import secrets
+import kyc_budget as budget
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
@@ -96,6 +97,7 @@ def init(c):
     c.execute('CREATE INDEX IF NOT EXISTS commerce_entitlements_owner ON commerce_entitlements(owner_key,created)')
     c.execute('''CREATE TABLE IF NOT EXISTS trial_claims(
         owner_key TEXT PRIMARY KEY, game_id BIGINT UNIQUE, claimed TEXT NOT NULL)''')
+    budget.init(c)
 
 
 def owner_key(client_id):
@@ -257,7 +259,15 @@ def create_checkout(c, product, client_id, target_game=None):
         if int(target_game['max_rounds'] or 18) >= 30:
             raise CommerceError('extension_already_active', 409)
         target_id = target_game['id']
+    # Serialize against admissions and reuse an uncompleted payable link for
+    # this browser/product. Refresh must not consume another budget envelope.
+    budget._lock(c)
+    previous = c.execute("SELECT * FROM commerce_orders WHERE owner_key=? AND product=? AND status IN ('created','pending','failed') AND COALESCE(target_game_id,0)=? AND checkout_url IS NOT NULL ORDER BY created DESC LIMIT 1", (key,product,target_id or 0)).fetchone()
+    if previous:
+        if os.getenv('OPENAI_API_KEY','').strip():budget.hold_checkout(c,previous['id'],product,target_game)
+        return {'order_id':previous['id'],'checkout_url':previous['checkout_url'],'amount_cents':previous['amount_cents'],'currency':previous['currency']}
     order_id, stamp = secrets.token_urlsafe(18), utcnow()
+    if os.getenv('OPENAI_API_KEY','').strip():budget.hold_checkout(c,order_id,product,target_game)
     c.execute('INSERT INTO commerce_orders(id,owner_key,product,amount_cents,currency,status,target_game_id,created,updated) VALUES(?,?,?,?,?,?,?,?,?)',
               (order_id, key, product, item['amount_cents'], 'USD', 'created', target_id, stamp, stamp))
     if static_link_mode():
@@ -410,5 +420,7 @@ def refund(c, order_id, bearer, amount_cents=None):
     if str(_walk(data, 'status', 'code', 'status_code') or '').lower() not in ('success', 'approved', '0', '000'):
         raise CommerceError('refund_provider_failed', 502)
     c.execute("UPDATE commerce_orders SET status='refunded',updated=? WHERE id=?", (utcnow(), order['id']))
+    budget.release_refund(c,order['id'])
     return {'ok': True, 'status': 'refunded', 'order_id': order['id'], 'amount_cents': cents}
+
 
