@@ -235,10 +235,9 @@ class PipelineTests(unittest.TestCase):
         self.room()
         with patch.object(jobs.POOL,'submit'):
             self.reveal(expect_start=False)
+            # Keep submission mocked until the async scheduler has queued work.
+            self.wait_status('queued')
         self.assertEqual(self.calls,[])
-        # Queue creation happens on the app's non-blocking visual executor; wait
-        # for that hand-off instead of racing the background scheduler.
-        self.wait_status('queued')
         jobs.recover(k.cn,k.generate_many);jobs.recover(k.cn,k.generate_many)
         self.assertTrue(self.entered.wait(1));self.release.set();self.wait_status('ready')
         self.assertEqual(len(self.calls),1)
@@ -247,6 +246,7 @@ class PipelineTests(unittest.TestCase):
         self.room()
         with patch.object(jobs.POOL,'submit'):
             self.reveal(expect_start=False)
+            self.wait_status('queued')
         with k.cn() as c:
             row=c.execute('SELECT * FROM image_jobs WHERE game_id=?',(self.g['id'],)).fetchone()
         original=k.cn;inserts=[]
@@ -332,3 +332,4 @@ class ProviderTests(unittest.TestCase):
 if __name__=='__main__':
     try:unittest.main(verbosity=2)
     finally:SERVER.shutdown();jobs.POOL.shutdown(wait=True)
+

@@ -11,7 +11,7 @@ import kyc_budget as b
 k.init()
 # Isolate own singleton in the dedicated test database.
 with k.cn() as c:
- c.execute('DELETE FROM budget_calls');c.execute('DELETE FROM budget_active');c.execute('DELETE FROM budget_sessions');c.execute('UPDATE launch_budget SET sessions=0,reserved_micro=0 WHERE id=1')
+ c.execute('DELETE FROM budget_allocations');c.execute('DELETE FROM budget_order_holds');c.execute('DELETE FROM budget_calls');c.execute('DELETE FROM budget_active');c.execute('DELETE FROM budget_sessions');c.execute('UPDATE launch_budget SET sessions=0,reserved_micro=0 WHERE id=1')
 def admit(gid):
  try:
   with k.cn() as c:return b.admit(c,gid)
@@ -63,4 +63,5 @@ with patch.object(b,'CAP',0):
  assert request('/api/create',{'name':'Must roll back'})==(429,{'error':'pilot_limit'})
  with k.cn() as c:assert c.execute('SELECT COUNT(*) AS n FROM games').fetchone()['n']==before
 server.shutdown();print('Budget HTTP auth, quote and admission rollback passed')
+
 
