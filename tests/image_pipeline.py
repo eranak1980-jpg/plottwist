@@ -110,7 +110,9 @@ class PipelineTests(unittest.TestCase):
         until=time.monotonic()+3
         while time.monotonic()<until:
             st=self.state()
-            if st['final_hero_status' if final else 'hero_status']==status:return st
+            # PostgreSQL READ COMMITTED may see a newly ready job after the
+            # preceding asset query. Wait for the URL as well as its status.
+            if st['final_hero_status' if final else 'hero_status']==status and (status!='ready' or st['final_hero' if final else 'hero']):return st
             time.sleep(.01)
         self.fail_test(status)
 
