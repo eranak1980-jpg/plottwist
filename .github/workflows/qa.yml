@@ -11,6 +11,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Smoke test image dependency
+        run: pip install Pillow
       - name: Python syntax
         run: python -m py_compile kyc_server.py kyc_ai.py kyc_visuals.py kyc_questions.py kyc_locales.py
       - name: Game engine smoke test
