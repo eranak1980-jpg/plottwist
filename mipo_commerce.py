@@ -329,6 +329,31 @@ def _callback_success(payload):
     return bool(approval) and (status in ('success', 'approved', '000', '0') or code in ('0', '000'))
 
 
+def _callback_transaction(payload):
+    """Normalize PayPlus's transaction callback, not unrelated card/3DS data.
+
+    The official gateway uses transaction.uid and
+    transaction.payment_page_request_uid. IPN and older page callbacks use
+    flat transaction_uid/payment_request_uid fields.
+    """
+    if not isinstance(payload, dict):
+        raise CommerceError('invalid_callback_payload', 400)
+    tx = payload.get('transaction')
+    if isinstance(tx, dict):
+        return {
+            'transaction_uid': tx.get('uid'),
+            'payment_request_uid': tx.get('payment_page_request_uid') or tx.get('payment_request_uid'),
+            'more_info': tx.get('more_info'), 'amount': tx.get('amount'),
+            'currency_code': tx.get('currency') or tx.get('currency_code'),
+            'status_code': tx.get('status_code'), 'status': tx.get('status'),
+            'approval_number': tx.get('approval_number'),
+            'transaction_type': payload.get('transaction_type'),
+        }
+    data = payload.get('data')
+    tx = data if isinstance(data, dict) and 'transaction_uid' in data else payload
+    return {**tx, 'transaction_type': tx.get('transaction_type') or tx.get('type') or payload.get('transaction_type')}
+
+
 def process_callback(c, raw, headers):
     if not verified_callback(raw, headers):
         raise CommerceError('invalid_callback_signature', 403)
@@ -336,6 +361,12 @@ def process_callback(c, raw, headers):
         payload = json.loads(raw)
     except Exception as exc:
         raise CommerceError('invalid_callback_payload', 400) from exc
+    payload = _callback_transaction(payload)
+    # Approval (J5), card checks and refunds also have successful callbacks.
+    # They must never be treated as a completed purchase.
+    kind = str(payload.get('transaction_type') or '').strip().lower()
+    if kind and kind != 'charge':
+        raise CommerceError('callback_not_a_charge', 409)
     order_id = str(_walk(payload, 'more_info') or '')
     request_uid = str(_walk(payload, 'payment_request_uid', 'page_request_uid') or '')
     # Lock the order before checking/granting credit (also serializes PG callbacks).
@@ -361,7 +392,11 @@ def process_callback(c, raw, headers):
             raise CommerceError('callback_transaction_missing', 400)
         amount = _walk(payload, 'amount', 'transaction_amount', 'amount_total')
         currency = str(_walk(payload, 'currency_code', 'currency') or '').upper()
-        try: callback_cents = int((Decimal(str(amount)) * 100).quantize(Decimal('1')))
+        try:
+            exact_cents = Decimal(str(amount)) * 100
+            callback_cents = int(exact_cents)
+            if not exact_cents.is_finite() or exact_cents != callback_cents:
+                raise ValueError('fractional_cent')
         except (InvalidOperation, ValueError, TypeError): raise CommerceError('callback_amount_missing', 400)
         if callback_cents != int(order['amount_cents']) or currency != str(order['currency']).upper():
             raise CommerceError('callback_order_mismatch', 409)

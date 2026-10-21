@@ -782,9 +782,14 @@ class H(BaseHTTPRequestHandler):
    self.send_response(303);self.send_header('Location',destination);self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Length','0');self.end_headers();return
   if p=='/api/payplus/callback':
    raw=self.rfile.read(int(self.headers.get('Content-Length','0')))
-   with cn() as c:
-    result=commerce.process_callback(c,raw,self.headers)
-    if result.get('status')=='paid':analytics.record(c,'purchase_completed',result.get('order_id'),metadata={'provider':'payplus'})
+   try:
+    with cn() as c:
+     result=commerce.process_callback(c,raw,self.headers)
+     if result.get('status')=='paid':analytics.record(c,'purchase_completed',result.get('order_id'),metadata={'provider':'payplus'})
+   except commerce.CommerceError as e:
+    print(json.dumps({'event':'payplus_callback_rejected','code':e.code}),flush=True)
+    raise
+   print(json.dumps({'event':'payplus_callback_processed','status':result.get('status'),'idempotent':bool(result.get('idempotent'))}),flush=True)
    return self.J(result)
   d=self.B()
   if p=='/api/analytics':
