@@ -11,8 +11,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Smoke test image dependency
-        run: pip install Pillow
       - name: Python syntax
         run: python -m py_compile kyc_server.py kyc_ai.py kyc_visuals.py kyc_questions.py kyc_locales.py
       - name: Game engine smoke test
@@ -29,6 +27,9 @@ jobs:
           python tests/readiness.py
           python tests/budget.py
           python tests/launch_budget.py
+          PYTHONPATH=. python tests/commerce.py
+          python tests/static_links.py
+          python tests/payplus_callbacks.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -37,6 +38,7 @@ jobs:
           npm install --prefix /tmp/plot-ui jsdom@30.1.1 --ignore-scripts --no-audit --no-fund
           PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/experience_ui.js
           node tests/session_ui.js
+          node tests/checkout_return.js
           node --check static/experience.js
           node --check static/sw.js
       - name: Browser JavaScript syntax
