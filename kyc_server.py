@@ -263,6 +263,7 @@ def total_rounds(g):
  try:return int(tie_data(g).get('end') or max(6,min(30,int(g['rounds'] or 12))))
  except:return 12
 def record_game_completion(c,g):
+ budget.complete(c,g['id'])
  analytics.record(c,'game_completed',g['owner_key'] or g['host'],g['id'],{'access':g['access_kind']})
  if g['access_kind']=='trial':analytics.record(c,'trial_completed',g['owner_key'],g['id'])
 def game_language(g):
@@ -890,7 +891,7 @@ class H(BaseHTTPRequestHandler):
     if not secrets.compare_digest(str(d.get('host','')),current['host']):return self.J({'error':'forbidden'},403)
     entitlement=''
     if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
-    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True)
+    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     # A preserved room means the currently active crew. Players already removed
     # from the run stay removed; photos, tokens, profiles and consents remain.
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
@@ -944,6 +945,7 @@ class H(BaseHTTPRequestHandler):
     g=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not can_tiebreak(g,ps):return self.J({'error':'tiebreak_unavailable'},409)
     if str(d.get('image_run'))!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
+    if os.getenv('OPENAI_API_KEY','').strip():budget.resume(c,g['id'])
     active=[p for p in ps if p['active']];start=total_rounds(g)
     tb={'sets':tie_data(g).get('sets',0)+1,'start':start,'end':start+len(active),
         'order':[p['id'] for p in active],'contenders':[p['id'] for p in winners(g,ps)]}
@@ -959,7 +961,7 @@ class H(BaseHTTPRequestHandler):
     if not current or current['status']!='finished':return self.J({'error':'not_finished'},409)
     entitlement=''
     if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
-    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True)
+    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1,access_kind=CASE WHEN ?<>'' THEN 'paid' ELSE access_kind END,entitlement_id=CASE WHEN ?<>'' THEN ? ELSE entitlement_id END,max_rounds=CASE WHEN ?<>'' THEN 18 ELSE max_rounds END,rounds=CASE WHEN ?<>'' AND rounds>18 THEN 18 ELSE rounds END WHERE id=? AND status='finished'",(entitlement,entitlement,entitlement,entitlement,entitlement,g['id']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],));c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),g['id']))
     for table in ('guesses','image_jobs','hero_scenes','instant_scenes','round_scores','match_answers','match_scores','chat_messages'):
@@ -1121,4 +1123,5 @@ def run():
  # makes /health and the landing page available while the heavy model warms.
  init();server=ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','5000'))),H)
  Thread(target=_background_startup,daemon=True).start();server.serve_forever()
+
 
