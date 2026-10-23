@@ -1,4 +1,9 @@
 import json,os,random,secrets,sqlite3,mimetypes
+PREVIEW_MODE=os.getenv('IS_PULL_REQUEST','').strip().lower()=='true'
+if PREVIEW_MODE:
+ os.environ.pop('DATABASE_URL',None)
+ os.environ.pop('DATABASE_PATH',None)
+ os.environ.pop('OPENAI_API_KEY',None)
 from threading import Thread,Lock,local
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone,timedelta
@@ -14,7 +19,7 @@ import mipo_commerce as commerce
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
-BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/'kyc.db'));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
+BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/('kyc-preview.db' if PREVIEW_MODE else 'kyc.db')));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
 def now():return datetime.now(timezone.utc).isoformat()
 def retention_cleanup(c):
  """Remove personal gameplay payloads after 30 days; keep minimal room rows."""
