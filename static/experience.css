@@ -144,3 +144,5 @@ html[dir="rtl"] .choiceDialog h2{margin:5px 0 8px 42px}
 @media(max-width:480px){.topbar .brand{width:155px;height:64px}}
 
 .scoreLogo img{display:block;width:190px;height:80px;object-fit:cover;object-position:center;margin:auto;border-radius:14px;background:#fff}
+
+html.crazygamesMode #hostIntroPhoto,html.crazygamesMode #photoReadyCard{display:none!important}
