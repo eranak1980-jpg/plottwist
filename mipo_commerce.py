@@ -157,6 +157,10 @@ def _paid_credit(c, key):
 
 def allocate_new_game(c, client_id, requested_access, game_id, qa_key=''):
     key = owner_key(client_id)
+    # CrazyGames Basic Launch games must remain playable without the website's
+    # one-time browser trial or a PayPlus purchase.
+    if str(client_id or '').strip().startswith('cg:'):
+        return {'owner_key': key, 'access_kind': 'crazygames', 'max_rounds': 8, 'entitlement_id': ''}
     if str(requested_access or '').lower() == 'qa':
         expected = os.getenv('MIPO_QA_TOKEN_HASH', DEFAULT_QA_TOKEN_HASH).strip().lower()
         supplied = hashlib.sha256(str(qa_key or '').encode()).hexdigest()
