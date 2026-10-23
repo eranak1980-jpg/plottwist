@@ -57,7 +57,7 @@ def _profile(c, gid, access_kind=None):
     if access_kind is None and _exists(c, 'games'):
         cols = c.execute('SELECT * FROM games WHERE id=?', (gid,)).fetchone()
         access_kind = cols['access_kind'] if cols and 'access_kind' in cols.keys() else None
-    trial = access_kind in ('trial', 'qa')
+    trial = access_kind in ('trial', 'qa', 'crazygames')
     return ('trial' if trial else 'paid', TRIAL_RESERVE if trial else SESSION_RESERVE, TRIAL_IMAGE_LIMIT if trial else IMAGE_LIMIT)
 
 def init(c):
