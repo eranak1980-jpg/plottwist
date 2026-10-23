@@ -30,8 +30,8 @@ def retention_cleanup(c):
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
 def crazygames_room(c,g):
  try:
-  host=c.execute('SELECT client_id FROM players WHERE game_id=? AND token=?',(g['id'],g['host'])).fetchone()
-  return bool(host and str(host['client_id'] or '').startswith('cg:'))
+  rows=c.execute('SELECT client_id FROM players WHERE game_id=?',(g['id'],)).fetchall()
+  return any(str(row['client_id'] or '').startswith('cg:') for row in rows)
  except Exception:return False
 def recently_seen(p,timeout=PRESENCE_TIMEOUT):
  raw=(p['last_seen'] if 'last_seen' in p.keys() else '') or (p['joined'] if 'joined' in p.keys() else '')
@@ -817,6 +817,7 @@ class H(BaseHTTPRequestHandler):
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
    co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120];language=normalize_language(d.get('language','en'))
+   if client_id.startswith('cg:'):ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';sp=min(sp,2);prize=''
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:
@@ -841,7 +842,8 @@ class H(BaseHTTPRequestHandler):
     if not g:payload,status={'error':'not_found'},404
     else:
      room_players=_players(c,g['id']);existing=next((x for x in room_players if client_id and (x['client_id'] or '')==client_id),None) or next((x for x in room_players if _norm_name(x['name'])==_norm_name(name)),None)
-     if existing:
+     if client_id.startswith('cg:') and any(x['photo_data'] and x['photo_consent'] for x in room_players):payload,status={'error':'photos_disabled_on_crazygames'},403
+     elif existing:
       if g['status']!='lobby' and int(existing['active'] if existing['active'] is not None else 1)==0:payload,status={'error':'removed_from_game'},409
       else:
        c.execute("UPDATE players SET active=1,last_seen=?,client_id=CASE WHEN client_id='' THEN ? ELSE client_id END WHERE id=?",(now(),client_id,existing['id']))
@@ -863,6 +865,8 @@ class H(BaseHTTPRequestHandler):
   if act=='chat':
    me=next((x for x in ps if x['token']==tok and int(x['active'] if x['active'] is not None else 1)==1),None)
    if not me:return self.J({'error':'forbidden'},403)
+   with cn() as c:cg_room=crazygames_room(c,g)
+   if cg_room:return self.J({'error':'chat_disabled_on_crazygames'},403)
    kind=str(d.get('kind','text')).strip().lower();body=str(d.get('body',d.get('message',''))).strip();client_msg_id=str(d.get('client_msg_id','')).strip()[:80]
    if not client_msg_id:return self.J({'error':'client_msg_id_required'},400)
    if kind=='reaction':
@@ -987,6 +991,8 @@ class H(BaseHTTPRequestHandler):
    ctx=str(d.get('context','')).strip()[:700];prize=str(d.get('prize','')).strip()[:180];round_limit=int(g['max_rounds'] or 30);rounds=max(6,min(round_limit,int(d.get('rounds',g['rounds']) or 12)));language=normalize_language(d.get('language',game_language(g)))
    try:sp=max(1,min(3,int(d.get('spice',g['spice']) or 1)))
    except:sp=int(g['spice'] or 1)
+   with cn() as c:cg_room=crazygames_room(c,g)
+   if cg_room:ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';prize='';sp=min(sp,2)
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,rounds=?,custom_questions=?,adults_confirmed=?,language=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,'[]',1 if adult else 0,language,g['id']))
@@ -1001,7 +1007,8 @@ class H(BaseHTTPRequestHandler):
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
-   if any(x['token']==g['host'] and str(x['client_id'] or '').startswith('cg:') for x in ps):return self.J({'error':'photos_disabled_on_crazygames'},403)
+   with cn() as c:cg_room=crazygames_room(c,g)
+   if cg_room:return self.J({'error':'photos_disabled_on_crazygames'},403)
    if not d.get('consent'):return self.J({'error':'consent_required'},400)
    if not isinstance(data,str) or not data.startswith('data:image/'):return self.J({'error':'invalid_image'},400)
    if len(data)>5_600_000:return self.J({'error':'image_too_large'},400)
@@ -1019,6 +1026,8 @@ class H(BaseHTTPRequestHandler):
    me=next((x for x in ps if x['token']==d.get('token')),None);topic=str(d.get('topic','')).strip()[:80]
    if not me or g['status']!='lobby':return self.J({'error':'not_allowed'},403)
    if topic not in TOPICS:return self.J({'error':'invalid_topic'},400)
+   with cn() as c:cg_room=crazygames_room(c,g)
+   if cg_room and topic in ADULT_TOPICS:return self.J({'error':'adult_content_disabled_on_crazygames'},403)
    if topic in ADULT_TOPICS and not int(g['adults_confirmed'] or 0):return self.J({'error':'adults_confirmation_required'},409)
    with cn() as c:
     old=c.execute('SELECT 1 FROM topic_votes WHERE game_id=? AND player_id=? AND topic=?',(g['id'],me['id'],topic)).fetchone()
