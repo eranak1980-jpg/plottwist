@@ -43,14 +43,13 @@
     };
     function syncRoom(state) {
       if (!state || !state.code) return;
-      const activePlayers = (state.players || []).filter(p => p.active !== false).length;
       if (state.status === 'finished') {
         call('leftRoom');
         lastRoomSignature = '';
         stopGameplay();
         return;
       }
-      const isJoinable = state.status === 'lobby' && activePlayers < 10;
+      const isJoinable = state.status === 'lobby';
       const room = {
         roomId: String(state.code),
         isJoinable,
