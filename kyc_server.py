@@ -900,7 +900,7 @@ class H(BaseHTTPRequestHandler):
     if not current or current['code']!=old_code:return self.J({'error':'stale_room'},409)
     if not secrets.compare_digest(str(d.get('host','')),current['host']):return self.J({'error':'forbidden'},403)
     entitlement=''
-    if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
+    if commerce.enabled(USE_PG) and current['access_kind']!='crazygames':entitlement=commerce.allocate_replay(c,current['owner_key'])
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     # A preserved room means the currently active crew. Players already removed
     # from the run stay removed; photos, tokens, profiles and consents remain.
@@ -970,7 +970,7 @@ class H(BaseHTTPRequestHandler):
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not current or current['status']!='finished':return self.J({'error':'not_finished'},409)
     entitlement=''
-    if commerce.enabled(USE_PG):entitlement=commerce.allocate_replay(c,current['owner_key'])
+    if commerce.enabled(USE_PG) and current['access_kind']!='crazygames':entitlement=commerce.allocate_replay(c,current['owner_key'])
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1,access_kind=CASE WHEN ?<>'' THEN 'paid' ELSE access_kind END,entitlement_id=CASE WHEN ?<>'' THEN ? ELSE entitlement_id END,max_rounds=CASE WHEN ?<>'' THEN 18 ELSE max_rounds END,rounds=CASE WHEN ?<>'' AND rounds>18 THEN 18 ELSE rounds END WHERE id=? AND status='finished'",(entitlement,entitlement,entitlement,entitlement,entitlement,g['id']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],));c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),g['id']))
