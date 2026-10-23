@@ -854,7 +854,6 @@ class H(BaseHTTPRequestHandler):
        c.execute("UPDATE players SET active=1,last_seen=?,client_id=CASE WHEN client_id='' THEN ? ELSE client_id END WHERE id=?",(now(),client_id,existing['id']))
        payload={'code':g['code'],'token':existing['token'],'name':existing['name'],'recovered':True}
      elif g['status']!='lobby':payload,status={'error':'started'},409
-     elif len([x for x in room_players if int(x['active'] if x['active'] is not None else 1)==1])>=10:payload,status={'error':'full'},409
      else:
       tok=secrets.token_urlsafe(16)
       c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(g['id'],name,tok,now(),now(),client_id,normalize_gender(d.get('gender'))))
