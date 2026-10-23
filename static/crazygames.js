@@ -1,12 +1,12 @@
 /* CrazyGames Basic Launch adapter. Loaded only when the game is embedded on CrazyGames. */
 (async function initCrazyGamesAdapter() {
   const isCrazyGamesOrigin = (value) => {
-    try { return /(^|\\.)crazygames\\.com$/i.test(new URL(value).hostname); }
+    try { return /(^|\.)crazygames\.com$/i.test(new URL(value).hostname); }
     catch (_) { return false; }
   };
   const embeddedOnCrazyGames =
     isCrazyGamesOrigin(document.referrer) ||
-    (window.location.hostname && /(^|\\.)crazygames\\.com$/i.test(window.location.hostname)) ||
+    (window.location.hostname && /(^|\.)crazygames\.com$/i.test(window.location.hostname)) ||
     (window.location.ancestorOrigins && Array.from(window.location.ancestorOrigins).some(isCrazyGamesOrigin));
   if (!embeddedOnCrazyGames) return;
 
