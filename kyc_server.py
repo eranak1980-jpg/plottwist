@@ -28,6 +28,11 @@ def retention_cleanup(c):
    c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
  c.execute('DELETE FROM analytics_events WHERE created<?',(analytics_cutoff,))
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
+def crazygames_room(c,g):
+ try:
+  host=c.execute('SELECT client_id FROM players WHERE game_id=? AND token=?',(g['id'],g['host'])).fetchone()
+  return bool(host and str(host['client_id'] or '').startswith('cg:'))
+ except Exception:return False
 def recently_seen(p,timeout=PRESENCE_TIMEOUT):
  raw=(p['last_seen'] if 'last_seen' in p.keys() else '') or (p['joined'] if 'joined' in p.keys() else '')
  if not raw:return False
@@ -996,6 +1001,7 @@ class H(BaseHTTPRequestHandler):
   if act=='photo':
    me=next((x for x in ps if x['token']==d.get('token')),None);data=d.get('data_url','')
    if not me:return self.J({'error':'player_not_found'},404)
+   if any(x['token']==g['host'] and str(x['client_id'] or '').startswith('cg:') for x in ps):return self.J({'error':'photos_disabled_on_crazygames'},403)
    if not d.get('consent'):return self.J({'error':'consent_required'},400)
    if not isinstance(data,str) or not data.startswith('data:image/'):return self.J({'error':'invalid_image'},400)
    if len(data)>5_600_000:return self.J({'error':'image_too_large'},400)
@@ -1035,7 +1041,7 @@ class H(BaseHTTPRequestHandler):
     if not current or current['status']!='lobby':return self.J({'error':'already_started'},409)
     active=[x for x in _players(c,g['id']) if int(x['active'] if x['active'] is not None else 1)==1]
     if len(active)<2:return self.J({'error':'need_2'},409)
-    if any(not x['photo_data'] or not x['photo_consent'] for x in active):return self.J({'error':'photos_required'},409)
+    if not crazygames_room(c,current) and any(not x['photo_data'] or not x['photo_consent'] for x in active):return self.J({'error':'photos_required'},409)
     selected=topics(current);vote_rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall()
     for row in vote_rows:
      if row['topic'] not in selected:selected.append(row['topic'])
