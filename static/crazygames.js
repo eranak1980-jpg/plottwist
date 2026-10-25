@@ -1,5 +1,6 @@
 /* CrazyGames Basic Launch adapter. Loaded only when the game is embedded on CrazyGames. */
 (async function initCrazyGamesAdapter() {
+  document.documentElement.dataset.mipoAdapter = JSON.stringify({create: typeof window.createGame, instant: new URLSearchParams(location.search).get('instantJoin')});
   const isCrazyGamesOrigin = (value) => {
     try { return /(^|\.)crazygames\.com$/i.test(new URL(value).hostname); }
     catch (_) { return false; }
@@ -8,6 +9,7 @@
     isCrazyGamesOrigin(document.referrer) ||
     (window.location.hostname && /(^|\.)crazygames\.com$/i.test(window.location.hostname)) ||
     (window.location.ancestorOrigins && Array.from(window.location.ancestorOrigins).some(isCrazyGamesOrigin));
+  document.documentElement.dataset.mipoEmbedded = String(embeddedOnCrazyGames);
   if (!embeddedOnCrazyGames) return;
 
   const loadSdk = () => new Promise((resolve, reject) => {
