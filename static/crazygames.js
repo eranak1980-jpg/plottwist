@@ -100,8 +100,10 @@
     if (typeof cg.addJoinRoomListener === 'function') {
       cg.addJoinRoomListener(joinFromInvite);
     }
-    if (cg.inviteParams) {
-      await joinFromInvite(cg.inviteParams);
+    const initialInvite = cg.inviteParams || {};
+    const initialCode = initialInvite.code || initialInvite.roomCode || initialInvite.roomId;
+    if (initialCode) {
+      await joinFromInvite(initialInvite);
     } else if (cg.isInstantMultiplayer && typeof window.createGame === 'function') {
       if (typeof window.mode === 'function') window.mode('create');
       const nameInput = document.getElementById('cname');
