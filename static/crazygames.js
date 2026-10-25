@@ -23,8 +23,7 @@
   try {
     await loadSdk();
     await window.CrazyGames.SDK.init();
-    const cg = window.CrazyGames.SDK.game;
-    if (!cg) return;
+    const cg = window.CrazyGames.SDK.game || {};
 
     let gameplayActive = false;
     let lastRoomSignature = '';
@@ -102,7 +101,7 @@
     }
     const launchParams = new URLSearchParams(window.location.search);
     const instantMultiplayer = cg.isInstantMultiplayer || launchParams.get('instantJoin') === 'true';
-    if (launchParams.get('qaTool') === 'true') console.info('MIPO SDK launch', { instantMultiplayer, sdkInstant: cg.isInstantMultiplayer, create: typeof window.createGame, join: typeof window.joinGame });
+    if (launchParams.get('qaTool') === 'true') console.info('MIPO SDK launch ' + JSON.stringify({ environment: window.CrazyGames.SDK.environment, instantMultiplayer, sdkInstant: cg.isInstantMultiplayer, create: typeof window.createGame, join: typeof window.joinGame }));
     const initialInvite = cg.inviteParams || {};
     const initialCode = initialInvite.code || initialInvite.roomCode || initialInvite.roomId;
     if (initialCode) {
