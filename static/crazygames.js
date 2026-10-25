@@ -106,6 +106,8 @@
       await joinFromInvite(initialInvite);
     } else if (cg.isInstantMultiplayer && typeof window.createGame === 'function') {
       if (typeof window.mode === 'function') window.mode('create');
+      const introContinue = document.getElementById('hostIntroContinue');
+      if (introContinue) introContinue.click();
       const nameInput = document.getElementById('cname');
       if (nameInput && !nameInput.value.trim()) nameInput.value = 'Player';
       await window.createGame();
