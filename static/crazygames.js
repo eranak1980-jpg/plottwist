@@ -100,11 +100,14 @@
     if (typeof cg.addJoinRoomListener === 'function') {
       cg.addJoinRoomListener(joinFromInvite);
     }
+    const launchParams = new URLSearchParams(window.location.search);
+    const instantMultiplayer = cg.isInstantMultiplayer || launchParams.get('instantJoin') === 'true';
+    if (launchParams.get('qaTool') === 'true') console.info('MIPO SDK launch', { instantMultiplayer, sdkInstant: cg.isInstantMultiplayer, create: typeof window.createGame, join: typeof window.joinGame });
     const initialInvite = cg.inviteParams || {};
     const initialCode = initialInvite.code || initialInvite.roomCode || initialInvite.roomId;
     if (initialCode) {
       await joinFromInvite(initialInvite);
-    } else if (cg.isInstantMultiplayer && typeof window.createGame === 'function') {
+    } else if (instantMultiplayer && typeof window.createGame === 'function') {
       if (typeof window.mode === 'function') window.mode('create');
       const introContinue = document.getElementById('hostIntroContinue');
       if (introContinue) introContinue.click();
