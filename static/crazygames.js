@@ -111,7 +111,7 @@
       if (!codeInput || !nameInput) return;
       if (typeof window.mode === 'function') window.mode('join');
       codeInput.value = String(code).toUpperCase().slice(0, 5);
-      if (!nameInput.value.trim()) nameInput.value = 'Player';
+      if (!nameInput.value.trim()) nameInput.value = 'Guest ' + Math.random().toString(36).slice(2, 6).toUpperCase();
       await window.joinGame();
     }
 
