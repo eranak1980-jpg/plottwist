@@ -20,6 +20,23 @@
     document.head.appendChild(script);
   });
 
+  let launchHandled = false;
+  const pageParams = new URLSearchParams(window.location.search);
+  // An optional platform SDK must not hold up the iframe's playable launch.
+  if (pageParams.get('instantJoin') === 'true' && !pageParams.get('code') && typeof window.createGame === 'function') {
+    try {
+      if (typeof window.mode === 'function') window.mode('create');
+      const continueButton = document.getElementById('hostIntroContinue');
+      if (continueButton) continueButton.click();
+      const hostName = document.getElementById('cname');
+      if (hostName && !hostName.value.trim()) hostName.value = 'Player';
+      await window.createGame();
+      launchHandled = !document.getElementById('game')?.classList.contains('hidden');
+    } catch (error) {
+      console.warn('MIPO instant launch can be completed with Create game.', error);
+    }
+  }
+
   try {
     await loadSdk();
     await window.CrazyGames.SDK.init();
@@ -104,9 +121,9 @@
     if (launchParams.get('qaTool') === 'true') console.info('MIPO SDK launch ' + JSON.stringify({ environment: window.CrazyGames.SDK.environment, instantMultiplayer, sdkInstant: cg.isInstantMultiplayer, create: typeof window.createGame, join: typeof window.joinGame }));
     const initialInvite = cg.inviteParams || {};
     const initialCode = initialInvite.code || initialInvite.roomCode || initialInvite.roomId;
-    if (initialCode) {
+    if (initialCode && !launchHandled) {
       await joinFromInvite(initialInvite);
-    } else if (instantMultiplayer && typeof window.createGame === 'function') {
+    } else if (!launchHandled && instantMultiplayer && typeof window.createGame === 'function') {
       if (typeof window.mode === 'function') window.mode('create');
       const introContinue = document.getElementById('hostIntroContinue');
       if (introContinue) introContinue.click();
