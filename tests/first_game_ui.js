@@ -8,7 +8,7 @@ const w=dom.window,errors=[],requests=[];w.addEventListener('error',e=>errors.pu
 let clock=10000,notes=0,stops=0,intervals=[];w.Date.now=()=>clock;
 w.setInterval=fn=>{intervals.push(fn);return intervals.length};
 w.HTMLElement.prototype.scrollIntoView=function(){};
-w.fetch=async(url,options={})=>{requests.push({url:String(url),options});return {ok:true,json:async()=>String(url).includes('/api/chat/')?({messages:[]}):({language:'he',copy:{},topics:{}})}};
+w.fetch=async(url,options={})=>{requests.push({url:String(url),options});return {ok:true,json:async()=>String(url).includes('/api/access')?({paid_games:process.env.MIPO_TEST_PAID?'1':0}):String(url).includes('/api/chat/')?({messages:[]}):({language:'he',copy:{},topics:{}})}};
 w.AbortController=AbortController;
 class AudioContext{constructor(){this.currentTime=0;this.state='running'}resume(){this.state='running';return Promise.resolve()}suspend(){this.state='suspended';return Promise.resolve()}createOscillator(){return {frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},start(){notes++},stop(){stops++},disconnect(){}}}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}}}}
 w.AudioContext=AudioContext;
@@ -20,7 +20,7 @@ script(fs.readFileSync('static/first-game.js','utf8'));
 (async()=>{
  await new Promise(r=>setImmediate(r));
  w.mode('create');assert($('hostIntro').classList.contains('hidden'));assert(!$('create').classList.contains('hidden'));
- assert.equal($('advancedSetup').open,false);assert.equal(w.eval('rounds'),8);assert.equal(w.eval('audienceType'),'friends');
+ assert.equal($('advancedSetup').open,false);assert.equal(w.eval('rounds'),process.env.MIPO_TEST_PAID?18:8);assert.equal(w.eval('audienceType'),'friends');
  assert($('cname').closest('#quickSetup'));assert($('audienceTypes').closest('#quickSetup'));assert($('topics').closest('#advancedSetup'));
  assert.equal(w.document.querySelectorAll('#cname').length,1);
  const before=requests.length;$('exampleRoundBtn').click();assert(w.document.querySelector('[role="dialog"]'));w.document.querySelector('[data-demo="1"]').click();assert(!w.document.querySelector('.demoAnswer').classList.contains('hidden'));assert.equal(requests.length,before,'demo has no network call or trial consumption');w.document.querySelector('.demoClose').click();
