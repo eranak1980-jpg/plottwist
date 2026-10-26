@@ -38,8 +38,7 @@ def play(device, expected_rounds, count, extension=False):
     room=req('/api/create',{'name':'Host','client_id':device,'rounds':30})
     code=room['code']; tokens=[room['token']]
     for n in range(1,count):tokens.append(req('/api/join',{'code':code,'name':'Guest'+str(n),'client_id':device+'-guest'+str(n)})['token'])
-    # Only photo storage is a fixture. All answers/guesses/advancement use HTTP.
-    with k.cn() as db:db.execute("UPDATE players SET photo_data='test-reference',photo_consent=1 WHERE game_id=?",(k.game(code)['id'],))
+    # Exercise the public flow with no photos, using real HTTP state and actions.
     if extension:purchase(device,'extension',299,{'code':code,'host':room['host']})
     def state(token=room['token']):return req('/api/state/'+code+'?token='+token+'&host='+room['host'])
     assert state()['total']==expected_rounds
@@ -53,7 +52,8 @@ def play(device, expected_rounds, count, extension=False):
             if p['id']!=subject['id']:req('/api/'+code+'/guess',{'token':p['token'],'guess':answer})
         assert state()['reveal']
         req('/api/'+code+'/next',{'host':room['host']})
-    assert state()['status']=='finished'
+    final=state();assert final['status']=='finished'
+    assert final['relationships'] and all(x['correct']==x['attempts'] for x in final['relationships']),final['relationships']
     print('FULL_FLOW_OK',expected_rounds,'rounds',count,'players')
 try:
     play('trial-device-launch',8,4)

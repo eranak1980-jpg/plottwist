@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 EVENTS = {
     'landing_page_view', 'click_play_mipo', 'click_free_trial', 'game_started',
-    'trial_completed', 'checkout_started', 'purchase_completed', 'game_completed',
+    'room_created', 'player_joined', 'round_completed', 'trial_completed', 'checkout_started', 'purchase_completed', 'game_completed',
 }
 
 

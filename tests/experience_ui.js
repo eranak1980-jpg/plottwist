@@ -22,7 +22,7 @@ const $=id=>w.document.getElementById(id);
  assert.equal(notes,0,'no audio before gesture');
  w.renderCreateTopics();w.renderAudience();
  assert(!$('adultOptions').open,'adult categories opt in');
- w.mode('create');assert(!$('hostIntro').classList.contains('hidden'));assert(!$('hostIntroAge').checked,'intro never prechecks age');
+ w.mode('create');assert($('hostIntro').classList.contains('hidden'));$('hostGuideLink').click();assert(!$('hostIntro').classList.contains('hidden'));assert(!$('hostIntroAge').checked,'intro never prechecks age');
  $('hostIntroAge').checked=true;$('hostIntroAge').dispatchEvent(new w.Event('change'));
  assert($('adultConfirm').checked,'explicit intro consent is retained in setup');
  $('hostIntroContinue').click();assert($('adultOptions').open);assert(!$('adultBox').classList.contains('hidden'),'age confirmation visible before choosing a topic');

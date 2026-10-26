@@ -203,7 +203,7 @@
     choice.classList.toggle('hidden',!d.can_tiebreak||!d.is_host);
     if(d.can_tiebreak&&d.is_host){
       if(!el('tieBreakBtn'))choice.innerHTML='<p id="tieHelp"></p><button type="button" id="tieBreakBtn"></button>';
-      el('tieHelp').textContent=L()[8];el('tieBreakBtn').disabled=gateStates.get(d.code+'_'+d.image_run+'_final')==='pending';el('tieBreakBtn').textContent='⚡ '+L()[7];el('tieBreakBtn').onclick=async()=>{
+      el('tieHelp').textContent=L()[8];el('tieBreakBtn').disabled=false;el('tieBreakBtn').textContent='⚡ '+L()[7];el('tieBreakBtn').onclick=async()=>{
         const button=el('tieBreakBtn');button.disabled=true;
         try{await window.req('/api/'+s.code+'/tiebreak',{host:s.host,image_run:d.image_run});stateSig='';await load()}catch(_){toast(copy.retry||'Try again')}finally{button.disabled=false}
       };
@@ -266,7 +266,7 @@
   function guideLabels(){const c=guideText();el('hostIntroTitle').textContent=c[0];el('hostIntroContinue').textContent=c[1];guideLink.textContent=c[2];const icons=['🤫','🎯','🖼️','🔗'];el('hostIntroRules').innerHTML=c[3].map((rule,i)=>'<li><span class="guideStepIcon" aria-hidden="true">'+icons[i]+'</span><span>'+safe(rule)+'</span></li>').join('');el('hostIntroAdult').textContent=S()[0];el('hostIntroAgeLabel').textContent=S()[1];el('hostIntroPhoto').textContent=S()[2];if(el('adultOptionsHint'))el('adultOptionsHint').textContent=c[5]}
   const baseMode=window.mode;
   function showHostGuide(){baseMode('create');el('create').classList.add('hidden');intro.classList.remove('hidden');el('hostIntroAge').checked=el('adultConfirm').checked;guideLabels();intro.scrollIntoView({block:'start'});el('hostIntroTitle').focus({preventScroll:true})}
-  window.mode=function(next){intro.classList.add('hidden');if(next==='create')showHostGuide();else baseMode(next)};
+  window.mode=function(next){intro.classList.add('hidden');baseMode(next)};
   guideLink.onclick=showHostGuide;
   el('hostIntroAge').onchange=()=>{el('adultConfirm').checked=el('hostIntroAge').checked;if(el('hostIntroAge').checked&&audienceType!=='family')el('adultOptions').open=true};
   el('hostIntroContinue').onclick=()=>{intro.classList.add('hidden');baseMode('create');adultSetup();el('create').scrollIntoView({block:'start'});el('cname').focus({preventScroll:true})};
@@ -344,7 +344,7 @@
     howAge.classList.toggle('hidden',!d.adult_required||!!d.me?.adult_confirmed);howAge.querySelector('span').textContent=S()[1];
     if(d.status==='lobby'){
       if(d.me&&!d.me.has_photo)el('photoBox').classList.remove('hidden');
-      const start=el('start');if(start&&start.disabled&&d.players.filter(p=>p.active).length>=2)start.textContent=d.players.some(p=>p.active&&!p.has_photo)?phrase('ממתינים לתמונות מכל השחקנים','Waiting for everyone’s photo'):phrase('ממתינים לאישור 18+ מכל השחקנים','Waiting for everyone’s 18+ confirmation');
+      const start=el('start');if(start&&start.disabled&&d.players.filter(p=>p.active).length>=2)start.textContent=phrase('ממתינים לאישור 18+ מכל השחקנים','Waiting for everyone’s 18+ confirmation');
     }
   }
   // Invitation links are the visible join mechanism; the room code stays internal.
@@ -427,7 +427,7 @@
   window.render=function(d){
     const newGame=current&&(current.code!==d.code||current.image_run!==d.image_run);if(newGame){closeScores();lastLine='';loadingKey='';el('companionMoment').classList.add('hidden')}
     if(previous&&previous.round!==d.round)closeScores();
-    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);featureRender(d);chatLabels();packageLabel();costs.classList.toggle('hidden',!d.is_host||d.status!=='finished');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
+    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);featureRender(d);chatLabels();packageLabel();costs.classList.add('hidden');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
     const help=el('ruleHelp');if(help)help.querySelector('summary span').textContent=L()[12];
     if(d.tiebreak?.sets&&d.status==='playing')el('round').textContent=L()[9]+' '+d.tiebreak.sets+' / 3 · '+(d.round-d.tiebreak.start+1)+' / '+d.tiebreak.order.length;
     const key=d.code+'_'+d.image_run+'_'+d.round+'_'+d.status;
@@ -441,7 +441,7 @@
   const baseGate=window.setImageGate;
   window.setImageGate=function(d,final,state){
     const key=d.code+'_'+d.image_run+'_'+(final?'final':d.round),before=gateStates.get(key);baseGate(d,final,state);gateStates.set(key,state);
-    if(final&&el('tieBreakBtn'))el('tieBreakBtn').disabled=state==='pending';if(before==='pending'&&state==='ready')sound('ready');if(gateStates.size>100)gateStates.delete(gateStates.keys().next().value);
+    if(final&&el('tieBreakBtn'))el('tieBreakBtn').disabled=false;if(before==='pending'&&state==='ready')sound('ready');if(gateStates.size>100)gateStates.delete(gateStates.keys().next().value);
     if(!final&&state!=='pending')autoScores(d);
   };
   new MutationObserver(()=>{guideLabels();label();chatLabels();packageLabel();lastScores='';if(current){scoreUI(current);finishUI(current);featureRender(current)}companion(true)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});

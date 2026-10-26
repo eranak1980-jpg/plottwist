@@ -434,6 +434,18 @@ def match_equal(a,b):
  except:return False
 def duo_callback(g,ps,rn):
  return meaningful_callback(g,ps,rn,duo=True) if len(ps)==2 else None
+def relationship_summary(g,ps):
+ if g['status']!='finished':return []
+ by_name={p['name']:p for p in ps};pairs={}
+ history={e.get('round'):e for e in mem(g) if e.get('answer') and e.get('answer')!='SKIPPED'}
+ with cn() as c:rows=c.execute('SELECT round_no,player_id,guess FROM guesses WHERE game_id=?',(g['id'],)).fetchall()
+ for row in rows:
+  entry=history.get(row['round_no']);subject=by_name.get(entry.get('subject')) if entry else None
+  if not subject or row['player_id']==subject['id']:continue
+  key=(row['player_id'],subject['id']);stat=pairs.setdefault(key,{'guesser_id':key[0],'subject_id':key[1],'correct':0,'attempts':0})
+  stat['attempts']+=1;stat['correct']+=int(row['player_id'] in entry['correct_guesser_ids'] if 'correct_guesser_ids' in entry else row['guess']==entry['answer'])
+ return sorted(pairs.values(),key=lambda x:(-x['correct']/x['attempts'],-x['attempts'],x['guesser_id'],x['subject_id']))
+
 def qdata(g,ps):
  # Removed/disconnected players stay in the room history, but must never be
  # selected as a future subject or answer option. Otherwise the room eventually
@@ -447,6 +459,8 @@ def qdata(g,ps):
   cb=duo_callback(g,ps,rn) if len(ps)==2 else smart_callback(g,ps,rn)
   if cb:return cb
  selected=effective_topics(g);tailored=custom_questions(g)
+ from mipo_content import opening_pack
+ opening=opening_pack(lang,g['custom_context'],selected) if rn<2 and not tb and int(g['spice'] or 1)<3 else []
  if lang=='he':
   focused=[]
   for t in selected:focused+=TOPICS.get(t,[])
@@ -489,6 +503,7 @@ def qdata(g,ps):
    if not too_similar(question_key(formatted,ps),used):
     return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']],sub
  chosen=None
+ if opening:base=opening
  for step in range(len(base)):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
@@ -635,7 +650,7 @@ class H(BaseHTTPRequestHandler):
   return self.get_impl()
  def get_impl(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'hybrid-v1','release':'pilot-budget-v6','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'hybrid-v1','release':'first-game-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p=='/api/pricing':
    try:return self.J(commerce.quote(int(parse_qs(u.query).get('rounds',['18'])[0]),int(parse_qs(u.query).get('games',['1'])[0])))
    except (ValueError,TypeError):return self.J({'error':'invalid_quote'},400)
@@ -771,6 +786,7 @@ class H(BaseHTTPRequestHandler):
     'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(active_ids)==2 else 'group',
     'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
     'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
+    'relationships':relationship_summary(g,ps),
     'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]
    })
   return self.J({'error':'not_found'},404)
@@ -833,6 +849,7 @@ class H(BaseHTTPRequestHandler):
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
     if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid)
     c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(gid,name,pt,now(),now(),client_id,normalize_gender(d.get('gender'))))
+    analytics.record(c,'room_created',client_id,gid,{'language':language,'rounds':rounds,'photos_required':False})
    if adult:
     with cn() as c:c.execute('UPDATE players SET adult_confirmed=1 WHERE token=?',(pt,))
    Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
@@ -857,6 +874,7 @@ class H(BaseHTTPRequestHandler):
      else:
       tok=secrets.token_urlsafe(16)
       c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(g['id'],name,tok,now(),now(),client_id,normalize_gender(d.get('gender'))))
+      analytics.record(c,'player_joined',client_id,g['id'],{'players':len(room_players)+1})
       payload={'code':g['code'],'token':tok,'name':name}
    return self.J(payload,status)
   a=p.strip('/').split('/')
@@ -1054,7 +1072,6 @@ class H(BaseHTTPRequestHandler):
     if not current or current['status']!='lobby':return self.J({'error':'already_started'},409)
     active=[x for x in _players(c,g['id']) if int(x['active'] if x['active'] is not None else 1)==1]
     if len(active)<2:return self.J({'error':'need_2'},409)
-    if not crazygames_room(c,current) and any(not x['photo_data'] or not x['photo_consent'] for x in active):return self.J({'error':'photos_required'},409)
     selected=topics(current);vote_rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall()
     for row in vote_rows:
      if row['topic'] not in selected:selected.append(row['topic'])
@@ -1129,7 +1146,8 @@ class H(BaseHTTPRequestHandler):
     active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1}
     need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
     if not g['answer'] or len([r for r in gs if r['player_id'] in active_ids])<need:return self.J({'error':'not_ready'},409)
-    clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ});rn=int(g['round_no'])+1
+    analytics.record(c,'round_completed',g['owner_key'] or g['host'],g['id'],{'round':int(g['round_no'])+1,'players':len(active_ids)})
+    clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ,'correct_guesser_ids':[r['player_id'] for r in gs if r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer'])]});rn=int(g['round_no'])+1
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
     if rn>=total_rounds(g) or remaining<2:
