@@ -117,13 +117,13 @@ def clean_pack(data,language='en'):
   typ=q.get('type');text=q.get('text');opts=q.get('options',[])
   if typ not in ('know','room') or not isinstance(text,str):continue
   text=text.strip()
-  if '{s}' not in text or _semantic_duplicate(text,seen_text) or _vague_question(text,language) or _contrived_question(text,language) or len(text)>(160 if language=='ja' else 280):continue
-  if language!='ja' and (len(text.split())<7 or len(text.split())>35):continue
+  if '{s}' not in text or _semantic_duplicate(text,seen_text) or _vague_question(text,language) or _contrived_question(text,language) or len(text)>(120 if language=='ja' else 210):continue
+  if language!='ja' and (len(text.split())<7 or len(text.split())>28):continue
   if not isinstance(opts,list):continue
   if typ=='know':
    if len(opts)!=4 or any(not isinstance(o,str) or not o.strip() for o in opts):continue
    opts=[o.strip() for o in opts]
-   if any(len(o)>70 or (language!='ja' and len(o.split())>10) for o in opts):continue
+   if any(len(o)>55 or (language!='ja' and len(o.split())>8) for o in opts):continue
    if not _distinct_options(opts) or any(_dodging_option(o,language) for o in opts):continue
   else:opts=[]
   seen_text.append(text);out.append((typ,text,opts))
@@ -153,6 +153,10 @@ or
 For room questions the answer will be one of the other players.
 
 Editorial standard:
+- One recognizable social moment per question, with one clear decision. Aim for 8–22 words and never exceed 28 words (Japanese: aim below 80 characters).
+- Options should be 2–6 words, plausible, mutually distinct and at the same level of detail. Do not create an obviously foolish answer just for a joke.
+- Ask something a friend could infer from real habits. The reveal should invite a story or a friendly disagreement.
+- Start accessible, then become more personal. Avoid multi-stage setups, arbitrary emergencies, judgmental descriptions, awkward pronouns, and explaining the joke.
 - REAL-LIFE FIRST: at least 9 of the 12 questions must be recognizable everyday moments that could plausibly happen this week: group chats, arriving late, ordering food, splitting a bill, family WhatsApp, getting ready, hosting, dating apps, work messages, travel planning, lending things, shopping, chores, calls, photos or ordinary nights out. Players should instantly think "that is so them".
 - The remaining 1–3 may be playful heightened dilemmas when they force an interesting choice between real people or two tempting actions. A two-seat car and choosing one friend for the first ride is good; a simple rescue fantasy may work for an adult group. Keep the setup to one sentence and the choice instantly clear. Never build random sketch-comedy worlds just to sound creative: no magical robots, bizarre movie lines, forced costume coincidences, sudden viral fame, celebrity encounters, or fortunes that must be spent by midnight. The funny part is the social choice and the ensuing debate.
 - Prefer observed habits and small social frictions over fantasy stakes. A good question exposes what the person actually tends to do: ignore a message, arrive late, avoid a bill, overpack, call a friend, change plans, order the same meal, or pretend everything is fine.

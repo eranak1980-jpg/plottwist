@@ -18,8 +18,6 @@ try:
  req('/api/create',{'name':'Host','topics':['דייטים'],'spice':2},400)
  h=req('/api/create',{'name':'Host','topics':['דייטים'],'spice':2,'adults_confirmed':True})
  g=req('/api/join',{'name':'Guest','code':h['code']});path='/api/'+h['code'];game=k.game(h['code'])
- assert req(path+'/start',{'host':h['host']},409)['error']=='photos_required'
- with k.cn() as c:c.execute("UPDATE players SET photo_data='fixture',photo_consent=1 WHERE game_id=?",(game['id'],))
  assert req(path+'/start',{'host':h['host']},409)['error']=='adults_confirmation_required'
  req(path+'/adultconfirm',{'token':'bad','confirmed':True},403)
  req(path+'/adultconfirm',{'token':h['token'],'confirmed':False},400)
@@ -40,5 +38,5 @@ try:
   c.execute("INSERT INTO image_jobs(game_id,image_run,round_no,status) VALUES(?,?,0,'running')",(game['id'],run))
  req(path+'/hero',{'host':h['host'],'retry':True,'image_run':run,'round':0})
  with k.cn() as c:assert c.execute('SELECT status FROM image_jobs WHERE game_id=?',(game['id'],)).fetchone()['status']=='running'
- print('PHOTO_READINESS_INDIVIDUAL_ADULT_CONSENT_AUTH_STALE_RETRY_ACTIVE_JOB_PRESERVED_OK')
+ print('OPTIONAL_PHOTOS_INDIVIDUAL_ADULT_CONSENT_AUTH_STALE_RETRY_ACTIVE_JOB_PRESERVED_OK')
 finally:server.shutdown();server.server_close()
