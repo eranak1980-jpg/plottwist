@@ -60,7 +60,7 @@ class PipelineTests(unittest.TestCase):
             def __enter__(self):return self
             def __exit__(self,*args):pass
             def execute(self,*args):return self
-            def fetchone(self):return {'id':1,'status':'finished','image_run':1}
+            def fetchone(self):return {'id':1,'status':'finished','image_run':1,'ai_images_enabled':1}
         with patch.object(k,'cn',DB),patch.object(k,'players',return_value=[]),patch.object(k,'image_payload',return_value={'kind':'final'}),patch.object(k.image_jobs,'queue',side_effect=lambda *a:events.append('ai') or 'queued'),patch.object(k.instant,'prepare',side_effect=lambda *a:events.append('preview')):
             self.assertEqual(k.prepare_hero_async(1,99,1),'queued')
         self.assertEqual(events,['ai','preview'])
@@ -151,7 +151,7 @@ class PipelineTests(unittest.TestCase):
         self.room(4,4)
         with k.cn() as c:
             c.execute('UPDATE games SET custom_questions=? WHERE id=?',(json.dumps([['room','Who would {s} choose for a trip?',['x']]]),self.g['id']))
-        with patch.object(k,'general_pack',return_value=[]):
+        with patch.object(k,'general_pack',return_value=[]),patch('mipo_content.opening_pack',return_value=[]):
             self.reveal();self.assertTrue(self.entered.wait(1))
         self.assertEqual([x[0] for x in self.calls[0]['items']],['Alice','Bob'])
         self.assertEqual(self.calls[0]['selected'],'Bob')

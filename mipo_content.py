@@ -51,6 +51,11 @@ PACKS = {
 ('קרוב משפחה מבקש מ־{s} עזרה בטלפון. מה קורה?', ['מסבירים שלב אחרי שלב','מתקנים בעצמנו','כותבים הוראות','מוצאים סרטון הדרכה']),
 ]}}
 
+# Stronger first rounds, with distinct closed choices instead of neutral chores.
+from mipo_playtest import PERSONAL_HE
+for kind in ('friends','couple','family'):
+ PACKS['he'][kind]=[(text,options) for _,text,options in PERSONAL_HE]
+
 def opening_pack(language,context,topics):
  bank=PACKS.get(language)
  if not bank:return []

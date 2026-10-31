@@ -117,8 +117,9 @@ def clean_pack(data,language='en'):
   typ=q.get('type');text=q.get('text');opts=q.get('options',[])
   if typ not in ('know','room') or not isinstance(text,str):continue
   text=text.strip()
+  if language=='he' and re.search(r'[\u0600-\u06ff]',text+' '.join(map(str,opts)) if isinstance(opts,list) else text):continue
   if '{s}' not in text or _semantic_duplicate(text,seen_text) or _vague_question(text,language) or _contrived_question(text,language) or len(text)>(120 if language=='ja' else 210):continue
-  if language!='ja' and (len(text.split())<7 or len(text.split())>28):continue
+  if language!='ja' and (len(text.split())<(4 if typ=='room' else 7) or len(text.split())>28):continue
   if not isinstance(opts,list):continue
   if typ=='know':
    if len(opts)!=4 or any(not isinstance(o,str) or not o.strip() for o in opts):continue
@@ -145,7 +146,7 @@ Selected topics: {', '.join(display_topics) if display_topics else 'mixed'}
 Host description of the group: {context or 'none'}
 Spice level: {level}
 
-Create exactly 12 excellent questions tailored to THIS group. This gives the game a small reserve when a question is filtered or was already played, without padding the pack with weaker variations. At least 10 must be "know" questions and at most 2 may be "room" questions. The game loop: one spotlight player answers secretly; everyone else predicts their answer.
+Create exactly 12 excellent questions tailored to THIS group. This gives the game a small reserve when a question is filtered or was already played, without padding the pack with weaker variations. At least 8 must be "know" questions and up to 4 may be "room" questions. The game loop: one spotlight player answers secretly; everyone else predicts their answer.
 Return ONLY a JSON array. Each item must be either:
 {{"type":"know","text":"question in the requested language containing {{s}} for spotlight player","options":["4 short mutually distinct answers in the requested language"]}}
 or
@@ -154,8 +155,8 @@ For room questions the answer will be one of the other players.
 
 Editorial standard:
 - One recognizable social moment per question, with one clear decision. Aim for 8–22 words and never exceed 28 words (Japanese: aim below 80 characters).
-- Options should be 2–6 words, plausible, mutually distinct and at the same level of detail. Do not create an obviously foolish answer just for a joke.
-- Ask something a friend could infer from real habits. The reveal should invite a story or a friendly disagreement.
+- Every option must directly answer the exact question asked; never add a disconnected fourth answer to fill the list. Options should be 2–6 words, plausible, mutually distinct and at the same level of detail. Do not create an obviously foolish answer just for a joke.
+- Ask something a friend could infer from real habits. The reveal should invite a friendly disagreement. All answers must remain closed choices; never ask players to write an explanation.
 - Start accessible, then become more personal. Avoid multi-stage setups, arbitrary emergencies, judgmental descriptions, awkward pronouns, and explaining the joke.
 - REAL-LIFE FIRST: at least 9 of the 12 questions must be recognizable everyday moments that could plausibly happen this week: group chats, arriving late, ordering food, splitting a bill, family WhatsApp, getting ready, hosting, dating apps, work messages, travel planning, lending things, shopping, chores, calls, photos or ordinary nights out. Players should instantly think "that is so them".
 - The remaining 1–3 may be playful heightened dilemmas when they force an interesting choice between real people or two tempting actions. A two-seat car and choosing one friend for the first ride is good; a simple rescue fantasy may work for an adult group. Keep the setup to one sentence and the choice instantly clear. Never build random sketch-comedy worlds just to sound creative: no magical robots, bizarre movie lines, forced costume coincidences, sudden viral fame, celebrity encounters, or fortunes that must be spent by midnight. The funny part is the social choice and the ensuing debate.
@@ -166,7 +167,7 @@ Editorial standard:
 - Before returning, silently read each question with EACH answer. Rewrite unclear setups and answers that need explanation. Remove rhetorical fluff such as "the photo will forgive". Replace generic chemistry/value checklists with a specific awkward date or funny decision.
 - Bold level means sharper COMEDY, not just more personal questions. Give each setup a specific comic problem and four funny, believable reactions. Avoid filler choices like "both", "depends", "balance" or "stay home" that dodge the dilemma.
 - Reject moral no-brainers (a wonderful real evening versus a fake social-media evening), generic values comparisons and abstract tradeoffs. Each option should have its own tempting upside and comic cost.
-- For Hebrew: write like friends joking out loud. Example tone: "{{s}} שלח/ה בטעות הודעה קולית לקבוצה הלא נכונה. איך יוצאים מזה?" with distinct reactions, not personality labels. Do not repeat this example.
+- For Hebrew: write like friends joking out loud. Example tone: "{{s}} שלח/ה בטעות הודעה קולית לקבוצה הלא נכונה. איך יוצאים מזה?" with distinct reactions. Room questions SHOULD be short, direct judgments about real friends: who {{s}} thinks is funniest, most responsible, most easily scared, most stubborn, most absent-minded, or who knows {{s}} best. No invented celebrity, elevator-comedy or viral-fame stories. Do not repeat this example.
 - Adult dating/intimacy only when explicitly selected, or at level 3. Family/children context always overrides adult suggestions: keep the pack clean, warm and funny.
 - Every question must earn its place: it should trigger laughter, surprise, debate, 'what?!', affectionate teasing, or reveal something socially interesting.
 - Chill is NOT boring or formal. For family, parent/child, or low-spice groups, create funny everyday dilemmas, old memories, travel mishaps, money hypotheticals, family habits, embarrassing-but-safe moments, and “I can’t believe you picked that” choices. Keep it warm and safe, but still entertaining.

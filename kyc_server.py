@@ -18,6 +18,7 @@ import kyc_instant as instant
 import mipo_commerce as commerce
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
+from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/('kyc-preview.db' if PREVIEW_MODE else 'kyc.db')));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
 def now():return datetime.now(timezone.utc).isoformat()
@@ -120,6 +121,7 @@ def init():
    c.execute("DELETE FROM players a USING players b WHERE a.game_id=b.game_id AND LOWER(TRIM(a.name))=LOWER(TRIM(b.name)) AND a.id>b.id")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
+   c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS ai_images_enabled INTEGER DEFAULT 1")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS image_run INTEGER DEFAULT 0")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS tiebreak TEXT DEFAULT '{}'")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS owner_key TEXT DEFAULT ''")
@@ -132,7 +134,7 @@ def init():
  with cn() as c:
   c.raw.executescript("""CREATE TABLE IF NOT EXISTS games(id INTEGER PRIMARY KEY,code TEXT UNIQUE,host TEXT,status TEXT DEFAULT 'lobby',round_no INTEGER DEFAULT 0,answer TEXT DEFAULT '',memory TEXT DEFAULT '[]',topics TEXT DEFAULT '[]',custom_context TEXT DEFAULT '',spice INTEGER DEFAULT 1,custom_questions TEXT DEFAULT '[]',prize TEXT DEFAULT '',rounds INTEGER DEFAULT 12,adults_confirmed INTEGER DEFAULT 0,language TEXT DEFAULT 'en',created TEXT);CREATE TABLE IF NOT EXISTS players(id INTEGER PRIMARY KEY,game_id INTEGER,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,client_id TEXT DEFAULT '');CREATE TABLE IF NOT EXISTS guesses(game_id INTEGER,round_no INTEGER,player_id INTEGER,guess TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS hero_scenes(game_id INTEGER,round_no INTEGER,image_data TEXT,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS round_scores(game_id INTEGER,round_no INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS topic_votes(game_id INTEGER,player_id INTEGER,topic TEXT,UNIQUE(game_id,player_id,topic));CREATE TABLE IF NOT EXISTS question_history(crew_key TEXT,question_key TEXT,question TEXT,used TEXT,UNIQUE(crew_key,question_key));CREATE TABLE IF NOT EXISTS match_answers(game_id INTEGER,round_no INTEGER,player_id INTEGER,answer TEXT,created TEXT,UNIQUE(game_id,round_no,player_id));CREATE TABLE IF NOT EXISTS match_scores(game_id INTEGER,round_no INTEGER,matched INTEGER,created TEXT,UNIQUE(game_id,round_no));CREATE TABLE IF NOT EXISTS chat_messages(id INTEGER PRIMARY KEY,game_id INTEGER,player_id INTEGER,kind TEXT,body TEXT,client_msg_id TEXT DEFAULT '',created TEXT);CREATE INDEX IF NOT EXISTS chat_messages_game_id ON chat_messages(game_id,id);CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_idempotency ON chat_messages(game_id,player_id,client_msg_id) WHERE client_msg_id<>'';""")
   gc={r['name'] for r in c.execute('PRAGMA table_info(games)')}
-  for n,d in [('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'"),('owner_key',"TEXT DEFAULT ''"),('access_kind',"TEXT DEFAULT 'pilot'"),('entitlement_id',"TEXT DEFAULT ''"),('max_rounds','INTEGER DEFAULT 30')]:
+  for n,d in [('ai_images_enabled','INTEGER DEFAULT 1'),('topics',"TEXT DEFAULT '[]'"),('custom_context',"TEXT DEFAULT ''"),('spice','INTEGER DEFAULT 1'),('custom_questions',"TEXT DEFAULT '[]'"),('prize',"TEXT DEFAULT ''"),('rounds','INTEGER DEFAULT 12'),('adults_confirmed','INTEGER DEFAULT 0'),('language',"TEXT DEFAULT 'he'"),('owner_key',"TEXT DEFAULT ''"),('access_kind',"TEXT DEFAULT 'pilot'"),('entitlement_id',"TEXT DEFAULT ''"),('max_rounds','INTEGER DEFAULT 30')]:
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   if 'tiebreak' not in gc:c.execute("ALTER TABLE games ADD COLUMN tiebreak TEXT DEFAULT '{}'")
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
@@ -175,11 +177,11 @@ def crew_key(ps):
 def question_key(text,ps):
  import re
  x=str(text or '').lower()
- for p in ps:
-  n=_norm_name(p['name'])
-  if n:x=x.replace(n,'{s}')
+ for n in sorted({_norm_name(p['name']) for p in ps},key=len,reverse=True):
+  if n:x=re.sub(r'(?<!\w)'+re.escape(n)+r'(?!\w)','{s}',x)
  x=re.sub(r'[^\w\u0590-\u05ff{}]+',' ',x,flags=re.UNICODE)
- return ' '.join(x.split())
+ x=' '.join(x.split())
+ return canonical_key(x) or x
 def past_question_keys(ps):
  ck=crew_key(ps)
  if not ck:return set()
@@ -196,7 +198,9 @@ def too_similar(qk,used):
   a=toks(qk)
   for u in used:
    if not u:continue
-   if qk==u or SequenceMatcher(None,qk,u).ratio()>=0.84:return True
+   if qk==u:return True
+   if qk.startswith('crew-choice:') or str(u).startswith('crew-choice:'):continue
+   if SequenceMatcher(None,qk,u).ratio()>=0.84:return True
    b=toks(u)
    if a and b and (len(a&b)>=5 and len(a&b)/max(1,min(len(a),len(b)))>=0.58):return True
   return False
@@ -261,6 +265,7 @@ def winners(g,ps):
  top=max(p['score'] for p in eligible)
  return [p for p in eligible if p['score']==top]
 def final_image_eligible(g,ps):
+ if not g['ai_images_enabled']:return False
  ws=winners(g,ps)
  active=active_players(ps)
  return bool(ws and all(p['photo_data'] and p['photo_consent'] for p in ws) and sum(bool(p['photo_data'] and p['photo_consent']) for p in active)<=16)
@@ -446,6 +451,19 @@ def relationship_summary(g,ps):
   stat['attempts']+=1;stat['correct']+=int(row['player_id'] in entry['correct_guesser_ids'] if 'correct_guesser_ids' in entry else row['guess']==entry['answer'])
  return sorted(pairs.values(),key=lambda x:(-x['correct']/x['attempts'],-x['attempts'],x['guesser_id'],x['subject_id']))
 
+def round_insights(g):
+ if g['status']!='finished':return []
+ with cn() as c:rows=c.execute('SELECT round_no,player_id FROM guesses WHERE game_id=?',(g['id'],)).fetchall()
+ counts={}
+ for row in rows:counts[row['round_no']]=counts.get(row['round_no'],0)+1
+ result=[]
+ for entry in mem(g):
+  attempts=counts.get(entry.get('round'),0)
+  if not attempts or entry.get('answer') in ('',None,'SKIPPED') or 'correct_guesser_ids' not in entry:continue
+  correct=len(entry['correct_guesser_ids'])
+  if correct<attempts:result.append({'round':entry['round'],'subject':entry.get('subject',''),'question':entry.get('question',''),'answer':entry['answer'],'correct':correct,'attempts':attempts})
+ return sorted(result,key=lambda x:(x['correct']/x['attempts'],-x['attempts'],x['round']))[:3]
+
 def qdata(g,ps):
  # Removed/disconnected players stay in the room history, but must never be
  # selected as a future subject or answer option. Otherwise the room eventually
@@ -468,9 +486,9 @@ def qdata(g,ps):
    # Retire the remaining sketch-comedy fallbacks from live selection. The
    # question should be funny because of a recognizable social moment, not a
    # robot, celebrity, magic object or impossible stunt.
-   bad=('רובוט','מלפפון','מיליון','תוכי','קריין','גביע עובד','תפקיד קטן בסרט','פנקייק נחת','אדם מפורסם','כרטיס אשראי בלי הגבלה','דלת בבית שמובילה','שש פיצות','ורוד וזוהר','שלוש דקות למלא עגלה','יום אחד שבו אף החלטה','כפתור שמאפשר לחזור שעה','מוזיקת כניסה של נבל')
+   bad=('כתם על החולצה','משאלה קטנה','חוק אחד שלא יחול','רובוט','מלפפון','מיליון','תוכי','קריין','גביע עובד','תפקיד קטן בסרט','פנקייק נחת','אדם מפורסם','כרטיס אשראי בלי הגבלה','דלת בבית שמובילה','שש פיצות','ורוד וזוהר','שלוש דקות למלא עגלה','יום אחד שבו אף החלטה','כפתור שמאפשר לחזור שעה','מוזיקת כניסה של נבל')
    return not any(word in str(text) for word in bad)
-  focused=[q for q in focused if grounded(q[1])]
+  focused=[q for q in focused if grounded(q[1]) and editorial_ok(q,lang)]
   if int(g['spice'] or 1)==2:
    broad=not selected or any(t in THEME_ONLY for t in selected)
    comic=[('know',text,opts) for topic,text,opts in BOLD_COMEDY if grounded(text) and (broad or topic in selected) and (topic not in ADULT_TOPICS or topic in selected)]
@@ -480,8 +498,8 @@ def qdata(g,ps):
   # but a narrow topic must not force the fallback into abstract or cartoonish
   # prompts when the curated everyday pack is available.
   themed=len(selected)==1 and selected[0] in THEME_ONLY
-  general=[q for q in GENERAL if grounded(q[1])]
-  base=tailored+focused+EVERYDAY_CORE if (tailored or focused) else EVERYDAY_CORE
+  general=[q for q in PERSONAL_HE+GENERAL if grounded(q[1]) and editorial_ok(q,lang)]
+  base=tailored+PERSONAL_HE+focused
  else:
   native=general_pack(lang);spicy=spicy_pack(lang) if int(g['spice'] or 1)>=3 else []
   base=tailored+spicy+native
@@ -489,21 +507,22 @@ def qdata(g,ps):
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if q[0]=='know']
  if lang=='he' and int(g['spice'] or 1)==2 and comic:
-  preferred=[q for q in tailored+comic+EVERYDAY_CORE if len(ps)!=2 or q[0]!='room']
+  preferred=[q for q in tailored+comic+PERSONAL_HE if len(ps)!=2 or q[0]!='room']
   used_now={question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
   if any(not too_similar(question_key(q[1].format(s=sub['name']),ps),used_now) for q in preferred):base=preferred
  used={question_key(e.get('question',''),ps) for e in mem(g)}
  used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
- if lang=='he' and len(ps)>2 and not tb and rn%4==2:
-  spark=[q for q in SOCIAL_SPARK if not ('רפסודה' in q[1] and any(word in str(g['custom_context'] or '').lower() for word in ('ילדים','children','kids')))]
+ if lang in ('he','en') and len(ps)>2 and not tb and rn%3==2:
+  spark=room_pack(lang,g['custom_context'])
   for step in range(len(spark)):
    typ,text,opts=spark[(seed//7+step)%len(spark)]
    formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):
     return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']],sub
+ base=[q for q in base if editorial_ok(q,lang)]
  chosen=None
- if opening:base=opening
+ if opening:base=[q for q in opening if editorial_ok(q,lang)]+base
  for step in range(len(base)):
   q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
@@ -521,17 +540,17 @@ def qdata(g,ps):
   opts=[o for o in opts if str(o).strip().removeprefix('✏️').strip().casefold()!=other_label(lang).removeprefix('✏️').strip().casefold()]
   if str(g['answer']).startswith('OTHER::'):opts=list(opts)+[other_label(lang)]
  return typ,formatted,list(opts),sub
-def _clean_pack(pack):
+def _clean_pack(pack,language='en'):
  clean=[];seen=set()
  for q in pack or []:
-  if not isinstance(q,(list,tuple)) or len(q)!=3:continue
+  if not editorial_ok(q,language):continue
   key=str(q[1]).strip().lower()
   if key and key not in seen:seen.add(key);clean.append(q)
  return clean
 def prepare_pack_async(gid,ts,ctx,spice,language='en'):
  try:
   with budget.scope(cn,gid,'questions'):
-   pack=_clean_pack(generate_pack(ts,ctx,spice,normalize_language(language)))
+   pack=_clean_pack(generate_pack(ts,ctx,spice,normalize_language(language)),normalize_language(language))
   if not pack:return
   with cn() as c:
    g=c.execute('SELECT status FROM games WHERE id=?',(gid,)).fetchone()
@@ -543,6 +562,7 @@ def hero_round(rn,total):
 def image_url(g,rn):
  return '/api/hero-image/'+g['code']+'/'+str(rn)+'?run='+str(g['image_run'])
 def image_payload(g,ps,final=False):
+ if not g['ai_images_enabled']:return None
  if final:
   ws=winners(g,ps)
   if not final_image_eligible(g,ps):return None
@@ -568,6 +588,7 @@ def image_payload(g,ps,final=False):
 def prepare_hero_async(gid,rn,expected_run=None):
  # Reserve and snapshot quickly; only the durable worker performs the slow API call.
  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
+ if g and not g['ai_images_enabled']:return 'disabled'
  if not g or (expected_run is not None and int(g['image_run'])!=int(expected_run)):return 'stale'
  final=int(rn)==99
  if final:
@@ -775,7 +796,7 @@ class H(BaseHTTPRequestHandler):
     'all_guesses':[{'player_id':x['id'],'name':x['name'],'gender':x['gender'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],
     'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,
     'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],
-    'reveal':reveal,'image_run':g['image_run'],'hero_eligible':bool(sub and sub['photo_data'] and sub['photo_consent']),
+    'reveal':reveal,'image_run':g['image_run'],'ai_images_enabled':bool(g['ai_images_enabled']),'hero_eligible':bool(g['ai_images_enabled'] and sub and sub['photo_data'] and sub['photo_consent']),
     'final_image_eligible':final_image_eligible(g,ps),'winner_ids':[p['id'] for p in winners(g,ps)],
     'tiebreak':tie_data(g),'can_tiebreak':can_tiebreak(g,ps),'instant_visual':instant_url(g['round_no']),
     'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),
@@ -786,7 +807,7 @@ class H(BaseHTTPRequestHandler):
     'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(active_ids)==2 else 'group',
     'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
     'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
-    'relationships':relationship_summary(g,ps),
+    'relationships':relationship_summary(g,ps),'round_insights':round_insights(g),
     'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]
    })
   return self.J({'error':'not_found'},404)
@@ -844,6 +865,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
+    c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('ai_images_enabled',True) is True),gid))
     if commerce.enabled(USE_PG):
      access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'));rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
@@ -911,13 +933,17 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True,'code':g['code'],'message':{'id':row['id'],'player_id':row['player_id'],'name':row['name'],'kind':row['kind'],'body':row['body'],'created':row['created']}})
   needs_question=act in ('reopen','drop','tiebreak','answer','guess','hero','finalhero','skip','next')
   typ,text,opts,sub=qdata(g,ps) if needs_question else (None,'',[],None)
-  host_actions=('start','next','hero','finalhero','skip','settings','reopen','drop','replay','freshroom','tiebreak')
+  host_actions=('image-settings','start','next','hero','finalhero','skip','settings','reopen','drop','replay','freshroom','tiebreak')
   if act in host_actions and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act in ('answer','guess','skip','next','hero'):
    if g['status']!='playing':return self.J({'error':'not_playing'},409)
    if d.get('image_run') is not None and str(d['image_run'])!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
    if d.get('round') is not None and str(d['round'])!=str(g['round_no']):return self.J({'error':'stale_round'},409)
   if act=='finalhero' and g['status']!='finished':return self.J({'error':'not_finished'},409)
+  if act=='image-settings':
+   if g['status']!='lobby':return self.J({'error':'already_started'},409)
+   with cn() as c:c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('enabled') is True),g['id']))
+   return self.J({'ok':True})
   if act=='freshroom':
    old_code=g['code'];new_code=code5()
    with cn() as c:

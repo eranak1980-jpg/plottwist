@@ -106,7 +106,7 @@ g=k.game('QA123');ps=k.players(g['id'])
 with k.cn() as db:
  db.execute("UPDATE games SET round_no=2,memory='[]' WHERE id=?",(g['id'],))
 g=k.game('QA123');typ,text,opts,sub=k.qdata(g,ps)
-assert typ=='room' and len(opts)==2 and any(w in text for w in ('רכב','רפסודה','הופעה','תוכנית טלוויזיה','חופשה')),(typ,text,opts)
+assert typ=='room' and len(opts)==2 and any(text==template.format(s=sub['name']) for _,template,_ in k.room_pack('he')),(typ,text,opts)
 with k.cn() as db:
  db.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
   {'round':0,'subject':'Eran','question':'הודעה בקבוצה','answer':'עונה','type':'know'},
@@ -115,8 +115,7 @@ with k.cn() as db:
   {'round':3,'subject':'Eran','question':'נסיעה בבוקר','answer':'אוטובוס','type':'know'},
  ],ensure_ascii=False),g['id']))
 g=k.game('QA123');cb=k.smart_callback(g,ps,4)
-assert cb and cb[0]=='callback' and opts[0] in cb[1] and 'עכשיו זה באמת קורה' not in cb[1],cb
-assert len(set(cb[2]))==4,cb
+assert cb is None, 'Short trait questions must not get an unrelated invented sequel'
 print('QA_SOCIAL_SPARK_CALLBACK_OK')
 
 # Scoring must be idempotent and survive a state/reveal race.
@@ -321,7 +320,7 @@ print('QA_REPLAY_GUEST_FINISH_RESET_OK')
 # A player who enters a room should keep the room code in the browser URL so
 # browser history/direct reopening returns to the same room entry point.
 html=(Path(__file__).resolve().parents[1]/'static'/'kyc.html').read_text()
-assert "location.pathname+'?code='+encodeURIComponent(s.code)" in html
+assert "let u=mipoRoomUrl(s.code)" in html
 assert "history.replaceState({},'',u)" in html
 print('QA_ROOM_URL_PERSISTENCE_OK')
 

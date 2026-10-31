@@ -45,10 +45,11 @@
   const safe=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch(_){return fallback}};
   const write=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch(_){}};
+  let voiceEnabled=read('plot_voice',false)===true;
   let enabled=true,activated=false,context,busyUntil=0,audioEpoch=0,pendingSound;
   try{enabled=localStorage.getItem('plot_sound')!=='off'}catch(_){}
   const nodes=new Set();
-  function hush(){audioEpoch++;busyUntil=0;clearTimeout(pendingSound);for(const n of nodes){try{n.stop()}catch(_){}}nodes.clear();if(context&&context.state==='running')context.suspend().catch(()=>{});}
+  function hush(){window.speechSynthesis?.cancel();audioEpoch++;busyUntil=0;clearTimeout(pendingSound);for(const n of nodes){try{n.stop()}catch(_){}}nodes.clear();if(context&&context.state==='running')context.suspend().catch(()=>{});}
   function unlock(){activated=true;try{const A=window.AudioContext||window.webkitAudioContext;if(enabled&&A){context ||= new A();if(context.state!=='running')context.resume().catch(()=>{});}}catch(_){}}
   function sound(kind){
     if(!enabled||!activated||document.hidden)return;
@@ -60,17 +61,19 @@
     try{
       clearTimeout(pendingSound);
       unlock();if(!context)return;
-      const spoken={
+      let spoken={
         hum:['Hmm…','Mmm-hmm…'],peek:['Oh!','Well, well…'],oops:['Oops!','Uh-oh…'],
         wow:['Whoa!','Oh wow!'],tie:['Ooh…','Interesting…'],taDa:['Ta-da!','There it is!'],
         snicker:['Heh heh…','Ha! Knew it.'],wink:['Mm-hmm!','Nice one!'],
         mischief:['Heh heh…','Oh, this is good…'],hmm:['Hmm…','Come on…'],gasp:['Oh!','No way!']
       };
+      if(spoken[kind]&&!voiceEnabled)return;
+      if(lang()==='he')spoken={hum:['הממ'],peek:['אה!'],oops:['אופס'],wow:['וואו'],tie:['תיקו!'],taDa:['הפתעה!'],snicker:['מפתיע!'],wink:['יפה!'],mischief:['מעניין!'],hmm:['הממ'],gasp:['באמת?']};
       // Companion moments should sound like a character, not an arcade. Native
       // speech is tiny, works offline on most phones and falls back to WebAudio.
-      if(spoken[kind]&&window.speechSynthesis&&window.SpeechSynthesisUtterance){
+      if(spoken[kind]&&['he','en'].includes(lang())&&window.speechSynthesis&&window.SpeechSynthesisUtterance){
         const lines=spoken[kind],utterance=new SpeechSynthesisUtterance(lines[Math.floor(Math.random()*lines.length)]);
-        utterance.lang='en-US';utterance.rate=kind==='snicker'||kind==='mischief'?1.2:.95;
+        utterance.lang=lang()==='he'?'he-IL':'en-US';utterance.rate=kind==='snicker'||kind==='mischief'?1.2:.95;
         utterance.pitch=kind==='hmm'?.72:kind==='gasp'?1.28:1.05;utterance.volume=.32;
         window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
         busyUntil=Date.now()+900;return;
@@ -107,6 +110,11 @@
   function label(){toggle.textContent=enabled?'🔊':'🔇';toggle.setAttribute('aria-label',L()[enabled?0:1]);toggle.title=L()[enabled?0:1];toggle.setAttribute('aria-pressed',String(enabled));}
   toggle.onclick=()=>{enabled=!enabled;try{localStorage.setItem('plot_sound',enabled?'on':'off')}catch(_){}label();if(enabled){unlock();sound('peek')}else hush()};
   document.querySelector('.topbar').appendChild(toggle);label();
+  const voiceToggle=document.createElement('button');voiceToggle.id='voiceToggle';voiceToggle.type='button';voiceToggle.className='soundToggle';
+  function voiceLabel(){voiceToggle.textContent=voiceEnabled?'🗣️':'🤫';voiceToggle.setAttribute('aria-pressed',String(voiceEnabled));voiceToggle.setAttribute('aria-label',(lang()==='he'?'תגובות קוליות: ':'Character voice: ')+(voiceEnabled?(lang()==='he'?'פועל':'on'):(lang()==='he'?'כבוי':'off')));voiceToggle.title=voiceToggle.getAttribute('aria-label')}
+  voiceToggle.onclick=()=>{voiceEnabled=!voiceEnabled;write('plot_voice',voiceEnabled);window.speechSynthesis?.cancel();voiceLabel()};
+  document.querySelector('.topbar').appendChild(voiceToggle);voiceLabel();
+  new MutationObserver(voiceLabel).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
   document.addEventListener('pointerdown',unlock,{passive:true});
   document.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')unlock()});
   document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled||b===toggle)return;unlock();sound('tap')},true);
@@ -145,7 +153,12 @@
     el('scorePanelTitle').textContent=leaders(d).length>1?L()[11]:L()[2];el('closeScores').textContent=L()[3];el('scorePanel').setAttribute('aria-label',L()[2]);
     autoScores(d);
   }
-  function mascot(mood='peek'){return `<div class="popMascot mood-${mood}" aria-hidden="true"><svg viewBox="0 0 100 100" focusable="false"><path fill="#60249c" d="M14 65C14 37 29 27 50 27s36 13 36 38v22H14z"/><path fill="#b9d729" d="M48 35C69 22 22 22 46 2c-2 13 40 10 22 39-3-10-12-8-20-6z"/><g class="mascotEyes"><path fill="#fff9ef" d="M23 54q12-6 24 2c-2 16-24 18-24-2zm32 4q12-8 24-1c-1 18-22 18-24 1z"/><circle cx="30" cy="58" r="6" fill="#381453"/><circle cx="61" cy="61" r="6" fill="#381453"/></g><path fill="none" stroke="#fff9ef" stroke-width="4" stroke-linecap="round" d="M25 44q8-7 17-3m16 5 17 2"/><path class="mascotSmirk" d="M44 76q13 7 24-4" fill="none" stroke="#fff9ef" stroke-width="3" stroke-linecap="round"/><path fill="#60249c" d="M8 78q12-7 19 4v12H7zm65 4q12-10 20 0v12H73z"/><path d="M14 86v7m7-7v7m58-7v7m7-7v7" stroke="#8e52c2" stroke-width="2" stroke-linecap="round"/></svg></div>`}
+  let mascotId=0;
+  function mascot(mood='peek'){
+    const id='mipoBubble'+(++mascotId),surprise=['miss','wow','oops','tie','gasp'].includes(mood),happy=['win','correct','leader'].includes(mood);
+    const mouth=surprise?'M45 67a6 8 0 1 0 12 0a6 8 0 1 0-12 0':happy?'M35 63Q50 85 68 61Q54 73 35 63':'M38 66Q53 75 66 64';
+    return `<div class="popMascot mood-${mood}" aria-hidden="true"><svg viewBox="0 0 100 100" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b38aff"/><stop offset=".55" stop-color="#8447e3"/><stop offset="1" stop-color="#5320a6"/></linearGradient></defs><ellipse cx="51" cy="92" rx="30" ry="4" fill="#6b32b4" opacity=".12"/><path d="M14 41Q14 13 48 13h8q32 0 32 29v19q0 24-29 24H43L25 95l3-16Q14 73 14 58Z" fill="url(#${id})"/><path d="M23 35Q29 19 52 21" fill="none" stroke="#e5d2ff" stroke-width="5" stroke-linecap="round" opacity=".6"/><g class="mascotEyes"><ellipse cx="36" cy="47" rx="10" ry="${surprise?13:11}" fill="white"/><ellipse cx="66" cy="47" rx="10" ry="${surprise?13:11}" fill="white"/><circle cx="38" cy="48" r="5.2" fill="#2d174d"/><circle cx="64" cy="48" r="5.2" fill="#2d174d"/><circle cx="40" cy="45" r="1.8" fill="white"/><circle cx="66" cy="45" r="1.8" fill="white"/></g><path d="${surprise?'M28 28l13-2m19 0 13 2':'M28 31q7-5 14-1m17-2 13 4'}" fill="none" stroke="#4d217e" stroke-width="3" stroke-linecap="round"/><ellipse cx="24" cy="61" rx="6" ry="3" fill="#fda5d5" opacity=".6"/><ellipse cx="77" cy="61" rx="6" ry="3" fill="#fda5d5" opacity=".6"/><path class="mascotSmirk" d="${mouth}" fill="${surprise||happy?'#351251':'none'}" stroke="#351251" stroke-width="3" stroke-linecap="round"/></svg></div>`
+  }
 
   function draw(kind='wait'){
     const language=lang(),bank=window.PlotLines[language]||window.PlotLines.en;
@@ -168,7 +181,15 @@
     if(d.all_guesses?.length&&d.all_guesses.every(g=>!g.correct))return 'miss';
     return 'correct';
   }
-  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),6000);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
+  function resultLine(d){
+    if(!d?.reveal||!d.all_guesses?.length||!['he','en'].includes(lang()))return '';
+    const gs=d.all_guesses,n=gs.filter(g=>g.correct).length,he=lang()==='he',name=d.subject?.name||'';
+    if(gs.every(g=>g.guess===gs[0].guess)&&!n)return he?'כולם ניחשו '+gs[0].guess+'. הבחירה של '+name+': '+d.answer+'.':'Everyone guessed '+gs[0].guess+'. '+name+' chose '+d.answer+'.';
+    if(n===gs.length)return he?'כולם ניחשו נכון את הבחירה של '+name+'!':'Everyone predicted '+name+' correctly!';
+    if(!n)return he?'אף אחד לא ניחש את הבחירה של '+name+'!':'Nobody predicted '+name+' this time!';
+    return he?n+' מתוך '+gs.length+' ניחשו נכון.':n+' of '+gs.length+' guessed correctly.';
+  }
+  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=resultLine(current)||draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),6000);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
   function companion(force=false){
     if(!current)return;
     const targets=['heroStatus','finalHeroStatus'].map(el).filter(st=>st&&!st.classList.contains('hidden')&&(st.id==='heroStatus'?el('visualStage').classList.contains('is-loading'):st.classList.contains('is-loading')));
@@ -186,14 +207,6 @@
     actor.classList.remove('antic-spin','antic-dive','antic-hop');void actor.offsetWidth;
     actor.classList.add(['antic-spin','antic-dive','antic-hop'][Math.floor(Math.random()*3)]);
   }
-  // The companion also peeks from the score strip during quiet question time.
-  const visitor=document.createElement('div');visitor.className='companionVisitor hidden';visitor.innerHTML=mascot();dock.prepend(visitor);
-  let visitorTimer;
-  setInterval(()=>{
-    if(document.hidden||!current||current.status!=='playing'||current.reveal||!el('waiting').classList.contains('hidden'))return;
-    visitor.classList.remove('hidden');animateMascot(visitor);variedSound(['peek','wink','mischief','hmm','gasp']);
-    clearTimeout(visitorTimer);visitorTimer=setTimeout(()=>visitor.classList.add('hidden'),2300);
-  },15000);
   function finishUI(d){
     if(d.status!=='finished')return;
     const ws=d.players.filter(p=>(d.winner_ids||leaders(d).map(x=>x.id)).includes(p.id));
