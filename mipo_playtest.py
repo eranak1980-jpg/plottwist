@@ -95,4 +95,97 @@ def canonical_key(text):
  # Existing and newly worded versions of this scenario share one history key.
  if ('חופשה' in text and ('הכרטיס השני' in text or 'אדם אחד מהחבורה' in text)):
   return 'scenario:holiday-companion'
+ return semantic_family(text)
+
+# Each reviewed card has one decision, four answers, and an editorial identity.
+# Identity is narrower than a topic: two money cards need not be the same dilemma.
+REVIEWED = [
+ ('plans',1,'host-plans','{s} מארח הערב והחברים שואלים מה להביא. מה הוא מבקש?',['משהו לאכול','משהו לשתות','שיבואו בזמן','שלא יביאו כלום'], '{s} is hosting tonight. What do they ask friends to bring?',['Something to eat','Something to drink','Just arrive on time','Nothing at all']),
+ ('habits',1,'packing','כולם כבר מוכנים לצאת. מה הכי סביר שמעכב את {s}?',['מחפש את המפתחות','מחליף בגדים שוב','מסיים משהו בטלפון','בודק שלא שכח כלום'], 'Everyone is ready to leave. What is most likely holding {s} up?',['Looking for their keys','Changing clothes again','Finishing something on their phone','Checking they packed everything']),
+ ('food',1,'restaurant-choice','{s} חוזר למסעדה שהוא אוהב. מה הוא מזמין?',['את המנה הקבועה','מנה חדשה לגמרי','מה שהמלצר ממליץ','כמה מנות לחלוק'], '{s} returns to a favourite restaurant. What do they order?',['Their usual dish','Something completely new','The waiter’s recommendation','Several dishes to share']),
+ ('habits',1,'game-competition','באמצע משחק, {s} מגלה שחבר לא הבין כלל חשוב. מה עושה?',['עוצרים ומסבירים','מתחילים את הסיבוב מחדש','ממשיכים ומסבירים בסוף','נותנים לו הזדמנות נוספת'], 'Mid-game, {s} notices a friend misunderstood a rule. What do they do?',['Stop and explain','Restart the round','Explain after this round','Give them another chance']),
+ ('plans',1,'party-arrival','{s} מגיע למסיבה ומכיר רק את המארח. מה הוא עושה קודם?',['נשאר ליד המארח','מציג את עצמו למישהו','הולך להביא שתייה','שולח לחבר שיבוא'], '{s} arrives at a party knowing only the host. What do they do first?',['Stay near the host','Introduce themselves to someone','Go and get a drink','Text a friend to come']),
+ ('food',1,'last-slice','נשארה פרוסת פיצה אחת ו־{s} עדיין רעב. מה עושה?',['לוקח אותה','שואל מי רוצה','מציע לחלוק אותה','מחכה שמישהו יציע לו'], 'One pizza slice is left and {s} is hungry. What do they do?',['Take the slice','Ask who wants it','Offer to split it','Wait to be offered it']),
+ ('money',2,'unpaid-debt','חבר חייב ל־{s} כסף ושכח להחזיר. מה הוא עושה?',['מזכיר לו ישירות','שולח בקשת תשלום','מעלה את זה בצחוק','מחכה שייזכר לבד'], 'A friend forgot to repay {s}. What do they do?',['Remind them directly','Send a payment request','Mention it as a joke','Wait for them to remember']),
+ ('trust',2,'unsolicited-advice','{s} מספר לחבר על יום קשה ומקבל עצות שלא ביקש. מה אומר?',['רק רציתי שתשמע אותי','תודה, אחשוב על זה','מסביר למה זה לא יעזור','משנה את נושא השיחה'], '{s} vents about a hard day and gets unwanted advice. What do they say?',['I just needed you to listen','Thanks, I’ll think about it','Explain why it won’t help','Change the subject']),
+ ('messages',2,'group-disagreement','בקבוצה מציעים תוכנית ש־{s} לא רוצה, וכולם מסכימים. מה עושה?',['אומר שזה לא מתאים לו','מציע חלופה בקבוצה','מדבר עם חבר בפרטי','מסכים ומצטרף'], 'Everyone agrees on a group plan that {s} dislikes. What do they do?',['Say it doesn’t suit them','Suggest another plan','Message one friend privately','Agree and join in']),
+ ('boundaries',2,'uninvited-guest','חבר מבקש להביא עוד מישהו לארוחה קטנה אצל {s}. מה התגובה?',['בטח, שיבוא','שואל קודם מי זה','מסכים רק הפעם','מבקש להישאר בהרכב המקורי'], 'A friend asks to bring someone extra to dinner at {s}’s. What is the response?',['Of course, bring them','Ask who it is first','Agree just this once','Keep the original guest list']),
+ ('habits',2,'shared-space','{s} חולק חדר בחופשה עם חבר מבולגן. מה הוא עושה?',['מסדר גם בשבילו','מבקש ממנו לסדר','קובע אזור נפרד לכל אחד','מתעלם מהבלגן'], '{s} shares a holiday room with a messy friend. What do they do?',['Tidy up for both','Ask them to tidy up','Agree on separate spaces','Ignore the mess']),
+ ('honesty',2,'honest-feedback','חבר מבקש מ־{s} ביקורת כנה על משהו שהכין. איך עונים?',['אומרים ישר מה לא עובד','מתחילים במה שכן טוב','שואלים כמה כנות הוא רוצה','מציעים שינוי אחד קטן'], 'A friend asks {s} for honest feedback on their work. How do they respond?',['Say what isn’t working','Start with what works','Ask how honest to be','Suggest one small change']),
+ ('trust',3,'public-support','חבר מתווכח מול כולם, ו־{s} חושב שהוא טועה. מה עושה?',['אומר שהוא לא מסכים','תומך בו ומדבר איתו אחר כך','מנסה להרגיע את כולם','לא מתערב בוויכוח'], 'A friend argues in front of everyone, but {s} thinks they’re wrong. What happens?',['Say they disagree','Back them, then talk privately','Try to calm everyone down','Stay out of the argument']),
+ ('boundaries',3,'phone-privacy','בן הזוג מבקש לראות הודעה פרטית בטלפון של {s}. מה התגובה?',['מראה את ההודעה','מסביר מה כתוב בלי להראות','שואל למה הוא רוצה לראות','אומר שזו שיחה פרטית'], '{s}’s partner asks to read a private message on their phone. How do they respond?',['Show the message','Explain it without showing it','Ask why they want to see','Say the conversation is private']),
+ ('honesty',3,'friend-secret','{s} מגלה שחבר הסתיר ממנו משהו שכולם כבר ידעו. מה הכי מפריע לו?',['שלא סמכו עליו','שהאחרים ידעו לפניו','שלא סיפרו לו ישירות','שזה נשמר בסוד בכלל'], '{s} discovers a friend told everyone a secret except them. What bothers them most?',['Not being trusted','Being the last to know','Not hearing it directly','Keeping it secret at all']),
+ ('trust',3,'changed-friendship','{s} מרגיש שרק הוא יוזם מפגשים עם חבר. מה הוא עושה?',['מדבר איתו על זה','מפסיק ליזום ובודק מה יקרה','מציע מפגש אחרון','ממשיך ליזום כרגיל'], '{s} feels they always initiate plans with a friend. What do they do?',['Talk to them about it','Stop initiating and see','Suggest one last meetup','Keep making the plans']),
+ ('boundaries',3,'personal-joke','חבר משתמש במשהו אישי של {s} כדי להצחיק את החבורה. מה התגובה?',['מבקש לעצור מול כולם','לוקח אותו לשיחה בפרטי','מחזיר לו באותה מטבע','צוחק אבל מתרחק ממנו'], 'A friend uses something private about {s} as a group joke. How do they react?',['Ask them to stop publicly','Take them aside privately','Make a joke back at them','Laugh but pull away']),
+ ('honesty',3,'unpopular-opinion','ל־{s} יש דעה שונה משל כל החבורה. מתי הוא אומר אותה?',['מיד, גם אם יתווכחו','רק אם שואלים אותו','אומר לחבר אחד אחר כך','מעדיף להשאיר אותה לעצמו'], '{s} disagrees with everyone in the group. When do they say so?',['Immediately, even if they argue','Only if someone asks','Tell one friend later','Keep it to themselves']),
+]
+
+# Metadata for the existing 24 cards, in their original order.
+_BASE_META=[
+ ('trust',3,'hurt-then-normal'),('honesty',2,'unflattering-clothes'),('trust',3,'excluded-meetup'),
+ ('messages',2,'ignored-message'),('honesty',2,'inaccurate-story'),('money',2,'lending-money'),
+ ('habits',1,'losing-game'),('habits',2,'called-out-late'),('money',2,'split-bill'),
+ ('trust',3,'keeping-secret'),('habits',1,'group-photo'),('honesty',2,'receiving-criticism'),
+ ('food',1,'disliked-restaurant'),('plans',2,'repeated-cancellation'),('money',2,'price-regret'),
+ ('honesty',3,'stolen-credit'),('messages',2,'need-to-talk'),('trust',3,'making-up'),
+ ('boundaries',3,'hurtful-joke'),('plans',1,'planned-evening'),('boundaries',2,'personal-question'),
+ ('habits',2,'annoying-habit'),('trust',1,'favourite-compliment'),('honesty',2,'stubborn-topic')]
+_PERSONAL_PROFILES=list(zip(PERSONAL_HE,_BASE_META))
+PERSONAL_HE += [('know',q[3],q[4]) for q in REVIEWED]
+PERSONAL_EN = [('know',q[5],q[6]) for q in REVIEWED]
+_PERSONAL_PROFILES += [(('know',q[3],q[4]),q[:3]) for q in REVIEWED]
+_PERSONAL_PROFILES += [(('know',q[5],q[6]),q[:3]) for q in REVIEWED]
+
+def _norm(text):
+ return re.sub(r'[^\w{}]+',' ',unicodedata.normalize('NFKC',str(text)).casefold()).strip()
+_PROFILES=[(re.compile(re.escape(_norm(q[1])).replace(r'\{s\}',r'.+?')),meta) for q,meta in _PERSONAL_PROFILES]
+_META={key:(category,depth) for _,(category,depth,key) in _PERSONAL_PROFILES}
+# Explicit aliases catch changed wording, not just different player names.
+_SCENARIOS=[
+ ('ignored-message',r'(ראה.*הודעה.*לא ענה|לא קיבל תשובה|לא עונה להודע|לא עונה להודעה|ignores? .*message|message.*no reply|read.*message.*reply)'),
+ ('lending-money',r'(להלוות כסף|מלווה כסף|lend.*money|loan.*friend)'),
+ ('unpaid-debt',r'(חייב.*כסף.*שכח|forgot.*repay|forgot.*pay.*back)'),
+ ('split-bill',r'(לחלק.*חשבון.*שווה|חשבון.*לחלק.*שווה|split.*bill|bill.*equally|חשבון משותף)'),
+ ('group-photo',r'(תמונה קבוצתית.*כולם|group photo|unflattering photo)'),
+ ('stolen-credit',r'(מעתיק רעיון|לוקח.*קרדיט|takes?.*credit|steals?.*idea)'),
+ ('personal-joke',r'(משהו אישי.*להצחיק|something private.*joke)'),
+ ('excluded-meetup',r'(חברים נפגשו בלעד|friends.*met.*without|friends.*didn.*invite)'),
+ ('repeated-cancellation',r'(ביטל.*פעם השלישית|cancel.*third time)'),
+]
+
+def semantic_family(text):
+ text=str(text)
+ if text.startswith('scenario:'):return text
+ for key,pattern in _SCENARIOS:
+  if re.search(pattern,text,re.I):return 'scenario:'+key
+ normalized=_norm(text)
+ for pattern,(_,_,key) in _PROFILES:
+  if pattern.fullmatch(normalized):return 'scenario:'+key
  return None
+
+def content_profile(text):
+ """Return topic and intimacy, for pacing rather than personality classification."""
+ text=str(text)
+ concept=semantic_family(text)
+ if concept and concept[9:] in _META:return _META[concept[9:]]
+ normalized=_norm(text)
+ for language in ('he','en'):
+  for i,q in enumerate(room_pack(language)):
+   pattern=re.escape(_norm(q[1])).replace(r'\{s\}',r'.+?')
+   if re.fullmatch(pattern,normalized):return ('crew',1 if i in (0,1,2,3,5,6,15) else 2 if i in (4,7,9,11,16,17) else 3)
+ if re.search(r'(אינטימ|סקס|משיכה|דייט|dating|sex|intimacy|attraction)',text,re.I):return ('dating',3)
+ for category,pattern in [('messages',r'הודע|וואטסאפ|message|text|chat'),('money',r'כסף|חשבון|קנה|קונה|money|bill|buy|spend'),('food',r'מסעד|ארוח|אוכל|food|dinner|restaurant'),('plans',r'תוכנית|חופשה|טיול|plans|holiday|trip'),('trust',r'סוד|סומך|secret|trust')]:
+  if re.search(pattern,text,re.I):return category,2
+ return 'everyday',2
+
+def paced_candidates(cards,round_no,total,history,seed):
+ """Deterministic within a round; history changes only when the host advances."""
+ if not cards:return []
+ phase=1 if round_no<max(2,int(total*.25)) else 2 if round_no<max(3,int(total*.65)) else 3
+ recent=[content_profile(e.get('question',''))[0] for e in history[-2:]]
+ rotated=cards[seed%len(cards):]+cards[:seed%len(cards)]
+ def rank(q):
+  category,depth=content_profile(q[1])
+  reviewed=bool(semantic_family(q[1])) or q[0]=='room'
+  return (max(0,depth-phase),recent.count(category),not reviewed,abs(depth-phase))
+ return sorted(rotated,key=rank)

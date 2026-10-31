@@ -151,7 +151,7 @@ class PipelineTests(unittest.TestCase):
         self.room(4,4)
         with k.cn() as c:
             c.execute('UPDATE games SET custom_questions=? WHERE id=?',(json.dumps([['room','Who would {s} choose for a trip?',['x']]]),self.g['id']))
-        with patch.object(k,'general_pack',return_value=[]),patch('mipo_content.opening_pack',return_value=[]):
+        with patch.object(k,'general_pack',return_value=[]),patch('mipo_content.opening_pack',return_value=[]),patch.object(k,'PERSONAL_EN',[]):
             self.reveal();self.assertTrue(self.entered.wait(1))
         self.assertEqual([x[0] for x in self.calls[0]['items']],['Alice','Bob'])
         self.assertEqual(self.calls[0]['selected'],'Bob')

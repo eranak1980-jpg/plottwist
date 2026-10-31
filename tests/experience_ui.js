@@ -55,7 +55,8 @@ const $=id=>w.document.getElementById(id);
  $('scoreBar').click();assert.equal($('scoreBar').getAttribute('aria-expanded'),'true');assert(notes>0,'gesture activates audio');
  $('closeScores').click();assert.equal($('scoreBar').getAttribute('aria-expanded'),'false');
  clock+=1000;d={...data(1),reveal:true,interactive_match:{ready:false,participants:[],answers:[]},all_guesses:[{player_id:2,name:'אבי',gender:'male',guess:'כן',correct:true}]};w.render(d);
- assert.equal($('scoreBar').getAttribute('aria-expanded'),'true','scoreboard after two rounds');
+ assert.equal($('scoreBar').getAttribute('aria-expanded'),'false','no automatic scoreboard after only two rounds');
+ d={...d,round:3};w.render(d);assert.equal($('scoreBar').getAttribute('aria-expanded'),'true','scoreboard every four rounds');
  assert(!w.document.querySelector('.nextDock').classList.contains('hidden'));
  assert($('interactiveTwist').classList.contains('hidden'),'legacy secret Match Twist is removed');assert(!$('next').classList.contains('hidden'),'legacy Match Twist never blocks next');
  assert(w.document.body.classList.contains('hasNextDock'),'chat button clears the host reveal CTA');assert(experienceCss.includes('.hasScoreDock.hasNextDock .chatFab'));
@@ -66,9 +67,9 @@ const $=id=>w.document.getElementById(id);
  const atReveal=notes;w.render(d);assert.equal(notes,atReveal,'poll does not repeat sounds');
  w.render(data(2));assert(w.document.querySelector('.nextDock').classList.contains('hidden'),'no stale next button on question');assert(!w.document.body.classList.contains('hasNextDock'));
  clock+=1000;$('soundToggle').click();assert.equal(w.localStorage.getItem('plot_sound'),'off');let muted=notes;clock+=2000;$('scoreBar').click();assert.equal(notes,muted);
- clock+=1000;$('soundToggle').click();assert.equal(w.localStorage.getItem('plot_sound'),'on');assert(notes>muted);
+ clock+=1000;$('soundToggle').click();assert.equal(w.localStorage.getItem('plot_sound'),'on');clock+=1000;$('scoreBar').click();assert(notes>muted,'effects resume without enabling character speech');
  // Repeated loading updates must preserve the line; time-based changes draw without replacement.
- d={...data(3),reveal:true,hero_eligible:true,ai_images_ready:true,hero_status:'running',subject:{id:1,name:'ערן',photo_url:'/test.jpg'}};
+ d={...data(3),reveal:false,answered:true,guess_count:0,guess_need:1,hero_eligible:true,ai_images_ready:true,hero_status:'running',subject:{id:1,name:'ערן',photo_url:'/test.jpg'}};
  w.render(d);const first=w.document.querySelector('.loadingJoke').textContent;w.render(d);assert.equal(w.document.querySelector('.loadingJoke').textContent,first);
  let seen=new Set([first]);for(let i=0;i<20;i++){clock+=12000;intervals.at(-1)();const line=w.document.querySelector('.loadingJoke').textContent;assert(!seen.has(line));seen.add(line)}
  $('soundToggle').click();muted=notes;clock+=12000;intervals.at(-1)();assert.equal(notes,muted,'muted companion stays silent');
@@ -82,5 +83,5 @@ const $=id=>w.document.getElementById(id);
  // Production boot recovers the same session, including when a different room was last active.
  assert(!inline.includes('if(e.persisted)location.reload()'),'bfcache must not force navigation');
  assert.equal(errors.length,0,errors.join('\n'));
- console.log('DOM_SCORE_DOCK_TWO_ROUNDS_NEXT_MUTE_AUDIO_80_LINES_NO_REPEATS_TIES_HOST_ONLY_OK');
+ console.log('DOM_SCORE_DOCK_FOUR_ROUNDS_QUIET_REVEAL_NEXT_MUTE_AUDIO_LINES_TIES_HOST_ONLY_OK');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>w.close());

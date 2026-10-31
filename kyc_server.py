@@ -18,7 +18,7 @@ import kyc_instant as instant
 import mipo_commerce as commerce
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
-from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key
+from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key, semantic_family, paced_candidates, PERSONAL_EN
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/('kyc-preview.db' if PREVIEW_MODE else 'kyc.db')));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
 def now():return datetime.now(timezone.utc).isoformat()
@@ -30,7 +30,7 @@ def retention_cleanup(c):
  for gid in old:
   c.execute("UPDATE games SET answer='',memory='[]',custom_context='',custom_questions='[]',prize='' WHERE id=?",(gid,))
   c.execute("UPDATE players SET photo_data='',name='Player ' || id WHERE game_id=?",(gid,))
-  for table in ('guesses','hero_scenes','instant_scenes','image_jobs','chat_messages','match_answers'):
+  for table in ('guesses','hero_scenes','instant_scenes','image_jobs','chat_messages','match_answers','question_feedback'):
    c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
  c.execute('DELETE FROM analytics_events WHERE created<?',(analytics_cutoff,))
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
@@ -96,6 +96,16 @@ class request_connection:
     else:raw.commit()
    finally:
     raw.close();delattr(_DB_LOCAL,'connection')
+def init_feedback(c):
+ c.execute("""CREATE TABLE IF NOT EXISTS question_feedback(game_id BIGINT,image_run INTEGER,round_no INTEGER,reason TEXT,question_key TEXT,question TEXT,options TEXT,language TEXT,created TEXT,UNIQUE(game_id,image_run,round_no,reason))""")
+
+def feedback_text(text,ps):
+ # Keep useful editorial copy without keeping participants' names in reports.
+ import re
+ for name in sorted({str(p['name']) for p in ps},key=len,reverse=True):
+  if name:text=re.sub(r'(?<!\w)'+re.escape(name)+r'(?!\w)','{player}',str(text),flags=re.I)
+ return str(text)[:500]
+
 def init():
  if USE_PG:
   with cn() as c:
@@ -128,7 +138,7 @@ def init():
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS access_kind TEXT DEFAULT 'pilot'")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS entitlement_id TEXT DEFAULT ''")
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS max_rounds INTEGER DEFAULT 30")
-   image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c);retention_cleanup(c)
+   init_feedback(c);image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c);retention_cleanup(c)
   return
  DB.parent.mkdir(parents=True,exist_ok=True)
  with cn() as c:
@@ -138,7 +148,7 @@ def init():
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   if 'tiebreak' not in gc:c.execute("ALTER TABLE games ADD COLUMN tiebreak TEXT DEFAULT '{}'")
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
-  image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c)
+  init_feedback(c);image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('adult_confirmed','INTEGER DEFAULT 0'),('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
@@ -199,6 +209,8 @@ def too_similar(qk,used):
   for u in used:
    if not u:continue
    if qk==u:return True
+   family=semantic_family(qk)
+   if family and family==semantic_family(u):return True
    if qk.startswith('crew-choice:') or str(u).startswith('crew-choice:'):continue
    if SequenceMatcher(None,qk,u).ratio()>=0.84:return True
    b=toks(u)
@@ -502,7 +514,7 @@ def qdata(g,ps):
   base=tailored+PERSONAL_HE+focused
  else:
   native=general_pack(lang);spicy=spicy_pack(lang) if int(g['spice'] or 1)>=3 else []
-  base=tailored+spicy+native
+  base=tailored+spicy+(PERSONAL_EN if lang=='en' else [])+native
  if len(ps)==2:
   base=[q for q in base if q[0]!='room' and len(q[2])>=3]
   if not base:base=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if q[0]=='know']
@@ -514,17 +526,16 @@ def qdata(g,ps):
  used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
  if lang in ('he','en') and len(ps)>2 and not tb and rn%3==2:
-  spark=room_pack(lang,g['custom_context'])
-  for step in range(len(spark)):
-   typ,text,opts=spark[(seed//7+step)%len(spark)]
+  spark=paced_candidates(room_pack(lang,g['custom_context']),rn,total_rounds(g),mem(g),seed//7)
+  for typ,text,opts in spark:
    formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):
     return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']],sub
  base=[q for q in base if editorial_ok(q,lang)]
  chosen=None
  if opening:base=[q for q in opening if editorial_ok(q,lang)]+base
- for step in range(len(base)):
-  q=base[(seed+step)%len(base)];typ,text,opts=q;formatted=text.format(s=sub['name'])
+ for typ,text,opts in paced_candidates(base,rn,total_rounds(g),mem(g),seed):
+  formatted=text.format(s=sub['name'])
   if not too_similar(question_key(formatted,ps),used):chosen=(typ,formatted,opts);break
  if chosen is None:
   fallback=[q for q in (general if lang=='he' else general_pack(lang)) if not (len(ps)==2 and q[0]=='room')]
@@ -761,7 +772,9 @@ class H(BaseHTTPRequestHandler):
     try:
      with cn() as c:c.execute('UPDATE players SET last_seen=? WHERE id=?',(now(),me['id']))
     except:pass
+   is_host=bool(host and secrets.compare_digest(host,g['host']))
    with cn() as c:
+    feedback_reasons=[r['reason'] for r in c.execute('SELECT reason FROM question_feedback WHERE game_id=? AND image_run=? AND round_no=?',(g['id'],g['image_run'],g['round_no'])).fetchall()] if is_host else []
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
     hero_rounds={r['round_no'] for r in c.execute('SELECT round_no FROM hero_scenes WHERE game_id=? AND round_no IN (?,?)',(g['id'],g['round_no'],99)).fetchall()}
     # Expire this run once, then read both current/final statuses together.
@@ -781,7 +794,7 @@ class H(BaseHTTPRequestHandler):
    for topic,_count in sorted(state_votes.items(),key=lambda x:(-x[1],x[0])):
     if topic not in state_topics:state_topics.append(topic)
    state_topics=state_topics[:10]
-   is_host=bool(host and secrets.compare_digest(host,g['host']));presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
+   presence={x['id']:(True if me and x['id']==me['id'] else recently_seen(x)) for x in ps}
    return self.J({
     'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,
     'adult_required':adult_required(state_topics,g['spice']),'adults_ready':all(x['adult_confirmed'] for x in ps if x['active']),
@@ -789,7 +802,7 @@ class H(BaseHTTPRequestHandler):
     'players':[{'id':x['id'],'name':x['name'],'gender':x['gender'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],
     'photo_count':sum(1 for x in ps if x['photo_data']),
     'subject':{'id':sub['id'],'name':sub['name'],'gender':sub['gender'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,
-    'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,
+    'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'feedback_reasons':feedback_reasons,
     # Match Twist secret answers were removed: Reveal chat/reactions are non-blocking.
     'interactive':'','interactive_match':None,
     'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,
@@ -906,6 +919,15 @@ class H(BaseHTTPRequestHandler):
   g=game_for_token(a[1],tok) if act in player_actions else game(a[1])
   if not g:return self.J({'error':'room_not_found'},404)
   ps=players(g['id'])
+  if act=='question-feedback':
+   if not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
+   if g['status']!='playing':return self.J({'error':'not_playing'},409)
+   if str(d.get('round'))!=str(g['round_no']) or str(d.get('image_run'))!=str(g['image_run']):return self.J({'error':'stale_round'},409)
+   reason=d.get('reason')
+   if reason not in ('weak_question','unrelated_options'):return self.J({'error':'invalid_reason'},400)
+   typ,text,opts,sub=qdata(g,ps)
+   with cn() as c:c.execute('INSERT INTO question_feedback(game_id,image_run,round_no,reason,question_key,question,options,language,created) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(game_id,image_run,round_no,reason) DO NOTHING',(g['id'],g['image_run'],g['round_no'],reason,question_key(text,ps),feedback_text(text,ps),json.dumps([feedback_text(o,ps) for o in opts],ensure_ascii=False),game_language(g),now()))
+   return self.J({'ok':True})
   if act=='chat':
    me=next((x for x in ps if x['token']==tok and int(x['active'] if x['active'] is not None else 1)==1),None)
    if not me:return self.J({'error':'forbidden'},403)

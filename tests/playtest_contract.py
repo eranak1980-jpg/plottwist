@@ -55,6 +55,20 @@ try:
    if st['type']=='room':
     room_count+=1;assert st['subject']['name'] not in st['options']
    else:assert 3<=len(st['options'])<=4
+   if rn==0:
+    payload={'host':host,'round':rn,'image_run':st['image_run'],'reason':'weak_question'}
+    post('question-feedback',{**payload,'host':'wrong'},403)
+    post('question-feedback',{**payload,'round':rn+1},409)
+    post('question-feedback',{**payload,'reason':'other'},400)
+    post('question-feedback',payload);post('question-feedback',payload)
+    assert state()['question']==st['question'],'feedback must not change the active question'
+    assert state()['feedback_reasons']==['weak_question']
+    guest=call(f'/api/state/{code}?token={tokens["שחר"]}')
+    assert guest['feedback_reasons']==[]
+    with k.cn() as c:
+     rows=c.execute('SELECT question,options FROM question_feedback WHERE game_id=? AND image_run=?',(g['id'],st['image_run'])).fetchall()
+     assert len(rows)==1,'idempotent report'
+     assert not any(n in rows[0]['question']+' '+rows[0]['options'] for n in tokens),'anonymized editorial reports'
    answer=st['options'][0]
    post('answer',{'token':tokens[st['subject']['name']],'answer':answer})
    assert state()['question']==st['question'],'question stable while waiting for guesses'
@@ -71,6 +85,14 @@ try:
   if run<2:
    fresh=post('freshroom',{'host':host});code=fresh['code'];assert state()['ai_images_enabled'] is False
  assert room_count>=12,room_count
+ assert k.too_similar(k.question_key('ערן כתב הודעה ולא קיבל תשובה, אבל ראה שהחבר מחובר. מה עכשיו?',names),{k.question_key('ערן ראה שהחבר ראה את ההודעה אבל לא ענה. מה עכשיו?',names)})
+ from mipo_playtest import paced_candidates,content_profile,PERSONAL_HE
+ early=paced_candidates(PERSONAL_HE,0,18,[],0);late=paced_candidates(PERSONAL_HE,15,18,[],0)
+ assert content_profile(early[0][1])[1]==1
+ assert content_profile(late[0][1])[1]==3
+ recent=[{'question':early[0][1]}]
+ assert content_profile(paced_candidates(PERSONAL_HE,0,18,recent,0)[0][1])[0]!=content_profile(early[0][1])[0]
+ print('FEEDBACK_HOST_AUTH_STALE_ROUND_IDEMPOTENCY_PRIVACY_AND_PACING_OK')
  print('PLAYTEST_54_ROUNDS_3_SAME_CREW_GAMES_NO_REPEATS_CLOSED_CHOICES_FAST_IMAGES_AUTH_RECAP_OK')
 finally:
  server.shutdown();server.server_close();tmp.cleanup()

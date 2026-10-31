@@ -135,7 +135,7 @@
   function ranked(d){const ids=d.tiebreak?.contenders||[];return [...d.players].sort((a,b)=>(ids.length?(Number(ids.includes(b.id))-Number(ids.includes(a.id))):0)||b.score-a.score||a.id-b.id)}
   function leaders(d){const list=ranked(d).filter(p=>!d.tiebreak?.contenders?.length||d.tiebreak.contenders.includes(p.id));return list.filter(p=>p.score===list[0]?.score)}
   function autoScores(d){
-    if(d.status!=='playing'||!d.reveal||(d.round+1)%2!==0)return;
+    if(d.status!=='playing'||!d.reveal||(d.round+1)%4!==0)return;
     const key=d.code+'_'+d.image_run+'_'+d.round;
     if(gateStates.get(key)==='pending'||shownBoards.has(key))return;
     shownBoards.add(key);if(!panelPinned)openScores();
@@ -189,9 +189,9 @@
     if(!n)return he?'אף אחד לא ניחש את הבחירה של '+name+'!':'Nobody predicted '+name+' this time!';
     return he?n+' מתוך '+gs.length+' ניחשו נכון.':n+' of '+gs.length+' guessed correctly.';
   }
-  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=resultLine(current)||draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),6000);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
+  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=resultLine(current)||draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),2400);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
   function companion(force=false){
-    if(!current)return;
+    if(!current||current.reveal||current.answered&&current.guess_need>0&&current.guess_count>=current.guess_need)return;
     const targets=['heroStatus','finalHeroStatus'].map(el).filter(st=>st&&!st.classList.contains('hidden')&&(st.id==='heroStatus'?el('visualStage').classList.contains('is-loading'):st.classList.contains('is-loading')));
     const waiting=el('waiting');if(!targets.length&&current.status==='playing'&&!current.reveal&&waiting&&!waiting.classList.contains('hidden'))targets.push(waiting);
     if(!targets.length){loadingKey='';return}
@@ -200,7 +200,7 @@
     if(changed||force||Date.now()>lineUntil){newAntic=true;loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
     for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
     // Spaced, soft vocal gestures. Never an endless audio loop or overlapping voices.
-    if(newAntic&&Date.now()-lastAntic>=8000){lastAntic=Date.now();variedSound(['hum','hmm','peek','snicker','wink'])}
+    // Waiting stays silent; reveal reactions leave room for the group's conversation.
   }
   function animateMascot(box){
     const actor=box.querySelector('.popMascot');if(!actor||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
