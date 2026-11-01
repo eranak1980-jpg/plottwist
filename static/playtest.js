@@ -15,6 +15,20 @@
  const lobbyImages=choice('lobbyImages');el('lobbyExtras').before(lobbyImages);
  const warning=document.createElement('p');warning.className='tiny imageSpeedNote';el('photoHelp').after(warning);
  const highlights=document.createElement('section');highlights.id='playtestHighlights';highlights.className='relationshipCard hidden';el('relationshipCard').before(highlights);
+ const insightCopy={
+  he:['מי קרא אותך הכי טוב?','הבחירה שאף אחד לא ניחש','הבחירה האמיתית של','כולם בחרו {guess}. הבחירה של {name}: {answer}.','{n} מתוך {total} ניחשו נכון.','תיקו: ','עוד משחק עם אותה חבורה','חדר חדש · שאלות חדשות · אותם אנשים והגדרות','אחד פותח. כולם מצטרפים בטלפון. רכישה אחת לכל החבורה.'],
+  en:['Who read you best?','The choice nobody predicted','The real choice from','Everyone picked {guess}. {name} chose {answer}.','{n} of {total} guessed correctly.','Tied: ','Play again with this group','New room · new questions · same people and settings','One person hosts. Everyone joins on their phone. One payment for the group.'],
+  es:['¿Quién te conoce mejor?','La respuesta que nadie adivinó','La elección real de','Todos eligieron {guess}. {name} eligió {answer}.','{n} de {total} acertaron.','Empate: ','Jugar de nuevo con este grupo','Sala nueva · preguntas nuevas · mismo grupo y ajustes','Una persona organiza. Todos se unen con su teléfono. Un pago para el grupo.'],
+  'pt-BR':['Quem mais acertou sobre você?','A escolha que ninguém acertou','A escolha real de','Todos escolheram {guess}. {name} escolheu {answer}.','{n} de {total} acertaram.','Empate: ','Jogar de novo com este grupo','Nova sala · novas perguntas · mesmas pessoas e ajustes','Uma pessoa organiza. Todos entram pelo celular. Um pagamento para o grupo.'],
+  fr:['Qui vous a le mieux compris ?','Le choix que personne n’a deviné','Le vrai choix de','Tout le monde a choisi {guess}. {name} a choisi {answer}.','{n} sur {total} ont trouvé.','Égalité : ','Rejouer avec ce groupe','Nouvelle salle · nouvelles questions · mêmes joueurs et réglages','Une personne organise. Chacun rejoint sur son téléphone. Un paiement pour le groupe.'],
+  ja:['あなたを一番理解していたのは？','誰も当てられなかった答え','本当に選んだ人：','全員の予想は「{guess}」。{name}の答えは「{answer}」。','{total}人中{n}人が正解。','同率：','同じメンバーでもう一度','新しいルーム・新しい質問・同じメンバーと設定','1人がホストになり、全員がスマホで参加。支払いはグループで1回。']
+ };
+ const I=()=>insightCopy[document.documentElement.lang]||insightCopy.en;
+ const fill=(str,vars)=>str.replace(/\{(\w+)\}/g,(_,key)=>String(vars[key]??''));
+ const revealInsight=document.createElement('p');revealInsight.id='revealInsight';revealInsight.className='revealInsight hidden';el('reaction').before(revealInsight);
+ const answerOwner=document.createElement('div');answerOwner.id='answerOwner';answerOwner.className='eyebrow hidden';el('answer').before(answerOwner);
+ const promise=document.createElement('p');promise.id='groupPromise';promise.className='groupPromise';el('createRoomBtn').after(promise);
+ const replayHint=document.createElement('p');replayHint.id='replayHint';replayHint.className='tiny';el('replayBtn').after(replayHint);
  let last=null;
  const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function labels(){
@@ -22,6 +36,7 @@
   el('quickAdult').checked=!family&&createAdultRequired();
   for(const node of [images,lobbyImages]){node.querySelector('b').textContent=t[2];node.querySelector('small').textContent=t[3]}
   images.classList.toggle('hidden',crazygamesMode);warning.textContent=t[3];
+  promise.textContent=I()[8];promise.classList.toggle('hidden',crazygamesMode);
   const talk=el('revealTalk');if(talk){talk.textContent='';talk.classList.add('hidden')}
  }
  function setAdult(on){
@@ -38,12 +53,21 @@
   oldRender(d);last=d;labels();lobbyImages.classList.toggle('hidden',d.status!=='lobby'||!d.is_host||crazygamesMode);el('lobbyImages').checked=d.ai_images_enabled!==false;
   if(d.ai_images_enabled===false){el('visualStage')?.classList.add('hidden');el('heroStatus')?.classList.add('hidden');el('finalHeroStatus')?.classList.add('hidden')}
   if(d.type==='room'&&!d.reveal){const role=el('questionRole');if(role)role.textContent+=' · '+T()[8]}
+  const guesses=d.all_guesses||[],visible=d.status==='playing'&&d.reveal&&guesses.length>0;
+  answerOwner.classList.toggle('hidden',!visible);answerOwner.textContent=I()[2]+' '+(d.subject?.name||'');
+  revealInsight.classList.toggle('hidden',!visible);
+  if(visible){const n=guesses.filter(g=>g.correct).length;revealInsight.textContent=guesses.length>1&&!n&&guesses.every(g=>g.guess===guesses[0].guess)?fill(I()[3],{guess:guesses[0].guess,name:d.subject?.name||'',answer:d.answer}):fill(I()[4],{n,total:guesses.length})}
+  replayHint.classList.toggle('hidden',d.status!=='finished'||!d.is_host);replayHint.textContent=I()[7];
+  if(d.status==='finished'&&d.is_host)el('replayBtn').textContent='↻ '+I()[6];
   renderFeedback(d);
   const done=d.status==='finished';highlights.classList.toggle('hidden',!done);if(!done)return;
   const t=T(),byId=new Map((d.players||[]).map(p=>[p.id,p.name]));
-  const pairs=(d.relationships||[]).filter(p=>p.attempts>=2).sort((a,b)=>b.correct/b.attempts-a.correct/a.attempts||b.attempts-a.attempts);
-  const best=pairs[0],surprises=d.round_insights||[];
-  highlights.innerHTML='<h3>'+safe(t[4])+'</h3>'+(best?'<p><b>'+safe(t[5])+'</b><br>'+safe(byId.get(best.guesser_id))+' → '+safe(byId.get(best.subject_id))+' · '+best.correct+'/'+best.attempts+' '+safe(t[7])+'</p>':'')+surprises.map(r=>'<article class="roundInsight"><small>'+safe(t[6])+' · '+safe(r.subject)+'</small><p>'+safe(r.question)+'</p><b>'+safe(r.answer)+'</b><span>'+r.correct+'/'+r.attempts+' '+safe(t[7])+'</span></article>').join('');
+  const pairs=(d.relationships||[]).filter(p=>p.attempts>=2&&p.correct>0);
+  const mine=pairs.filter(p=>p.subject_id===d.me?.id),pool=mine.length?mine:pairs;
+  pool.sort((a,b)=>b.correct/b.attempts-a.correct/a.attempts||b.attempts-a.attempts);
+  const best=pool[0],tied=best?pool.filter(p=>p.correct*best.attempts===best.correct*p.attempts):[];
+  const surprises=(d.round_insights||[]).slice().sort((a,b)=>Number(b.subject===byId.get(d.me?.id))-Number(a.subject===byId.get(d.me?.id))).slice(0,3);
+  highlights.innerHTML='<h3>'+safe(t[4])+'</h3>'+(best?'<div class="personalInsight"><b>'+safe(mine.length?I()[0]:t[5])+'</b>'+(tied.length>1?'<small>'+safe(I()[5])+'</small>':'')+tied.map(p=>'<p>'+'<bdi>'+safe(byId.get(p.guesser_id))+'</bdi> → <bdi>'+safe(byId.get(p.subject_id))+'</bdi>'+' · '+p.correct+'/'+p.attempts+' '+safe(t[7])+'</p>').join('')+'</div>':'')+surprises.map(r=>'<article class="roundInsight"><small>'+safe(r.correct===0?I()[1]:t[6])+' · '+safe(r.subject)+'</small><p>'+safe(r.question)+'</p><b>'+safe(r.answer)+'</b><span>'+r.correct+'/'+r.attempts+' '+safe(t[7])+'</span></article>').join('');
   if(!best&&!surprises.length)highlights.classList.add('hidden');
  };
  const feedbackCopy={
@@ -97,5 +121,5 @@
   renderActual(d);previousState=d;
  };
  const oldCopy=window.applyCopy;window.applyCopy=function(){oldCopy();labels()};
- labels();new MutationObserver(labels).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});if(window.lastState)window.render(window.lastState);
+ labels();new MutationObserver(()=>{labels();if(last&&!pending)renderActual(last)}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});if(window.lastState)window.render(window.lastState);
 })();

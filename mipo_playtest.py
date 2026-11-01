@@ -30,6 +30,10 @@ def room_pack(language='he', context=''):
    ('room','עם מי בחבורה {s} הכי נוח לו לדבר על משהו אישי?',[]),
    ('room','על מי בחבורה {s} הכי סומך שיגיד לו את האמת?',[]),
    ('room','למי בחבורה {s} היה נותן לבחור לו דייט?',[]),
+   ('room','למי בחבורה {s} הכי מתקשה להגיד לא?',[]),
+   ('room','למי בחבורה {s} היה מספר ראשון על חדשות טובות?',[]),
+   ('room','למי בחבורה {s} היה נותן לנהל לו את הכסף?',[]),
+   ('room','מי לדעת {s} תמיד חייב להגיד את המילה האחרונה?',[]),
   ]
  elif language == 'en':
   pack=[('room',f'Who does {{s}} think is {en} in this group?',[]) for _,_,en in ROOM_TRAITS]
@@ -39,6 +43,10 @@ def room_pack(language='he', context=''):
    ('room','Who does {s} feel most comfortable talking to about something personal?',[]),
    ('room','Who does {s} trust most to tell them the truth?',[]),
    ('room','Who would {s} trust to choose a date for them?',[]),
+   ('room','Who in this group does {s} find hardest to say no to?',[]),
+   ('room','Who in this group would {s} tell good news to first?',[]),
+   ('room','Who in this group would {s} trust to manage their money?',[]),
+   ('room','Who does {s} think always needs to have the last word?',[]),
   ]
  else:return []
  if any(w in str(context).casefold() for w in ('family','משפחה','ילדים','children')):
@@ -100,6 +108,14 @@ def canonical_key(text):
 # Each reviewed card has one decision, four answers, and an editorial identity.
 # Identity is narrower than a topic: two money cards need not be the same dilemma.
 REVIEWED = [
+ ('habits',2,'friend-friction','מה יותר מפריע ל־{s} אצל חבר?',['מאחר בלי לעדכן','מבטל ברגע האחרון','קוטע באמצע משפט','חייב תמיד להיות צודק'], 'What bothers {s} most in a friend?',['Being late without a message','Cancelling at the last minute','Interrupting mid-sentence','Always having to be right']),
+ ('trust',2,'good-news-reaction','{s} מספר לחבר חדשות טובות. איזו תגובה הכי תאכזב אותו?',['מחליף נושא מיד','מתחיל לדבר על עצמו','מסביר למה זה לא כזה הישג','אומר יפה בלי להרים מבט'], '{s} shares good news with a friend. Which response would disappoint them most?',['Changing the subject','Making it about themselves','Playing down the achievement','Saying nice without looking up']),
+ ('boundaries',2,'borrowed-item','חבר מחזיר ל־{s} משהו ששאל, והוא פגום. מה {s} מבקש?',['שיתקן אותו','שיקנה חדש','שישלם את שווי הנזק','לא מבקש פיצוי'], 'A friend returns something damaged to {s}. What do they ask for?',['Have it repaired','Buy a replacement','Pay for the damage','Ask for no compensation']),
+ ('honesty',2,'private-screenshot','חבר שולח ל־{s} צילום מסך של שיחה פרטית עם חבר אחר. מה התגובה?',['קורא ומגיב על השיחה','שואל אם מותר לשתף אותה','מבקש שלא ישלח עוד צילומים','מוחק בלי לקרוא'], 'A friend sends {s} a screenshot of another friend’s private chat. What happens?',['Read it and comment','Ask if they had permission','Ask not to receive more','Delete it without reading']),
+ ('money',2,'birthday-budget','מתכננים מתנה לחבר בסכום שגבוה מהתקציב של {s}. מה עושה?',['אומר מה התקציב שלו','מציע מתנה זולה יותר','קונה מתנה בנפרד','מצטרף למרות המחיר'], 'A group gift costs more than {s} can budget. What do they do?',['State their budget','Suggest a cheaper gift','Give a separate gift','Join in despite the cost']),
+ ('trust',3,'friend-ex','חבר מתחיל לצאת עם האקס של {s}. מה הכי חשוב ל־{s}?',['שישמע על זה מהחבר','שידברו לפני הדייט הראשון','שלא יביא אותו למפגשי החבורה','שלא ידברו איתו על הקשר'], 'A friend starts dating {s}’s ex. What matters most to {s}?',['Hear it from the friend','Talk before the first date','Keep the ex out of group plans','Not hear about the relationship']),
+ ('honesty',2,'apology-style','איזו התנצלות הכי תעצבן את {s}?',['מצטער אם נפגעת','סליחה אבל גם אתה אשם','כבר התנצלתי מה עוד רצית','זה היה בצחוק'], 'Which apology would annoy {s} most?',['Sorry if you were offended','Sorry, but you did it too','I said sorry, what else do you want','It was only a joke']),
+ ('plans',2,'host-overstay','כבר מאוחר והאורחים אצל {s} לא הולכים. מה עושה?',['אומר שהוא הולך לישון','מתחיל לסדר את הבית','מציע לקבוע שוב בקרוב','ממשיך לארח עד שילכו'], 'It is late and {s}’s guests are not leaving. What do they do?',['Say they are going to bed','Start tidying up','Suggest meeting again soon','Keep hosting until they leave']),
  ('plans',1,'host-plans','{s} מארח הערב והחברים שואלים מה להביא. מה הוא מבקש?',['משהו לאכול','משהו לשתות','שיבואו בזמן','שלא יביאו כלום'], '{s} is hosting tonight. What do they ask friends to bring?',['Something to eat','Something to drink','Just arrive on time','Nothing at all']),
  ('habits',1,'packing','כולם כבר מוכנים לצאת. מה הכי סביר שמעכב את {s}?',['מחפש את המפתחות','מחליף בגדים שוב','מסיים משהו בטלפון','בודק שלא שכח כלום'], 'Everyone is ready to leave. What is most likely holding {s} up?',['Looking for their keys','Changing clothes again','Finishing something on their phone','Checking they packed everything']),
  ('food',1,'restaurant-choice','{s} חוזר למסעדה שהוא אוהב. מה הוא מזמין?',['את המנה הקבועה','מנה חדשה לגמרי','מה שהמלצר ממליץ','כמה מנות לחלוק'], '{s} returns to a favourite restaurant. What do they order?',['Their usual dish','Something completely new','The waiter’s recommendation','Several dishes to share']),
@@ -142,6 +158,7 @@ _PROFILES=[(re.compile(re.escape(_norm(q[1])).replace(r'\{s\}',r'.+?')),meta) fo
 _META={key:(category,depth) for _,(category,depth,key) in _PERSONAL_PROFILES}
 # Explicit aliases catch changed wording, not just different player names.
 _SCENARIOS=[
+ ('annoying-habit',r'(איזה הרגל של חבר|מה יותר מפריע ל־|What bothers .+ most in a friend)'),
  ('ignored-message',r'(ראה.*הודעה.*לא ענה|לא קיבל תשובה|לא עונה להודע|לא עונה להודעה|ignores? .*message|message.*no reply|read.*message.*reply)'),
  ('lending-money',r'(להלוות כסף|מלווה כסף|lend.*money|loan.*friend)'),
  ('unpaid-debt',r'(חייב.*כסף.*שכח|forgot.*repay|forgot.*pay.*back)'),

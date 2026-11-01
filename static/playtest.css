@@ -5,4 +5,13 @@
 
 #voiceToggle{inset-inline-end:60px}.topbar{padding-inline-end:90px}
 
+.groupPromise{font-size:14px;line-height:1.6;color:#62467e;text-align:center;margin:8px 0 16px}
+.revealInsight{padding:14px 16px;border:1px solid #d9c7f0;border-radius:16px;background:#f1e8fc;color:#4e287b;font-size:18px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}
+#answerOwner{margin-top:16px;letter-spacing:0;overflow-wrap:anywhere}
+.personalInsight{padding:16px;background:#f1e8fc;border-radius:16px;overflow-wrap:anywhere}.personalInsight p{margin:8px 0;line-height:1.5}.personalInsight small{display:block;margin-top:8px}
+body[data-game-status="finished"] #playtestHighlights{order:3;width:100%;max-width:650px;margin:12px auto;text-align:start}
+body[data-game-status="finished"] #relationshipCard{order:5}
+body[data-game-status="finished"] #saveResultCard{order:5}
+body[data-game-status="finished"] #replayHint{order:6;margin:0 0 12px;line-height:1.5}
+
 .questionFeedback{margin:20px 0 10px;border-top:1px solid #e8dff2;padding-top:12px;color:#715f83;font-size:13px}.questionFeedback summary{cursor:pointer}.feedbackActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.feedbackActions button{width:auto;min-height:44px;font-size:13px;margin:0;border:1px solid #d9c7f0;background:#fff;color:#5c3d7c;padding:10px 14px}.questionFeedback p{line-height:1.5}.revealPrelude{padding:24px 20px;border:1px solid #d9c7f0;border-radius:22px;background:#faf6ff;text-align:center;min-height:180px}.revealPrelude h3{font-size:21px;line-height:1.5}.predictionPreview p{display:flex;justify-content:space-between;gap:16px;text-align:start;padding:10px;border-bottom:1px solid #e8dff2}.predictionPreview span{color:#715f83}.predictionPreview b{max-width:65%}.revealPrelude button{width:auto;min-height:44px;padding:10px 20px}.reveal-paused #questionCard,.reveal-paused #reveal,.reveal-paused #questionFeedback,.reveal-paused #scoreDock,.reveal-paused .nextDock,.reveal-paused #companionMoment{display:none!important}

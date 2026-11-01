@@ -231,48 +231,48 @@
     he:['לפני שמתחילים — איך משחקים?','הבנתי, בואו ניצור משחק','איך משחקים?',[
       'בכל סיבוב שחקן עונה בסוד, והאחרים מנחשים מה בחר.',
       'כל ניחוש נכון מזכה בנקודה. הניקוד זמין בתחתית המסך.',
-      'תמונת AI מצחיקה ממחישה את התשובה. מחכים שתופיע לפני שממשיכים.',
+      'תמונות AI הן תוספת לבחירה. אפשר להמשיך בלי לחכות לתמונה.',
       'המארח בוחר נושאים ורמת חריפות, ומשתף לינק להזמנת השחקנים.'
     ],'רוצים ערב למבוגרים? בהגדרות יש אפשרויות 18+ לדייטים, משיכה ואינטימיות. הן נפתחות לבחירה, והמשחק מתחיל רק לאחר אישור גיל והסכמה מכל המשתתפים. במצב משפחה האפשרויות מוסתרות.','דייטים, משיכה ואינטימיות — לבחירה ובהסכמת כל המשתתפים.'],
     en:['Before we play — the basics','Got it, let’s create a game','How to play',[
       'Each round, one player answers secretly. Everyone else guesses their choice.',
       'Each correct guess earns a point. Scores are available at the bottom.',
-      'A funny AI image brings the answer to life. Wait for it before continuing.',
+      'AI images are optional. You can continue without waiting for an image.',
       'The host picks topics and boldness, then shares an invitation link.'
     ],'Want an adults-only evening? Settings include optional 18+ dating, attraction and intimacy topics. Every player must confirm their age and consent before play. These options are hidden in family mode.','Dating, attraction and intimacy — optional, with everyone’s consent.'],
     es:['Antes de jugar — las reglas','Entendido, vamos a crear una partida','Cómo jugar',[
       'En cada ronda, alguien responde en secreto y los demás adivinan su elección.',
       'Cada acierto suma un punto. Los puntos están abajo.',
-      'Una imagen divertida de IA representa la respuesta. Esperad a verla antes de continuar.',
+      'Las imágenes de IA son opcionales. Puedes continuar sin esperar la imagen.',
       'El anfitrión elige temas e intensidad y comparte un enlace de invitación.'
     ],'¿Una noche para adultos? Los ajustes incluyen temas opcionales de citas, atracción e intimidad para mayores de 18. Todos deben confirmar su edad y consentimiento antes de jugar. Se ocultan en modo familia.','Citas, atracción e intimidad: opcionales y con el consentimiento de todos.'],
     'pt-BR':['Antes de jogar — as regras','Entendi, vamos criar um jogo','Como jogar',[
       'A cada rodada, uma pessoa responde em segredo e as outras adivinham sua escolha.',
       'Cada acerto vale um ponto. A pontuação fica na parte inferior.',
-      'Uma imagem divertida de IA ilustra a resposta. Esperem aparecer antes de continuar.',
+      'Imagens de IA são opcionais. Você pode continuar sem esperar a imagem.',
       'Quem organiza escolhe temas e intensidade e compartilha o link de convite.'
     ],'Querem uma noite para adultos? As configurações incluem temas opcionais de encontros, atração e intimidade para maiores de 18. Todos confirmam idade e consentimento antes de jogar. Essas opções ficam ocultas no modo família.','Encontros, atração e intimidade — opcionais, com o consentimento de todos.'],
     fr:['Avant de jouer — les règles','Compris, créons une partie','Comment jouer',[
       'À chaque tour, une personne répond en secret et les autres devinent son choix.',
       'Chaque bonne réponse rapporte un point. Les scores restent accessibles en bas.',
-      'Une image IA amusante illustre la réponse. Attendez son affichage avant de continuer.',
+      'Les images IA sont facultatives. Vous pouvez continuer sans attendre l’image.',
       'L’hôte choisit les thèmes et le niveau, puis partage un lien d’invitation.'
     ],'Une soirée entre adultes ? Les réglages proposent des thèmes facultatifs de rencontres, attirance et intimité réservés aux 18 ans et plus. Chaque joueur confirme son âge et son accord avant de jouer. Ces options sont masquées en mode famille.','Rencontres, attirance et intimité — au choix, avec l’accord de tous.'],
     ja:['始める前に — 遊び方','わかった！ゲームを作る','遊び方',[
       '毎回、1人がこっそり回答し、ほかの人はその答えを予想します。',
       '予想が当たると1点。得点は画面下で確認できます。',
-      '答えをもとに楽しいAI画像が完成します。表示されてから次へ進みましょう。',
+      'AI画像は任意です。画像の完成を待たずに次へ進めます。',
       'ホストがテーマとレベルを選び、招待リンクを共有します。'
     ],'大人だけの夜にしたい？設定には、デート・魅力・親密さを扱う18歳以上向けの選択肢があります。開始前に全員の年齢確認と同意が必要です。ファミリーモードでは表示されません。','デート・魅力・親密さのテーマ — 全員の同意のもとで選べます。']
   };
   const guideText=()=>guideCopy[lang()]||guideCopy.en;
   const setupCopy={
-    he:['אם בוחרים תכני 18+, סמנו כאן לפני יצירת החדר. כל משתתף יאשר גם בעצמו. במשחק רגיל אין צורך.','אני בן/בת 18 ומעלה ומסכים/ה לתכנים למבוגרים','לפני המשחק: העלו תמונת פנים ברורה ואשרו שימוש בה. התמונה הופכת אתכם לכוכבי תמונות ה־AI.','📸 העלו תמונה כדי להתחיל','בחירת תמונה מהטלפון','סמנו את אישור השימוש מתחת לתמונה — השמירה אוטומטית.','✓ התמונה שלכם מוכנה למשחק','בחדר הזה יש תכני 18+. סמנו אישור ואז לחצו על הכפתור להמשך.'],
-    en:['For 18+ topics, tick here before creating the room. Each player also confirms separately. Not needed for a regular game.','I am 18+ and agree to adult content','Before playing, upload a clear face photo and consent to its use. You will star in the AI images.','📸 Add your photo to get started','Choose a photo from your phone','Tick photo consent below the preview — it saves automatically.','✓ Your photo is ready to play','This room includes 18+ topics. Tick to confirm, then press the continue button.'],
-    es:['Para temas de 18+, marca aquí antes de crear la sala. Cada participante confirma por separado. No hace falta en una partida normal.','Tengo 18 años o más y acepto el contenido para adultos','Antes de jugar, sube una foto clara de tu cara y autoriza su uso. Serás protagonista de las imágenes de IA.','📸 Añade tu foto para empezar','Elige una foto del teléfono','Marca el permiso bajo la vista previa: se guarda automáticamente.','✓ Tu foto está lista','Esta sala incluye temas de 18+. Marca la casilla y pulsa continuar.'],
-    'pt-BR':['Para temas de 18+, marque aqui antes de criar a sala. Cada pessoa confirma separadamente. Não é necessário no jogo comum.','Tenho 18 anos ou mais e aceito conteúdo adulto','Antes de jogar, envie uma foto nítida do rosto e autorize seu uso. Você será protagonista das imagens de IA.','📸 Adicione sua foto para começar','Escolha uma foto do celular','Marque a autorização abaixo da prévia: a foto é salva automaticamente.','✓ Sua foto está pronta','Esta sala inclui temas de 18+. Marque a confirmação e toque em continuar.'],
-    fr:['Pour les thèmes 18+, cochez ici avant de créer la salle. Chaque personne confirme séparément. Inutile pour une partie classique.','J’ai 18 ans ou plus et j’accepte le contenu pour adultes','Avant de jouer, ajoutez une photo nette de votre visage et autorisez son utilisation. Vous serez la vedette des images IA.','📸 Ajoutez votre photo pour commencer','Choisir une photo du téléphone','Cochez l’autorisation sous l’aperçu : la photo sera enregistrée automatiquement.','✓ Votre photo est prête','Cette salle propose des thèmes 18+. Cochez la case, puis appuyez sur continuer.'],
-    ja:['18歳以上向けテーマを選ぶ場合は、ルーム作成前にここをチェックしてください。全員が個別に確認します。通常のゲームには不要です。','18歳以上で、大人向けの内容に同意します','開始前に顔がはっきり写った写真を追加し、使用に同意してください。AI画像の主役になれます。','📸 写真を追加して始めよう','スマホから写真を選ぶ','プレビュー下の使用同意をチェックすると自動保存されます。','✓ 写真の準備ができました','このルームは18歳以上向けです。同意欄をチェックして続行してください。']
+    he:['אם בוחרים תכני 18+, סמנו כאן לפני יצירת החדר. כל משתתף יאשר גם בעצמו. במשחק רגיל אין צורך.','אני בן/בת 18 ומעלה ומסכים/ה לתכנים למבוגרים','אפשר לשחק בלי תמונה. אם תרצו, העלו תמונה ברורה ואשרו שימוש בה; יצירת תמונות AI מופעלת בנפרד בהגדרות החדר.','הוספת תמונה (לא חובה)','בחירת תמונה מהטלפון','סמנו את אישור השימוש מתחת לתמונה — השמירה אוטומטית.','✓ התמונה שלכם מוכנה למשחק','בחדר הזה יש תכני 18+. סמנו אישור ואז לחצו על הכפתור להמשך.'],
+    en:['For 18+ topics, tick here before creating the room. Each player also confirms separately. Not needed for a regular game.','I am 18+ and agree to adult content','Photos are optional. Add a clear photo with your permission; the host can enable AI images separately in room settings.','Add a photo (optional)','Choose a photo from your phone','Tick photo consent below the preview — it saves automatically.','✓ Your photo is ready to play','This room includes 18+ topics. Tick to confirm, then press the continue button.'],
+    es:['Para temas de 18+, marca aquí antes de crear la sala. Cada participante confirma por separado. No hace falta en una partida normal.','Tengo 18 años o más y acepto el contenido para adultos','Las fotos son opcionales. Añade una foto con tu permiso; las imágenes de IA se activan por separado en los ajustes de la sala.','Añadir foto (opcional)','Elige una foto del teléfono','Marca el permiso bajo la vista previa: se guarda automáticamente.','✓ Tu foto está lista','Esta sala incluye temas de 18+. Marca la casilla y pulsa continuar.'],
+    'pt-BR':['Para temas de 18+, marque aqui antes de criar a sala. Cada pessoa confirma separadamente. Não é necessário no jogo comum.','Tenho 18 anos ou mais e aceito conteúdo adulto','Fotos são opcionais. Envie uma foto com sua autorização; imagens de IA são ativadas separadamente nos ajustes da sala.','Adicionar foto (opcional)','Escolha uma foto do celular','Marque a autorização abaixo da prévia: a foto é salva automaticamente.','✓ Sua foto está pronta','Esta sala inclui temas de 18+. Marque a confirmação e toque em continuar.'],
+    fr:['Pour les thèmes 18+, cochez ici avant de créer la salle. Chaque personne confirme séparément. Inutile pour une partie classique.','J’ai 18 ans ou plus et j’accepte le contenu pour adultes','Les photos sont facultatives. Ajoutez une photo avec votre accord ; les images IA s’activent séparément dans les réglages de la salle.','Ajouter une photo (facultatif)','Choisir une photo du téléphone','Cochez l’autorisation sous l’aperçu : la photo sera enregistrée automatiquement.','✓ Votre photo est prête','Cette salle propose des thèmes 18+. Cochez la case, puis appuyez sur continuer.'],
+    ja:['18歳以上向けテーマを選ぶ場合は、ルーム作成前にここをチェックしてください。全員が個別に確認します。通常のゲームには不要です。','18歳以上で、大人向けの内容に同意します','写真は任意です。同意した写真を追加できます。AI画像はルーム設定で別途オンにします。','写真を追加（任意）','スマホから写真を選ぶ','プレビュー下の使用同意をチェックすると自動保存されます。','✓ 写真の準備ができました','このルームは18歳以上向けです。同意欄をチェックして続行してください。']
   };
   const S=()=>setupCopy[lang()]||setupCopy.en;
   const intro=document.createElement('section');intro.id='hostIntro';intro.className='card hidden';intro.setAttribute('aria-labelledby','hostIntroTitle');

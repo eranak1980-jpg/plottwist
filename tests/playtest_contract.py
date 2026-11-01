@@ -32,7 +32,7 @@ try:
  assert len(set(keys))==len(keys)
  assert not k.too_similar(keys[1],{keys[0]}),'distinct short traits must remain available'
  assert not any('דייט' in q[1] for q in k.room_pack('he','משפחה'))
- created=call('/api/create',{'name':'ערן','rounds':18,'language':'he','ai_images_enabled':False})
+ created=call('/api/create',{'name':'ערן','rounds':18,'language':'he'})
  code=created['code'];host=created['host'];tokens={'ערן':created['token']}
  for n in ['שחר','שגית','עידן']:
   tokens[n]=call('/api/join',{'code':code,'name':n})['token']
