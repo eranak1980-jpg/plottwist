@@ -13,7 +13,7 @@ w.AbortController=AbortController;
 class AudioContext{constructor(){this.currentTime=0;this.state='running'}resume(){this.state='running';return Promise.resolve()}suspend(){this.state='suspended';return Promise.resolve()}createOscillator(){return {frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},start(){notes++},stop(){stops++},disconnect(){}}}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}}}}
 w.AudioContext=AudioContext;
 function script(source){const el=w.document.createElement('script');el.textContent=source;w.document.body.appendChild(el)}
-script(inline);script(fs.readFileSync('static/companion-copy.js','utf8'));script(fs.readFileSync('static/experience.js','utf8'));
+script(inline);script(fs.readFileSync('static/companion-copy.js','utf8'));script(fs.readFileSync('static/mascot.js','utf8'));script(fs.readFileSync('static/experience.js','utf8'));
 function data(round=0){return {code:'TEST1',image_run:1,round,total:8,status:'playing',is_host:true,players:[{id:1,name:'ערן',gender:'male',score:1,active:true,connected:true},{id:2,name:'אבי',score:1,active:true,connected:true}],me:{id:1,score:1,has_photo:false},subject:{id:1,name:'ערן',has_photo:false},topics:[],topics_display:[],spice:1,rounds:8,mode:'duo',language:'he',options:['כן','לא'],question:'בדיקה',answer:'כן',reveal:false,all_guesses:[],waiting_for:[],tiebreak:{},winner_ids:[1,2],history:[],hero_eligible:false,hero_status:'idle',ai_images_ready:false};}
 const $=id=>w.document.getElementById(id);
 script(fs.readFileSync('static/first-game.js','utf8'));

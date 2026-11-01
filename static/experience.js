@@ -153,11 +153,8 @@
     el('scorePanelTitle').textContent=leaders(d).length>1?L()[11]:L()[2];el('closeScores').textContent=L()[3];el('scorePanel').setAttribute('aria-label',L()[2]);
     autoScores(d);
   }
-  let mascotId=0;
   function mascot(mood='peek'){
-    const id='mipoBubble'+(++mascotId),surprise=['miss','wow','oops','tie','gasp'].includes(mood),happy=['win','correct','leader'].includes(mood);
-    const mouth=surprise?'M45 67a6 8 0 1 0 12 0a6 8 0 1 0-12 0':happy?'M35 63Q50 85 68 61Q54 73 35 63':'M38 66Q53 75 66 64';
-    return `<div class="popMascot mood-${mood}" aria-hidden="true"><svg viewBox="0 0 100 100" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b38aff"/><stop offset=".55" stop-color="#8447e3"/><stop offset="1" stop-color="#5320a6"/></linearGradient></defs><ellipse cx="51" cy="92" rx="30" ry="4" fill="#6b32b4" opacity=".12"/><path d="M14 41Q14 13 48 13h8q32 0 32 29v19q0 24-29 24H43L25 95l3-16Q14 73 14 58Z" fill="url(#${id})"/><path d="M23 35Q29 19 52 21" fill="none" stroke="#e5d2ff" stroke-width="5" stroke-linecap="round" opacity=".6"/><g class="mascotEyes"><ellipse cx="36" cy="47" rx="10" ry="${surprise?13:11}" fill="white"/><ellipse cx="66" cy="47" rx="10" ry="${surprise?13:11}" fill="white"/><circle cx="38" cy="48" r="5.2" fill="#2d174d"/><circle cx="64" cy="48" r="5.2" fill="#2d174d"/><circle cx="40" cy="45" r="1.8" fill="white"/><circle cx="66" cy="45" r="1.8" fill="white"/></g><path d="${surprise?'M28 28l13-2m19 0 13 2':'M28 31q7-5 14-1m17-2 13 4'}" fill="none" stroke="#4d217e" stroke-width="3" stroke-linecap="round"/><ellipse cx="24" cy="61" rx="6" ry="3" fill="#fda5d5" opacity=".6"/><ellipse cx="77" cy="61" rx="6" ry="3" fill="#fda5d5" opacity=".6"/><path class="mascotSmirk" d="${mouth}" fill="${surprise||happy?'#351251':'none'}" stroke="#351251" stroke-width="3" stroke-linecap="round"/></svg></div>`
+    return window.MipoMascot?.html(mood)||'';
   }
 
   function draw(kind='wait'){
@@ -175,10 +172,12 @@
     return pick.line.replaceAll('{name}',current?leaders(current)[0]?.name||'':'');
   }
   function eventKind(d){
+    const guesses=d.all_guesses||[],correct=guesses.filter(g=>g.correct).length;
+    if(guesses.length&&!correct)return guesses.length>1&&guesses.every(g=>g.guess===guesses[0].guess)?'suspicious':'miss';
+    if(guesses.length&&correct===1)return 'correct';
     const lead=leaders(d),old=previous?leaders(previous):[];
     if(previous&&previous.code===d.code&&old.length===1&&lead.length===1&&old[0].id!==lead[0].id)return 'leader';
     if(lead.length>1&&lead[0].score>0)return 'tie';
-    if(d.all_guesses?.length&&d.all_guesses.every(g=>!g.correct))return 'miss';
     return 'correct';
   }
   function resultLine(d){
@@ -186,10 +185,11 @@
     const gs=d.all_guesses,n=gs.filter(g=>g.correct).length,he=lang()==='he',name=d.subject?.name||'';
     if(gs.every(g=>g.guess===gs[0].guess)&&!n)return he?'כולם ניחשו '+gs[0].guess+'. הבחירה של '+name+': '+d.answer+'.':'Everyone guessed '+gs[0].guess+'. '+name+' chose '+d.answer+'.';
     if(n===gs.length)return he?'כולם ניחשו נכון את הבחירה של '+name+'!':'Everyone predicted '+name+' correctly!';
+    if(n===1&&gs.length>1)return he?'הניחוש המדויק היחיד: '+gs.find(g=>g.correct).name+'!':'Only '+gs.find(g=>g.correct).name+' got it right!';
     if(!n)return he?'אף אחד לא ניחש את הבחירה של '+name+'!':'Nobody predicted '+name+' this time!';
     return he?n+' מתוך '+gs.length+' ניחשו נכון.':n+' of '+gs.length+' guessed correctly.';
   }
-  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=resultLine(current)||draw(kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),2400);const pools={leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
+  function moment(kind){const box=el('companionMoment');box.innerHTML=mascot(kind)+'<p></p>';box.querySelector('p').textContent=resultLine(current)||draw(kind==='suspicious'?'miss':kind);box.classList.remove('hidden');clearTimeout(momentTimer);momentTimer=setTimeout(()=>box.classList.add('hidden'),2400);const pools={suspicious:['hmm'],leader:['mischief','wow'],tie:['hmm','tie'],miss:['snicker','gasp','oops'],correct:['wink','taDa'],win:['win']};variedSound(pools[kind]||['peek'])}
   function companion(force=false){
     if(!current||current.reveal||current.answered&&current.guess_need>0&&current.guess_count>=current.guess_need)return;
     const targets=['heroStatus','finalHeroStatus'].map(el).filter(st=>st&&!st.classList.contains('hidden')&&(st.id==='heroStatus'?el('visualStage').classList.contains('is-loading'):st.classList.contains('is-loading')));
@@ -198,7 +198,7 @@
     const key=current.code+'_'+current.image_run+'_'+current.round+'_'+current.status+'_'+targets[0].id;
     const changed=loadingKey!==key;let newAntic=false;
     if(changed||force||Date.now()>lineUntil){newAntic=true;loadingKey=key;lastLine=draw(current.status==='finished'?'win':'wait');lineUntil=Date.now()+7500}
-    for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot(['peek','hum','wow','tie'][Math.floor(Math.random()*4)])+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
+    for(const status of targets){let box=status.querySelector('.loadingCompanion');if(!box){box=document.createElement('div');box.className='loadingCompanion';box.innerHTML=mascot('peek')+'<p class="loadingJoke"></p>';status.appendChild(box)}box.querySelector('.loadingJoke').textContent=lastLine;if(newAntic)animateMascot(box)}
     // Spaced, soft vocal gestures. Never an endless audio loop or overlapping voices.
     // Waiting stays silent; reveal reactions leave room for the group's conversation.
   }
@@ -209,6 +209,9 @@
   }
   function finishUI(d){
     if(d.status!=='finished')return;
+    let art=el('finishMascot');if(!art){art=document.createElement('div');art.id='finishMascot';art.className='finishMascot';el('finishTitle').before(art)}
+    const artKey=d.code+'_'+d.image_run;if(art.dataset.game!==artKey){art.dataset.game=artKey;art.innerHTML=mascot('win')}
+
     const ws=d.players.filter(p=>(d.winner_ids||leaders(d).map(x=>x.id)).includes(p.id));
     el('finishTitle').textContent=ws.length>1?L()[4].replace('{n}',ws.length):L()[5].replace('{name}',ws[0]?.name||'');
     el('finalPrize').classList.toggle('hidden',!d.prize);el('finalPrize').textContent=d.prize?L()[6]+d.prize:'';
@@ -440,7 +443,7 @@
   window.render=function(d){
     const newGame=current&&(current.code!==d.code||current.image_run!==d.image_run);if(newGame){closeScores();lastLine='';loadingKey='';el('companionMoment').classList.add('hidden')}
     if(previous&&previous.round!==d.round)closeScores();
-    current=d;baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);featureRender(d);chatLabels();packageLabel();costs.classList.add('hidden');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
+    current=d;if(d.status==='lobby')window.MipoMascot?.preload();baseRender(d);label();scoreUI(d);finishUI(d);lobbyPolish(d);featureRender(d);chatLabels();packageLabel();costs.classList.add('hidden');costs.querySelector('summary').textContent=phrase('מדידת עלויות — למארח בטסט','Cost measurement — pilot host');costs.querySelector('button').textContent=phrase('עדכן מדידה','Refresh measurement');
     const help=el('ruleHelp');if(help)help.querySelector('summary span').textContent=L()[12];
     if(d.tiebreak?.sets&&d.status==='playing')el('round').textContent=L()[9]+' '+d.tiebreak.sets+' / 3 · '+(d.round-d.tiebreak.start+1)+' / '+d.tiebreak.order.length;
     const key=d.code+'_'+d.image_run+'_'+d.round+'_'+d.status;
