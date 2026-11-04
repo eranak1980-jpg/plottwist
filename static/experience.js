@@ -309,9 +309,9 @@
     if((family||!section.open)&&spice===3){spice=2;document.querySelectorAll('.spice button').forEach(b=>b.classList.toggle('on',b.dataset.s==='2'))}
     el('adultText').textContent=S()[1];
     if(family){el('adultConfirm').checked=false;el('hostIntroAge').checked=false}
-    section.ontoggle=()=>{if(!section.open){target.querySelectorAll('.on').forEach(b=>b.classList.remove('on'));el('adultConfirm').checked=false}adultSetup();syncCreateAdult()};
+    section.ontoggle=()=>{if(!section.open){target.querySelectorAll('.on').forEach(b=>b.classList.remove('on'));el('adultConfirm').checked=false;el('hostIntroAge').checked=false}adultSetup();syncCreateAdult()};
     syncCreateAdult();
-    section.appendChild(el('adultBox'));
+    if(!el('quickAdult'))section.appendChild(el('adultBox'));
   }
   const baseTopics=window.renderCreateTopics;window.renderCreateTopics=function(){baseTopics();adultSetup()};
   const baseAudience=window.renderAudience;window.renderAudience=function(){baseAudience();adultSetup()};
@@ -343,7 +343,10 @@
   const baseCreate=window.createGame;
   window.createGame=async function(){if(createAdultRequired()&&!el('adultConfirm').checked){el('adultOptions').open=true;syncCreateAdult();el('adultBox').scrollIntoView({block:'center'});el('adultConfirm').focus();return toast(S()[1])}return baseCreate()};
   const baseShare=window.share;window.share=function(){if(current?.is_host)return baseShare()};
+  const lobbyMascot=document.createElement('div');lobbyMascot.className='lobbyMascot hidden';
+  lobbyMascot.innerHTML=mascot('peek');el('roomDetails').before(lobbyMascot);
   function lobbyPolish(d){
+    lobbyMascot.classList.toggle('hidden',d.status!=='lobby');
     el('shareBtn').classList.toggle('hidden',!d.is_host);
     el('shareBtn').closest('.roomHeading').classList.toggle('hidden',!d.is_host);
     const ageKey=d.code+'_'+d.image_run+'_'+!!d.adult_required;
@@ -354,7 +357,7 @@
     el('playerAgeSave').textContent=phrase('אישור 18+','Confirm 18+');
     el('photoHelp').textContent=S()[2];el('photoTitle').textContent=d.me?.has_photo?S()[6]:S()[3];photoPick.textContent=S()[4];photoHint.textContent=S()[5];el('photoBox').classList.toggle('needsPhoto',!d.me?.has_photo);
     el('photoToggle').classList.add('hidden');photoReady.classList.toggle('hidden',d.status!=='lobby'||!d.me?.has_photo);
-    const mine=d.players.find(p=>p.id===d.me?.id);if(mine?.photo_url)el('savedPhotoThumb').src=mine.photo_url+(mine.photo_url.includes('?')?'&':'?')+'v='+(d.photo_count||0);
+    const mine=d.players.find(p=>p.id===d.me?.id);if(mine?.photo_url)el('savedPhotoThumb').src=mine.photo_url;
     el('savedPhotoLabel').textContent=S()[6];el('replacePhotoBtn').textContent=phrase('החלפת תמונה','Replace photo');
     el('how3').textContent=S()[2];el('how4').textContent=d.adult_required?S()[7]:(copy.how4||guideText()[3][3]);
     howAge.classList.toggle('hidden',!d.adult_required||!!d.me?.adult_confirmed);howAge.querySelector('span').textContent=S()[1];
@@ -396,8 +399,8 @@
   function setUnread(value){unread=Math.max(0,value);el('chatUnread').textContent=unread>99?'99+':String(unread);el('chatUnread').classList.toggle('hidden',!unread)}
   function renderChat(){const list=[...chatItems.values()].sort((a,b)=>Number(a.id)-Number(b.id)),box=el('chatMessages');if(!list.length){box.innerHTML='<p class="chatEmpty">'+safe(F().empty)+'</p>';return}box.innerHTML=list.map(m=>{const mine=Number(m.player_id)===Number(current?.me?.id),reaction=m.kind==='reaction';return '<div class="chatMessage '+(mine?'mine ':'')+(reaction?'reaction':'')+'"><span class="chatAuthor">'+safe(m.name||'')+'</span><span class="chatBody">'+safe(m.body||'')+'</span></div>'}).join('');box.scrollTop=box.scrollHeight}
   function setChatRoom(code){if(chatRoom===code)return;chatRoom=code||'';lastChatId=0;chatInitialLoaded=false;chatItems.clear();setUnread(0);renderChat()}
-  async function fetchChat(initial=false){if(chatLoading||!current?.me||!s.token||!current.code||current.code!==s.code||document.hidden)return;const requestedRoom=current.code;chatLoading=true;try{const result=await window.req('/api/chat/'+encodeURIComponent(requestedRoom)+'?token='+encodeURIComponent(s.token)+'&after='+(initial?0:lastChatId));if(chatRoom!==requestedRoom)return;const messages=Array.isArray(result.messages)?result.messages:[];let incoming=0;for(const m of messages){const id=Number(m.id)||0;if(chatItems.has(id))continue;chatItems.set(id,m);lastChatId=Math.max(lastChatId,id);if(!initial&&!chatOpen&&Number(m.player_id)!==Number(current.me.id))incoming++}chatInitialLoaded=true;while(chatItems.size>100)chatItems.delete(chatItems.keys().next().value);if(messages.length)renderChat();if(incoming){setUnread(unread+incoming);variedSound(['wink','peek'])}}catch(_){/* Chat retries quietly without blocking play. */}finally{chatLoading=false}}
-  async function sendChat(body,kind='text'){body=String(body||'').trim();if(!body||!current?.me)return;const id=(window.crypto?.randomUUID?.()||String(Date.now())+'_'+Math.random().toString(36).slice(2));try{const result=await window.req('/api/'+encodeURIComponent(current.code)+'/chat',{token:s.token,kind,body,client_msg_id:id}),m=result.message;if(m&&chatRoom===current.code){chatItems.set(Number(m.id),m);lastChatId=Math.max(lastChatId,Number(m.id)||0);renderChat()}else await fetchChat(false)}catch(_){toast(F().chatFailed)}}
+  async function fetchChat(initial=false){if(chatLoading||!current?.me||!s.token||!current.code||current.code!==s.code||document.hidden)return;const requestedRoom=current.code;chatLoading=true;try{const result=await window.req('/api/chat/'+encodeURIComponent(requestedRoom)+'?token='+encodeURIComponent(s.token)+'&after='+(initial?0:lastChatId));if(chatRoom!==requestedRoom)return;const messages=Array.isArray(result.messages)?result.messages:[];let incoming=0;for(const m of messages){const id=Number(m.id)||0;lastChatId=Math.max(lastChatId,id);if(chatItems.has(id))continue;chatItems.set(id,m);if(!initial&&!chatOpen&&Number(m.player_id)!==Number(current.me.id))incoming++}chatInitialLoaded=true;while(chatItems.size>100)chatItems.delete(chatItems.keys().next().value);if(messages.length)renderChat();if(incoming){setUnread(unread+incoming);variedSound(['wink','peek'])}}catch(_){/* Chat retries quietly without blocking play. */}finally{chatLoading=false}}
+  async function sendChat(body,kind='text'){body=String(body||'').trim();if(!body||!current?.me)return;const room=current.code;const id=(window.crypto?.randomUUID?.()||String(Date.now())+'_'+Math.random().toString(36).slice(2));try{const result=await window.req('/api/'+encodeURIComponent(room)+'/chat',{token:s.token,kind,body,client_msg_id:id}),m=result.message;if(chatRoom!==room)return;if(m){chatItems.set(Number(m.id),m);renderChat()}else await fetchChat(false);if(kind==='reaction'&&!chatOpen)toast(phrase('התגובה נשלחה','Reaction sent')+' '+body)}catch(_){toast(F().chatFailed)}}
   function openChat(){chatOpen=true;setUnread(0);el('chatSheet').classList.remove('hidden');el('chatFab').setAttribute('aria-expanded','true');document.body.classList.add('chatOpen');fetchChat(true);setTimeout(()=>el('chatInput').focus({preventScroll:true}),80)}
   function closeChat(){chatOpen=false;el('chatSheet').classList.add('hidden');el('chatFab').setAttribute('aria-expanded','false');document.body.classList.remove('chatOpen')}
   el('chatFab').onclick=()=>chatOpen?closeChat():openChat();el('chatClose').onclick=closeChat;
@@ -421,7 +424,12 @@
 
   window.dropPlayer=async function(id){const d=window.lastState,p=d?.players?.find(x=>x.id===id);if(!p||!window.confirm(ft(F().remove,p.name)))return;try{await window.req('/api/'+s.code+'/drop',{host:s.host,player_id:id});stateSig='';toast(ft(F().removed,p.name));await load()}catch(e){toast(e.message==='need_2'?copy.need_two:copy.remove_failed)}};
 
+  const previousHero=document.createElement('a');previousHero.className='mini previousHero hidden';
+  previousHero.target='_blank';previousHero.rel='noopener';el('visualStage').after(previousHero);
   function featureRender(d){
+    previousHero.classList.toggle('hidden',!d.previous_hero);
+    if(d.previous_hero)previousHero.href=d.previous_hero;else previousHero.removeAttribute('href');
+    previousHero.textContent=phrase('לתמונה מהסיבוב הקודם','View previous round image');
     setChatRoom(d.code);chatRoot.classList.toggle('hidden',!d.me);if(d.me&&!chatInitialLoaded)fetchChat(true);
     document.body.classList.toggle('hasNextDock',!!(d.status==='playing'&&d.reveal&&d.is_host));
     el('interactiveTwist').classList.add('hidden');el('interactiveTwist').setAttribute('aria-hidden','true');
