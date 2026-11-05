@@ -146,3 +146,7 @@ html[dir="rtl"] .choiceDialog h2{margin:5px 0 8px 42px}
 .scoreLogo img{display:block;width:190px;height:80px;object-fit:cover;object-position:center;margin:auto;border-radius:14px;background:#fff}
 
 html.crazygamesMode #hostIntroPhoto,html.crazygamesMode #photoReadyCard{display:none!important}
+
+.lobbyMascot{text-align:center;margin:0 auto 8px}
+.lobbyMascot .mipoComic,.lobbyMascot img{width:76px;height:76px}
+.previousHero:not(.hidden){display:inline-block;margin:8px 0}

@@ -11,7 +11,7 @@
  };
  const T=()=>text[document.documentElement.lang]||text.en;
  function choice(id){const row=document.createElement('label');row.className='playtestChoice';row.innerHTML='<input type="checkbox" id="'+id+'"><span><b></b><small></small></span>';return row}
- const adult=choice('quickAdult'),images=choice('quickImages');el('quickSetup').append(adult,images);
+ const adult=choice('quickAdult'),images=choice('quickImages');el('quickSetup').append(adult,el('adultBox'),images);
  const lobbyImages=choice('lobbyImages');el('lobbyExtras').before(lobbyImages);
  const warning=document.createElement('p');warning.className='tiny imageSpeedNote';el('photoHelp').after(warning);
  const highlights=document.createElement('section');highlights.id='playtestHighlights';highlights.className='relationshipCard hidden';el('relationshipCard').before(highlights);
@@ -40,8 +40,8 @@
   const talk=el('revealTalk');if(talk){talk.textContent='';talk.classList.add('hidden')}
  }
  function setAdult(on){
-  spice=on?3:1;el('advancedSetup').dataset.used='1';
-  if(on){el('advancedSetup').open=true;el('adultOptions').open=true}
+  spice=on?3:1;
+  if(on){el('adultOptions').open=true}
   else{document.querySelectorAll('#topics [data-topic]').forEach(b=>{if(['דייטים','אינטימיות למבוגרים'].includes(b.dataset.topic))b.classList.remove('on')});el('adultConfirm').checked=false;el('hostIntroAge').checked=false;el('adultOptions').open=false}
   document.querySelectorAll('.spice button').forEach((b,i)=>b.classList.toggle('on',i+1===spice));syncCreateAdult();labels();
  }
@@ -61,13 +61,13 @@
   if(d.status==='finished'&&d.is_host)el('replayBtn').textContent='↻ '+I()[6];
   renderFeedback(d);
   const done=d.status==='finished';highlights.classList.toggle('hidden',!done);if(!done)return;
-  const t=T(),byId=new Map((d.players||[]).map(p=>[p.id,p.name]));
+  const t=T(),he=document.documentElement.lang==='he',byId=new Map((d.players||[]).map(p=>[p.id,p.name]));
   const pairs=(d.relationships||[]).filter(p=>p.attempts>=2&&p.correct>0);
   const mine=pairs.filter(p=>p.subject_id===d.me?.id),pool=mine.length?mine:pairs;
   pool.sort((a,b)=>b.correct/b.attempts-a.correct/a.attempts||b.attempts-a.attempts);
   const best=pool[0],tied=best?pool.filter(p=>p.correct*best.attempts===best.correct*p.attempts):[];
   const surprises=(d.round_insights||[]).slice().sort((a,b)=>Number(b.subject===byId.get(d.me?.id))-Number(a.subject===byId.get(d.me?.id))).slice(0,3);
-  highlights.innerHTML='<h3>'+safe(t[4])+'</h3>'+(best?'<div class="personalInsight"><b>'+safe(mine.length?I()[0]:t[5])+'</b>'+(tied.length>1?'<small>'+safe(I()[5])+'</small>':'')+tied.map(p=>'<p>'+'<bdi>'+safe(byId.get(p.guesser_id))+'</bdi> → <bdi>'+safe(byId.get(p.subject_id))+'</bdi>'+' · '+p.correct+'/'+p.attempts+' '+safe(t[7])+'</p>').join('')+'</div>':'')+surprises.map(r=>'<article class="roundInsight"><small>'+safe(r.correct===0?I()[1]:t[6])+' · '+safe(r.subject)+'</small><p>'+safe(r.question)+'</p><b>'+safe(r.answer)+'</b><span>'+r.correct+'/'+r.attempts+' '+safe(t[7])+'</span></article>').join('');
+  highlights.innerHTML='<h3>'+safe(t[4])+'</h3>'+(best?'<div class="personalInsight"><b>'+safe(mine.length?I()[0]:t[5])+'</b>'+(tied.length>1?'<small>'+safe(I()[5])+'</small>':'')+tied.map(p=>'<p>'+'<bdi>'+safe(byId.get(p.guesser_id))+'</bdi>'+(he?' על התשובות של ':' → ')+'<bdi>'+safe(byId.get(p.subject_id))+'</bdi> · '+p.correct+'/'+p.attempts+' '+safe(t[7])+'</p>').join('')+'</div>':'')+surprises.map(r=>'<article class="roundInsight"><small>'+safe(r.correct===0?I()[1]:t[6])+' · '+safe(r.subject)+'</small><p>'+safe(r.question)+'</p><b>'+safe(r.answer)+'</b><span>'+r.correct+'/'+r.attempts+' '+safe(t[7])+'</span></article>').join('');
   if(!best&&!surprises.length)highlights.classList.add('hidden');
  };
  const feedbackCopy={

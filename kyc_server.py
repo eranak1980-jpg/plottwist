@@ -114,6 +114,7 @@ def init():
    c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'he'")
    c.execute("""CREATE TABLE IF NOT EXISTS players(id BIGSERIAL PRIMARY KEY,game_id BIGINT,name TEXT,token TEXT UNIQUE,score INTEGER DEFAULT 0,joined TEXT,photo_data TEXT DEFAULT '',photo_consent INTEGER DEFAULT 0,active INTEGER DEFAULT 1,last_seen TEXT DEFAULT '',client_id TEXT DEFAULT '')""")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS adult_confirmed INTEGER DEFAULT 0")
+   c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS photo_revision INTEGER NOT NULL DEFAULT 0")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_seen TEXT DEFAULT ''")
    c.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS client_id TEXT DEFAULT ''")
@@ -150,7 +151,7 @@ def init():
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
   init_feedback(c);image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
-  for n,d in [('adult_confirmed','INTEGER DEFAULT 0'),('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
+  for n,d in [('adult_confirmed','INTEGER DEFAULT 0'),('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('photo_revision','INTEGER NOT NULL DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
   c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
@@ -162,8 +163,12 @@ def _players(c,gid,include_photos=False):
  # State and lobby polling only need photo readiness. Returning a one-byte marker
  # keeps existing boolean callers compatible without copying multi-megabyte blobs.
  photo="photo_data" if include_photos else "CASE WHEN COALESCE(photo_data,'')<>'' AND COALESCE(photo_consent,0)=1 THEN '1' ELSE '' END AS photo_data"
- cols='id,game_id,name,token,score,joined,'+photo+',photo_consent,active,last_seen,client_id,adult_confirmed,gender'
+ cols='id,game_id,name,token,score,joined,'+photo+',photo_consent,photo_revision,active,last_seen,client_id,adult_confirmed,gender'
  return c.execute('SELECT '+cols+' FROM players WHERE game_id=? ORDER BY id',(gid,)).fetchall()
+def player_photo_url(code,player):
+ if not player or not player['photo_data']:return ''
+ return '/api/photo/'+code+'/'+str(player['id'])+'?v='+str(player['photo_revision'])
+
 def players(gid,include_photos=False):
  with cn() as c:return _players(c,gid,include_photos)
 def game_for_token(code,token=''):
@@ -776,7 +781,7 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     feedback_reasons=[r['reason'] for r in c.execute('SELECT reason FROM question_feedback WHERE game_id=? AND image_run=? AND round_no=?',(g['id'],g['image_run'],g['round_no'])).fetchall()] if is_host else []
     gs=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
-    hero_rounds={r['round_no'] for r in c.execute('SELECT round_no FROM hero_scenes WHERE game_id=? AND round_no IN (?,?)',(g['id'],g['round_no'],99)).fetchall()}
+    hero_rounds={r['round_no'] for r in c.execute('SELECT round_no FROM hero_scenes WHERE game_id=? AND round_no IN (?,?,?)',(g['id'],g['round_no'],g['round_no']-1,99)).fetchall()}
     # Expire this run once, then read both current/final statuses together.
     image_jobs.expire_jobs(c,g['id'],g['image_run'])
     jobs={r['round_no']:r['status'] for r in c.execute('SELECT round_no,status FROM image_jobs WHERE game_id=? AND image_run=? AND round_no IN (?,?)',(g['id'],g['image_run'],g['round_no'],99)).fetchall()}
@@ -799,14 +804,14 @@ class H(BaseHTTPRequestHandler):
     'code':g['code'],'status':g['status'],'round':g['round_no'],'total':total_rounds(g),'is_host':is_host,
     'adult_required':adult_required(state_topics,g['spice']),'adults_ready':all(x['adult_confirmed'] for x in ps if x['active']),
     'me':{'adult_confirmed':bool(me['adult_confirmed']),'id':me['id'],'name':me['name'],'gender':me['gender'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,
-    'players':[{'id':x['id'],'name':x['name'],'gender':x['gender'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps],
+    'players':[{'id':x['id'],'name':x['name'],'gender':x['gender'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':player_photo_url(g['code'],x)} for x in ps],
     'photo_count':sum(1 for x in ps if x['photo_data']),
-    'subject':{'id':sub['id'],'name':sub['name'],'gender':sub['gender'],'has_photo':bool(sub['photo_data']),'photo_url':('/api/photo/'+g['code']+'/'+str(sub['id'])) if sub and sub['photo_data'] else ''} if sub else None,
+    'subject':{'id':sub['id'],'name':sub['name'],'gender':sub['gender'],'has_photo':bool(sub['photo_data']),'photo_url':player_photo_url(g['code'],sub)} if sub else None,
     'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'feedback_reasons':feedback_reasons,
     # Match Twist secret answers were removed: Reveal chat/reactions are non-blocking.
     'interactive':'','interactive_match':None,
     'answered':bool(g['answer']),'my_guess':myguess,'my_correct':iscorrect,
-    'all_guesses':[{'player_id':x['id'],'name':x['name'],'gender':x['gender'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':('/api/photo/'+g['code']+'/'+str(x['id'])) if x['photo_data'] else ''} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],
+    'all_guesses':[{'player_id':x['id'],'name':x['name'],'gender':x['gender'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':player_photo_url(g['code'],x)} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],
     'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,
     'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],
     'reveal':reveal,'image_run':g['image_run'],'ai_images_enabled':bool(g['ai_images_enabled']),'hero_eligible':bool(g['ai_images_enabled'] and sub and sub['photo_data'] and sub['photo_consent']),
@@ -814,6 +819,7 @@ class H(BaseHTTPRequestHandler):
     'tiebreak':tie_data(g),'can_tiebreak':can_tiebreak(g,ps),'instant_visual':instant_url(g['round_no']),
     'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),
     'hero_status':hero_status,'final_hero_status':final_hero_status,
+    'previous_hero':image_url(g,g['round_no']-1) if me and g['status']=='playing' and g['round_no']>0 and g['round_no']-1 in hero_rounds else None,
     'hero':image_url(g,g['round_no']) if hero and reveal else None,
     'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,
     'topics':state_topics,'topics_display':topic_labels(state_topics,game_language(g)),'direction':direction(game_language(g)),
@@ -1087,7 +1093,7 @@ class H(BaseHTTPRequestHandler):
    try:
     # Save the original photo first and respond immediately. Portrait preprocessing
     # is best-effort background work and must never make the lobby or room unavailable.
-    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1 WHERE id=?',(data,me['id']))
+    with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1,photo_revision=photo_revision+1 WHERE id=?',(data,me['id']))
     VISUAL_POOL.submit(_portrait_worker,me['id'],data)
    except Exception as e:
     print('photo save db error',type(e).__name__,flush=True);return self.J({'error':'photo_save_failed'},503)
