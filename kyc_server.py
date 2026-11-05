@@ -20,6 +20,7 @@ import mipo_analytics as analytics
 from kyc_ai import generate_pack
 from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key, semantic_family, paced_candidates, PERSONAL_EN
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
+LEGACY_INSTANT_IMAGES=os.getenv('PLOT_LEGACY_INSTANT_IMAGES','0').strip()=='1'
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/('kyc-preview.db' if PREVIEW_MODE else 'kyc.db')));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
 def now():return datetime.now(timezone.utc).isoformat()
 def retention_cleanup(c):
@@ -620,11 +621,13 @@ def prepare_hero_async(gid,rn,expected_run=None):
   if not sub:return 'not_ready'
  payload=image_payload(g,ps,final)
  if not payload:return 'no_photo'
- # Queue the final image first. The legacy local preview must not delay the AI
- # request (the current UI deliberately hides that preview).
+ # The current UI shows only completed AI images. Legacy collages also take a
+ # game-row lock while composing, delaying later image jobs and game actions.
+ # Keep them opt-in for older clients instead of doing invisible work every round.
  result=image_jobs.queue(cn,g,int(rn),payload,generate_many) if os.getenv('OPENAI_API_KEY','').strip() else 'unavailable'
- try:instant.prepare(cn,g,int(rn),payload,ps)
- except Exception as e:print('instant visual failed',type(e).__name__,flush=True)
+ if LEGACY_INSTANT_IMAGES:
+  try:instant.prepare(cn,g,int(rn),payload,ps)
+  except Exception as e:print('instant visual failed',type(e).__name__,flush=True)
  return result
 def _visual_worker(gid,rn,run,key):
  try:prepare_hero_async(gid,rn,run)
@@ -687,7 +690,7 @@ class H(BaseHTTPRequestHandler):
   return self.get_impl()
  def get_impl(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'hybrid-v1','release':'first-game-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
+  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'ai-prefetch-v2','release':'first-game-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
   if p=='/api/pricing':
    try:return self.J(commerce.quote(int(parse_qs(u.query).get('rounds',['18'])[0]),int(parse_qs(u.query).get('games',['1'])[0])))
    except (ValueError,TypeError):return self.J({'error':'invalid_quote'},400)
@@ -749,7 +752,11 @@ class H(BaseHTTPRequestHandler):
    if not row or not row['image_data']:return self.send_error(404)
    mime,raw=decode_data_url(row['image_data'])
    if not raw:return self.send_error(404)
-   self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control','private, no-cache');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+   # A completed image never changes within a run. Explicit run URLs can be
+   # reused by preload, Reveal and history without another mobile download.
+   # Unversioned legacy URLs must still revalidate after replay/tiebreak.
+   cache='private, max-age=86400, immutable' if 'run' in parse_qs(u.query) else 'private, no-cache'
+   self.send_response(200);self.send_header('Content-Type',mime or 'image/png');self.send_header('Cache-Control',cache);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
   if p=='/api/meta':
    q=parse_qs(u.query);lang=normalize_language(q.get('lang',['en'])[0]);return self.J({'language':lang,'direction':direction(lang),'languages':SUPPORTED_LANGUAGES,'topics':{k:topic_labels([k],lang)[0] for k in TOPIC_LABELS},'copy':ui_copy(lang)})
   if p.startswith('/api/chat/'):
@@ -821,6 +828,9 @@ class H(BaseHTTPRequestHandler):
     'hero_status':hero_status,'final_hero_status':final_hero_status,
     'previous_hero':image_url(g,g['round_no']-1) if me and g['status']=='playing' and g['round_no']>0 and g['round_no']-1 in hero_rounds else None,
     'hero':image_url(g,g['round_no']) if hero and reveal else None,
+    # Only players whose answer/guess is locked may download before Reveal.
+    # Keep the actual Reveal URL hidden from everyone still choosing a guess.
+    'hero_preload':image_url(g,g['round_no']) if hero and not reveal and g['status']=='playing' and me and g['answer'] and (me['id'] in guessed or (sub and me['id']==sub['id'])) else None,
     'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,
     'topics':state_topics,'topics_display':topic_labels(state_topics,game_language(g)),'direction':direction(game_language(g)),
     'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(active_ids)==2 else 'group',
@@ -1094,10 +1104,10 @@ class H(BaseHTTPRequestHandler):
     # Save the original photo first and respond immediately. Portrait preprocessing
     # is best-effort background work and must never make the lobby or room unavailable.
     with cn() as c:c.execute('UPDATE players SET photo_data=?,photo_consent=1,photo_revision=photo_revision+1 WHERE id=?',(data,me['id']))
-    VISUAL_POOL.submit(_portrait_worker,me['id'],data)
+    if LEGACY_INSTANT_IMAGES:VISUAL_POOL.submit(_portrait_worker,me['id'],data)
    except Exception as e:
     print('photo save db error',type(e).__name__,flush=True);return self.J({'error':'photo_save_failed'},503)
-   return self.J({'ok':True,'bytes':len(data),'photo_ready':True,'has_photo':True,'portrait':'processing'})
+   return self.J({'ok':True,'bytes':len(data),'photo_ready':True,'has_photo':True,'portrait':'processing' if LEGACY_INSTANT_IMAGES else 'not_needed'})
   if act=='topicvote':
    me=next((x for x in ps if x['token']==d.get('token')),None);topic=str(d.get('topic','')).strip()[:80]
    if not me or g['status']!='lobby':return self.J({'error':'not_allowed'},403)
@@ -1212,7 +1222,9 @@ class H(BaseHTTPRequestHandler):
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
 def _background_startup():
- try:instant.warm();warm_image_runtime();image_jobs.recover(cn,generate_many)
+ try:
+  if LEGACY_INSTANT_IMAGES:instant.warm()
+  warm_image_runtime();image_jobs.recover(cn,generate_many)
  except Exception as e:print('background startup failed',type(e).__name__,flush=True)
 def run():
  # Bind the HTTP port before loading the optional image runtime. On Render this

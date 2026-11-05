@@ -17,7 +17,7 @@ def req(path,body=None,expected=200):
  assert status==expected,(path,status,data)
  return data
 def room(n):
- host=req('/api/create',{'name':'Host','rounds':8,'language':'he','client_id':'host-'+str(n)})
+ host=req('/api/create',{'name':'Host','rounds':8,'language':'he','client_id':'host-'+str(n),'ai_images_enabled':True})
  sessions=[host]+[req('/api/join',{'code':host['code'],'name':'Player '+str(i),'client_id':str(n)+'-'+str(i)}) for i in range(1,n)]
  with k.cn() as c:c.execute("UPDATE players SET photo_data='test-reference',photo_consent=1 WHERE game_id=?",(k.game(host['code'])['id'],))
  req('/api/'+host['code']+'/start',{'host':host['host']})

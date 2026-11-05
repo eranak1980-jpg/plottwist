@@ -10,6 +10,22 @@ const sandbox={copy:{image_loading:'Loading…',image_failed:'Failed',image_cont
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 function paint(){while(frames.length)frames.shift()()}
 const d={code:'TEST',image_run:1,round:0,total:12,hero_eligible:true,ai_images_ready:true,instant_visual:'/instant',subject:{photo_url:'/photo.jpg'},hero_status:'running'};
+// Locked players download off-screen while others guess, then reuse that image.
+assert.match(page,/function render\(d\)\{preloadLockedVisual\(d\)/);
+sandbox.preloadLockedVisual({...d,status:'playing',hero_preload:'/preloaded'});
+const prefetched=images['/preloaded'];assert.ok(prefetched);
+assert.equal(element('#heroImg').src,undefined,'preloading never reveals an image');
+prefetched.complete=true;prefetched.naturalWidth=720;
+sandbox.renderRoundImage({...d,reveal:true,hero:'/preloaded',hero_status:'ready'});paint();
+assert.equal(element('#heroImg').src,'/preloaded');
+assert.equal(images['/preloaded'],prefetched,'Reveal reuses the downloaded image');
+sandbox.preloadLockedVisual({...d,status:'playing',hero_preload:'/preload-failed'});
+const brokenPrefetch=images['/preload-failed'];brokenPrefetch.onerror();
+sandbox.preloadLockedVisual({...d,status:'playing',hero_preload:'/preload-failed'});
+assert.notEqual(images['/preload-failed'],brokenPrefetch,'failed preload can retry at Reveal');
+sandbox.preloadLockedVisual({...d,status:'finished',hero_preload:'/stale-preload'});
+assert.equal(images['/stale-preload'],undefined);
+element('#heroImg').dataset.loaded='';element('#heroImg').dataset.requested='';
 sandbox.renderRoundImage(d);
 assert.equal(element('#next').disabled,false);
 assert.ok(element('#visualStage').classList.set.has('is-loading'));
