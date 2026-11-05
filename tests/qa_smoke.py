@@ -233,7 +233,7 @@ print('QA_POLL_RENDER_GUARD_OK')
 server=(Path(__file__).resolve().parents[1]/'kyc_server.py').read_text()
 state_block=server[server.index("if p.startswith('/api/state/')"):server.index("def do_POST")]
 assert "'hero':image_url(g," in state_block
-assert "'photo_url':('/api/photo/" in state_block
+assert "'photo_url':player_photo_url(" in state_block
 assert "'image_data':" not in state_block
 print('QA_STATE_PAYLOAD_REFERENCES_ONLY_OK')
 

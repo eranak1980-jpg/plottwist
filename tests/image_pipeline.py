@@ -22,6 +22,7 @@ os.environ['DATABASE_PATH'] = str(Path(TMP.name)/'images.db')
 os.environ.pop('DATABASE_URL', None)
 if os.getenv('PLOT_IMAGE_TEST_DATABASE_URL'):os.environ['DATABASE_URL']=os.environ['PLOT_IMAGE_TEST_DATABASE_URL']
 os.environ.pop('OPENAI_API_KEY', None)
+os.environ.pop('PLOT_LEGACY_INSTANT_IMAGES', None)
 import kyc_server as k
 import kyc_image_jobs as jobs
 import kyc_visuals as visuals
@@ -61,7 +62,7 @@ class PipelineTests(unittest.TestCase):
             def __exit__(self,*args):pass
             def execute(self,*args):return self
             def fetchone(self):return {'id':1,'status':'finished','image_run':1,'ai_images_enabled':1}
-        with patch.object(k,'cn',DB),patch.object(k,'players',return_value=[]),patch.object(k,'image_payload',return_value={'kind':'final'}),patch.object(k.image_jobs,'queue',side_effect=lambda *a:events.append('ai') or 'queued'),patch.object(k.instant,'prepare',side_effect=lambda *a:events.append('preview')):
+        with patch.object(k,'LEGACY_INSTANT_IMAGES',True),patch.object(k,'cn',DB),patch.object(k,'players',return_value=[]),patch.object(k,'image_payload',return_value={'kind':'final'}),patch.object(k.image_jobs,'queue',side_effect=lambda *a:events.append('ai') or 'queued'),patch.object(k.instant,'prepare',side_effect=lambda *a:events.append('preview')):
             self.assertEqual(k.prepare_hero_async(1,99,1),'queued')
         self.assertEqual(events,['ai','preview'])
 
@@ -79,7 +80,7 @@ class PipelineTests(unittest.TestCase):
         self.release.set()
 
     def room(self, count=2, photos=1):
-        c=request('/api/create',{'name':'Alice','rounds':6,'language':'en'})
+        c=request('/api/create',{'name':'Alice','rounds':6,'language':'en','ai_images_enabled':True})
         self.code,self.host=c['code'],c['host'];self.tokens={'Alice':c['token']}
         for name in ['Bob','Cara','Dan'][:count-1]:
             self.tokens[name]=request('/api/join',{'code':self.code,'name':name})['token']
@@ -119,6 +120,9 @@ class PipelineTests(unittest.TestCase):
     def fail_test(self,status):raise AssertionError('did not reach '+status)
 
     def test_single_photo_nonblocking_refresh_reconnect_duplicate(self):
+        # Legacy composite endpoints remain available to old clients that opt in.
+        self.legacy=patch.object(k,'LEGACY_INSTANT_IMAGES',True)
+        self.legacy.start();self.addCleanup(self.legacy.stop)
         self.room(); start=time.monotonic();st=self.reveal()
         self.assertLess(time.monotonic()-start,1)
         self.assertTrue(st['reveal']);self.assertTrue(self.entered.wait(1))
@@ -142,6 +146,10 @@ class PipelineTests(unittest.TestCase):
         data,headers=request(st['hero'],raw=True)
         self.assertEqual(data,base64.b64decode(ART.split(',')[1]))
         self.assertEqual(headers['Content-Type'],'image/jpeg')
+        self.assertIn('private',headers['Cache-Control'])
+        self.assertIn('immutable',headers['Cache-Control'])
+        _,legacy_headers=request(st['hero'].split('?')[0],raw=True)
+        self.assertEqual(legacy_headers['Cache-Control'],'private, no-cache')
         self.assertEqual(self.post('hero',body)['image'],st['hero']);self.assertEqual(len(self.calls),1)
         request(st['subject']['photo_url'],raw=True)
         # Reload job recovery never re-runs completed jobs.
@@ -169,12 +177,14 @@ class PipelineTests(unittest.TestCase):
 
     def test_ai_failure_is_terminal_and_game_continues(self):
         self.room();self.provider_fail=True;self.release.set();self.reveal();st=self.wait_status('failed')
-        self.assertIsNone(st['hero']);self.assertTrue(st['subject']['photo_url']);request(st['instant_visual'],raw=True)
+        self.assertIsNone(st['hero']);self.assertTrue(st['subject']['photo_url']);self.assertIsNone(st['instant_visual'])
         for _ in range(3):self.assertEqual(self.post('hero',{'host':self.host})['status'],'failed')
         self.post('next',{'host':self.host});self.assertEqual(self.state()['round'],1)
         self.assertEqual(len(self.calls),1)
 
     def test_replay_during_generation_discards_old_result_and_url(self):
+        self.legacy=patch.object(k,'LEGACY_INSTANT_IMAGES',True)
+        self.legacy.start();self.addCleanup(self.legacy.stop)
         self.room();st=self.reveal();self.assertTrue(self.entered.wait(1))
         oldrun=st['image_run'];oldinstant=st['instant_visual']
         with k.cn() as c:portrait_before=dict(c.execute('SELECT * FROM visual_portraits WHERE player_id=?',(st['subject']['id'],)).fetchone())
@@ -190,6 +200,46 @@ class PipelineTests(unittest.TestCase):
         request(f'/api/hero-image/{self.code}/0?run={oldrun}',expect=404,raw=True)
         with k.cn() as c:self.assertIsNone(c.execute('SELECT 1 FROM hero_scenes WHERE game_id=?',(self.g['id'],)).fetchone())
         self.entered.clear();self.reveal();self.wait_status('ready');self.assertEqual(len(self.calls),2)
+
+    def test_default_pipeline_skips_invisible_composites_and_portrait_work(self):
+        self.assertFalse(k.LEGACY_INSTANT_IMAGES)
+        with patch.object(k.instant,'prepare') as preview,patch.object(k.instant,'save_portrait') as portrait:
+            self.room();self.reveal()
+            self.release.set();st=self.wait_status('ready')
+            self.assertIsNone(st['instant_visual'])
+            self.assertEqual(len(self.calls),1)
+            preview.assert_not_called();portrait.assert_not_called()
+
+    def test_preload_only_for_locked_players_without_revealing_answer(self):
+        st=self.room(4,4);answer=st['options'][0]
+        self.post('answer',{'token':self.tokens[st['subject']['name']],'answer':answer})
+        self.assertTrue(self.entered.wait(1));self.release.set()
+        until=time.monotonic()+3
+        while time.monotonic()<until:
+            locked=self.state()
+            if locked['hero_preload']:break
+            time.sleep(.01)
+        else:self.fail('preload should be available to the spotlight player before Reveal')
+        self.assertFalse(locked['reveal']);self.assertIsNone(locked['hero']);self.assertIsNone(locked['answer'])
+        data,headers=request(locked['hero_preload'],raw=True)
+        self.assertEqual(data,base64.b64decode(ART.split(',')[1]));self.assertIn('immutable',headers['Cache-Control'])
+        def state_for(name):return request(f'/api/state/{self.code}?token={self.tokens[name]}')
+        self.assertIsNone(state_for('Bob')['hero_preload'])
+        self.assertIsNone(request(f'/api/state/{self.code}')['hero_preload'])
+        self.post('guess',{'token':self.tokens['Bob'],'guess':answer})
+        bob=state_for('Bob')
+        self.assertEqual(bob['hero_preload'],locked['hero_preload']);self.assertIsNone(bob['hero']);self.assertIsNone(bob['answer'])
+        # The image cannot help Bob change an already locked guess.
+        self.post('guess',{'token':self.tokens['Bob'],'guess':st['options'][1]})
+        self.assertEqual(state_for('Bob')['my_guess'],answer)
+        for name in ['Cara','Dan']:
+            self.assertIsNone(state_for(name)['hero_preload'])
+            self.post('guess',{'token':self.tokens[name],'guess':answer})
+        revealed=self.state()
+        self.assertTrue(revealed['reveal']);self.assertIsNone(revealed['hero_preload'])
+        self.assertEqual(revealed['hero'],locked['hero_preload']);self.assertEqual(len(self.calls),1)
+        self.post('next',{'host':self.host})
+        self.assertIsNone(self.state()['hero_preload'])
 
     def test_final_hero_async_winner_first_prize_and_cache(self):
         self.room(4,4)
