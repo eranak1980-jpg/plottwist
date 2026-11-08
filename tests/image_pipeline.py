@@ -305,6 +305,7 @@ class PipelineTests(unittest.TestCase):
         class Store:
             def __enter__(inner):inner.c=original();inner.c.__enter__();return inner
             def __exit__(inner,*args):return inner.c.__exit__(*args)
+            def __getattr__(inner,name):return getattr(inner.c,name)
             def execute(inner,sql,args=()):
                 if sql.startswith('INSERT INTO hero_scenes'):
                     inserts.append(1)

@@ -24,6 +24,7 @@ jobs:
           python tests/http_smoke.py
           python tests/new_backend_contract.py
           python tests/invite_capacity.py
+          python tests/idle_budget.py
       - name: Ties, fair continuation and session recovery
         run: |
           python tests/ties_reconnect.py
@@ -88,6 +89,7 @@ jobs:
           python tests/budget.py
           python tests/launch_budget.py
           python tests/invite_capacity.py
+          python tests/idle_budget.py
       - name: Reveal image loading and fallback
         run: node tests/image_ui.js
 

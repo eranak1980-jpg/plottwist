@@ -1,15 +1,15 @@
 """Persistent $150 launch liability ledger (estimates, not provider invoices).
 
-Live games and payable checkout links hold capacity. Completed games release
-unused round capacity; known/unknown call costs and final-image retries remain.
-No rollover, budget reset, external charge, or change to AI generation settings.
+Live games and payable checkout links hold capacity. Idle games release unused
+capacity after 24 hours and reacquire it before another provider call.
+Completed games retain their call costs and final-image retry allowance.
 """
 import contextvars
 import json
 import os
 import secrets
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 ACTIVE = contextvars.ContextVar('plot_budget', default=None)
 IMAGE_ALLOWANCE = 150000
@@ -21,6 +21,7 @@ SESSION_RESERVE = IMAGE_ALLOWANCE * IMAGE_LIMIT + TEXT_ALLOWANCE * TEXT_LIMIT
 TRIAL_RESERVE = IMAGE_ALLOWANCE * TRIAL_IMAGE_LIMIT + TEXT_ALLOWANCE * TEXT_LIMIT
 CAP = 150000000  # $150 lifetime launch ceiling, never reset automatically
 GAME_LIMIT = 100  # historical constant; admissions now use the money ceiling
+IDLE_RESERVATION_HOURS = 24
 
 class BudgetLimit(Exception):
     pass
@@ -53,6 +54,47 @@ def _refresh(c):
     c.execute('UPDATE launch_budget SET reserved_micro=? WHERE id=1', (total,))
     return total
 
+def _release_idle_reservations(c):
+    """Called under the ledger lock. Keep incurred/unknown call costs in full."""
+    if not all(_exists(c, table) for table in ('games', 'players', 'image_jobs')):
+        return
+    current = datetime.now(timezone.utc)
+    cutoff = (current - timedelta(hours=IDLE_RESERVATION_HOURS)).isoformat()
+    rows = c.execute('''SELECT a.session_id FROM budget_allocations a
+        JOIN budget_sessions s ON s.id=a.session_id
+        JOIN budget_active b ON b.session_id=a.session_id
+        JOIN games g ON g.id=b.game_id
+        WHERE a.closed=0 AND a.parked=0 AND s.created<?
+        AND NOT EXISTS (SELECT 1 FROM players p WHERE p.game_id=g.id
+            AND (p.last_seen>=? OR p.joined>=?))
+        AND NOT EXISTS (SELECT 1 FROM budget_calls bc WHERE bc.session_id=a.session_id
+            AND bc.created>=?)
+        AND NOT EXISTS (SELECT 1 FROM image_jobs j WHERE j.game_id=g.id
+            AND j.status IN ('queued','running') AND j.deadline>?)''',
+        (cutoff, cutoff, cutoff, cutoff, current.timestamp())).fetchall()
+    for row in rows:
+        c.execute('UPDATE budget_allocations SET capacity_micro=?,parked=1 WHERE session_id=?',
+                  (_costs(c, row['session_id']), row['session_id']))
+    if rows:
+        total = _refresh(c)
+        print(json.dumps({'event': 'idle_ai_reservations_released',
+                          'sessions': len(rows), 'launch_liability_usd': total / 1e6}), flush=True)
+
+def _restore_reservation(c, sid):
+    """A returning room reserves its allowance before any new provider request."""
+    allocation = c.execute('SELECT * FROM budget_allocations WHERE session_id=?', (sid,)).fetchone()
+    if not allocation or not allocation['parked']:
+        return
+    costs = _costs(c, sid)
+    capacity = costs + _final_hold(c, sid) if allocation['closed'] else max(
+        costs, TRIAL_RESERVE if allocation['kind'] == 'trial' else SESSION_RESERVE)
+    needed = capacity - max(costs, int(allocation['capacity_micro']))
+    if _refresh(c) + needed > CAP:
+        raise BudgetLimit('pilot_limit')
+    c.execute('UPDATE budget_allocations SET capacity_micro=?,parked=0 WHERE session_id=?',
+              (capacity, sid))
+    _refresh(c)
+
 def _profile(c, gid, access_kind=None):
     if access_kind is None and _exists(c, 'games'):
         cols = c.execute('SELECT * FROM games WHERE id=?', (gid,)).fetchone()
@@ -69,6 +111,10 @@ def init(c):
     c.execute('CREATE INDEX IF NOT EXISTS budget_calls_session ON budget_calls(session_id)')
     c.execute('''CREATE TABLE IF NOT EXISTS budget_allocations(session_id TEXT PRIMARY KEY,
         kind TEXT NOT NULL,capacity_micro BIGINT NOT NULL,image_limit INTEGER NOT NULL,closed INTEGER NOT NULL DEFAULT 0)''')
+    if getattr(c, 'pg', False):
+        c.execute('ALTER TABLE budget_allocations ADD COLUMN IF NOT EXISTS parked INTEGER NOT NULL DEFAULT 0')
+    elif 'parked' not in {row['name'] for row in c.execute('PRAGMA table_info(budget_allocations)').fetchall()}:
+        c.execute('ALTER TABLE budget_allocations ADD COLUMN parked INTEGER NOT NULL DEFAULT 0')
     c.execute('''CREATE TABLE IF NOT EXISTS budget_order_holds(order_id TEXT PRIMARY KEY,
         slots_remaining INTEGER NOT NULL DEFAULT 0,created TEXT NOT NULL)''')
     _lock(c)
@@ -92,6 +138,7 @@ def init(c):
     if _exists(c, 'games'):
         for r in c.execute("SELECT a.game_id FROM budget_active a JOIN games g ON g.id=a.game_id WHERE g.status='finished'").fetchall():
             complete(c,r['game_id'])
+    _release_idle_reservations(c)
     _refresh(c)
 
 def complete(c, gid):
@@ -100,13 +147,17 @@ def complete(c, gid):
     active = c.execute('SELECT session_id FROM budget_active WHERE game_id=?', (gid,)).fetchone()
     if active:
         sid=active['session_id']
-        c.execute('UPDATE budget_allocations SET closed=1,capacity_micro=? WHERE session_id=?', (_costs(c,sid)+_final_hold(c,sid),sid))
+        c.execute('UPDATE budget_allocations SET closed=1,parked=0,capacity_micro=? WHERE session_id=?', (_costs(c,sid)+_final_hold(c,sid),sid))
     _refresh(c)
 
 def resume(c, gid):
     """Reacquire the existing envelope before an optional tiebreak starts."""
     _lock(c)
+    _release_idle_reservations(c)
     a=c.execute('SELECT s.* FROM budget_allocations s JOIN budget_active a ON a.session_id=s.session_id WHERE a.game_id=?',(gid,)).fetchone()
+    if a and a['parked']:
+        _restore_reservation(c, a['session_id'])
+        a=c.execute('SELECT * FROM budget_allocations WHERE session_id=?',(a['session_id'],)).fetchone()
     if not a or not a['closed']:return
     capacity=max(TRIAL_RESERVE if a['kind']=='trial' else SESSION_RESERVE,_costs(c,a['session_id']))
     if _refresh(c)+capacity-int(a['capacity_micro'])>CAP:raise BudgetLimit('pilot_limit')
@@ -115,6 +166,7 @@ def resume(c, gid):
 
 def hold_checkout(c, order_id, product, target_game=None):
     _lock(c)
+    _release_idle_reservations(c)
     if c.execute('SELECT 1 FROM budget_order_holds WHERE order_id=?',(order_id,)).fetchone():return
     slots=2 if product=='two_games' else 0 if product=='extension' else 1
     if product=='extension':
@@ -142,8 +194,11 @@ def release_local_game_hold(c, gid):
 
 def admit(c, gid, fresh=False, access_kind=None, entitlement_id=None):
     _lock(c)
+    _release_idle_reservations(c)
     old=c.execute('SELECT session_id FROM budget_active WHERE game_id=?',(gid,)).fetchone()
-    if old and not fresh:return old['session_id']
+    if old and not fresh:
+        _restore_reservation(c, old['session_id'])
+        return old['session_id']
     kind,capacity,limit=_profile(c,gid,access_kind)
     # Transfer a prepaid checkout slot, atomically with consuming its entitlement.
     if entitlement_id is None and _exists(c,'games'):
@@ -184,6 +239,7 @@ def begin(kind,model):
     column,allowance=('images',IMAGE_ALLOWANCE) if kind=='image' else ('texts',TEXT_ALLOWANCE)
     with cn() as c:
         _lock(c)
+        _restore_reservation(c, sid)
         s=c.execute('SELECT b.*,a.image_limit,a.capacity_micro,a.closed FROM budget_sessions b JOIN budget_allocations a ON a.session_id=b.id WHERE b.id=?',(sid,)).fetchone()
         if not s or s[column]>=(s['image_limit'] if kind=='image' else TEXT_LIMIT):raise BudgetLimit('game_ai_limit')
         if s['closed'] and operation!='image:99':raise BudgetLimit('game_ai_limit')
@@ -214,7 +270,9 @@ def finish(ticket,usage=None,status='success'):
                 actual=int(details['text_tokens']*5+details['image_tokens']*8+data['output_tokens']*30)
         c.execute('UPDATE budget_calls SET status=?,actual_micro=?,usage_json=? WHERE id=?',(status,actual,json.dumps(data) if data is not None else None,ident))
         a=c.execute('SELECT * FROM budget_allocations WHERE session_id=?',(row['session_id'],)).fetchone()
-        if a and a['closed']:
+        if a and a['parked']:
+            c.execute('UPDATE budget_allocations SET capacity_micro=? WHERE session_id=?', (_costs(c,row['session_id']),row['session_id']))
+        elif a and a['closed']:
             c.execute('UPDATE budget_allocations SET capacity_micro=? WHERE session_id=?',(_costs(c,row['session_id'])+_final_hold(c,row['session_id']),row['session_id']))
         total=_refresh(c)
         print(json.dumps({'event':'ai_cost','call_id':ident,'kind':row['kind'],'status':status,'actual_usd':actual/1e6 if actual is not None else None,'provisional_usd':row['reserved_micro']/1e6,'launch_liability_usd':total/1e6,'launch_warning':total>=CAP*.8}),flush=True)
