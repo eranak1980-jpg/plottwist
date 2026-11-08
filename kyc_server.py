@@ -150,13 +150,14 @@ def init():
    if n not in gc:c.execute(f'ALTER TABLE games ADD COLUMN {n} {d}')
   if 'tiebreak' not in gc:c.execute("ALTER TABLE games ADD COLUMN tiebreak TEXT DEFAULT '{}'")
   if 'image_run' not in gc:c.execute('ALTER TABLE games ADD COLUMN image_run INTEGER DEFAULT 0')
-  init_feedback(c);image_jobs.init_jobs(c);instant.init(c);budget.init(c);commerce.init(c);analytics.init(c)
+  init_feedback(c);image_jobs.init_jobs(c);instant.init(c)
   pc={r['name'] for r in c.execute('PRAGMA table_info(players)')}
   for n,d in [('adult_confirmed','INTEGER DEFAULT 0'),('photo_data',"TEXT DEFAULT ''"),('photo_consent','INTEGER DEFAULT 0'),('photo_revision','INTEGER NOT NULL DEFAULT 0'),('active','INTEGER DEFAULT 1'),('last_seen',"TEXT DEFAULT ''"),('client_id',"TEXT DEFAULT ''"),('gender',"TEXT DEFAULT 'unspecified'")]:
    if n not in pc:c.execute(f'ALTER TABLE players ADD COLUMN {n} {d}')
   c.execute("DELETE FROM players WHERE id NOT IN (SELECT MIN(id) FROM players GROUP BY game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_name_ci ON players(game_id,LOWER(TRIM(name)))")
   c.execute("CREATE UNIQUE INDEX IF NOT EXISTS players_game_client_id ON players(game_id,client_id) WHERE client_id<>''")
+  budget.init(c);commerce.init(c);analytics.init(c)
   retention_cleanup(c)
 def game(code):
  with cn() as c:return c.execute('SELECT * FROM games WHERE code=?',(str(code or '').upper(),)).fetchone()
