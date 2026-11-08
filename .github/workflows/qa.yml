@@ -23,6 +23,7 @@ jobs:
         run: |
           python tests/http_smoke.py
           python tests/new_backend_contract.py
+          python tests/invite_capacity.py
       - name: Ties, fair continuation and session recovery
         run: |
           python tests/ties_reconnect.py
@@ -41,6 +42,7 @@ jobs:
           PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/experience_ui.js
           node tests/session_ui.js
           node tests/checkout_return.js
+          PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/playtest_ui.js
           node --check static/experience.js
           node --check static/sw.js
       - name: Browser JavaScript syntax
@@ -85,6 +87,7 @@ jobs:
           python tests/image_pipeline.py
           python tests/budget.py
           python tests/launch_budget.py
+          python tests/invite_capacity.py
       - name: Reveal image loading and fallback
         run: node tests/image_ui.js
 

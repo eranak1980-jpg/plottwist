@@ -18,16 +18,50 @@
  audienceType=audienceType||'friends';rounds=8;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',b.dataset.r==='8'));renderAudience();
  // Keep the optional, consented photo picker collapsed instead of asking everyone to upload.
  let photoExpanded=false;el('photoToggle').onclick=()=>{photoExpanded=!photoExpanded;el('photoBox').classList.toggle('hidden',!photoExpanded);el('photoBox').dataset.editing=photoExpanded?'1':''};
- const lobby=document.createElement('section');lobby.id='inviteCard';lobby.className='inviteCard hidden';lobby.innerHTML='<b></b><p></p><button type="button"></button><div class="inviteFallback hidden"><input readonly aria-label="Invitation link"></div>';
+ const createMessages={
+  he:['מכסת ה־AI מלאה כרגע. אפשר לפתוח חדר עם השאלות המובנות ולשחק ללא תמונות AI.','פתיחת חדר ללא AI','החדר מוכן. תמונות AI אינן זמינות כרגע. אפשר להזמין חברים ולהתחיל לשחק.','לא הצלחנו ליצור את החדר. בדקו את החיבור ונסו שוב.','שליחה ב־WhatsApp','העתקת קישור'],
+  en:['AI capacity is currently full. You can create a room with built-in questions and play without AI images.','Create room without AI','Your room is ready. AI images are currently unavailable. Invite your friends and start playing.','Could not create the room. Check your connection and try again.','Send with WhatsApp','Copy link'],
+  es:['La capacidad de IA está llena. Puedes crear una sala con preguntas incluidas y jugar sin imágenes de IA.','Crear sala sin IA','La sala está lista. Las imágenes de IA no están disponibles. Invita a tus amigos y empieza a jugar.','No se pudo crear la sala. Revisa tu conexión e inténtalo de nuevo.','Enviar por WhatsApp','Copiar enlace'],
+  'pt-BR':['A capacidade de IA está cheia. Crie uma sala com perguntas incluídas e jogue sem imagens de IA.','Criar sala sem IA','Sua sala está pronta. Imagens de IA indisponíveis. Convide seus amigos e comece a jogar.','Não foi possível criar a sala. Confira a conexão e tente novamente.','Enviar pelo WhatsApp','Copiar link'],
+  fr:['La capacité IA est pleine. Créez une salle avec les questions intégrées et jouez sans images IA.','Créer une salle sans IA','La salle est prête. Les images IA sont indisponibles. Invitez vos amis et commencez à jouer.','Impossible de créer la salle. Vérifiez la connexion et réessayez.','Envoyer sur WhatsApp','Copier le lien'],
+  ja:['AIの利用枠がいっぱいです。内蔵の質問を使い、AI画像なしでルームを作成できます。','AIなしでルームを作成','ルームの準備ができました。AI画像は現在利用できません。友達を招待して遊べます。','ルームを作成できませんでした。接続を確認して再試行してください。','WhatsAppで送る','リンクをコピー']
+ };
+ const C=()=>createMessages[document.documentElement.lang]||createMessages.en;
+ const createError=document.createElement('section');createError.id='createError';createError.className='rulebox hidden';createError.setAttribute('role','alert');createError.innerHTML='<p></p><button type="button" class="primary hidden"></button>';create.before(createError);
+ window.showCreateError=function(error){
+  const capacity=error?.message==='pilot_limit';
+  createError.querySelector('p').textContent=capacity?C()[0]:error?.message==='name_required'?(copy.name_required||T()[4]):C()[3];
+  const button=createError.querySelector('button');button.textContent=C()[1];button.classList.toggle('hidden',!capacity);
+  createError.classList.remove('hidden');createError.scrollIntoView({behavior:'smooth',block:'center'});
+ };
+ let allowAiFallback=false;
+ const createReq=window.req;
+ window.req=function(path,body){
+  if(path==='/api/create'&&body&&allowAiFallback)body={...body,allow_ai_fallback:true};
+  return createReq(path,body);
+ };
+ createError.querySelector('button').onclick=async()=>{
+  const button=createError.querySelector('button');button.disabled=true;allowAiFallback=true;
+  try{await window.createGame()}finally{allowAiFallback=false;button.disabled=false}
+ };
+ const lobby=document.createElement('section');lobby.id='inviteCard';lobby.className='inviteCard hidden';lobby.innerHTML='<b></b><p></p><small class="inviteAiNotice hidden" role="status"></small><button type="button"></button><div class="inviteFallback hidden"><a class="mini" target="_blank" rel="noopener">WhatsApp</a><button type="button" class="mini"></button><input readonly aria-label="Invitation link"></div>';
  el('sharedSetup').before(lobby);lobby.querySelector('button').onclick=async()=>{
+  if(!s.code)return;
   const fallback=lobby.querySelector('.inviteFallback'),input=fallback.querySelector('input');
   input.value=location.origin+'/?code='+encodeURIComponent(s.code)+(crazygamesMode?'&cg=1':'');
   if(navigator.share){
    try{await navigator.share({title:'Play MIPO',text:copy.share_text||'Play MIPO',url:input.value});return}
    catch(error){if(error.name==='AbortError')return}
   }
+  fallback.querySelector('a').href='https://wa.me/?text='+encodeURIComponent((copy.share_text||'Play MIPO')+' '+input.value);
+  fallback.querySelector('a').textContent=C()[4];fallback.querySelector('button').textContent=C()[5];
   fallback.classList.remove('hidden');
   input.select();
+ };
+ lobby.querySelector('.inviteFallback button').onclick=async()=>{
+  const input=lobby.querySelector('.inviteFallback input');
+  try{await navigator.clipboard.writeText(input.value);toast(copy.link_copied||'Link copied')}
+  catch(_){input.focus();input.select()}
  };
  const lobbyDetails=document.createElement('details');lobbyDetails.id='lobbyExtras';lobbyDetails.innerHTML='<summary></summary>';el('sharedSetup').before(lobbyDetails);lobbyDetails.appendChild(el('sharedSetup'));
  // The onboarding is available on demand; only adult rooms require an explicit confirmation.
@@ -35,6 +69,7 @@
  const oldCreate=window.createGame;let creating=false;
  window.createGame=async function(){
   if(creating)return;if(!name.value.trim()){name.focus();return toast(copy.name_required||T()[4])}
+  createError.classList.add('hidden');
   if(!advanced.open&&!advanced.dataset.used){
    const presets=audienceType==='family'?['מה היית עושה אם…','משפחה','אוכל']:audienceType==='couple'?['מה היית עושה אם…','זוגיות','אוכל']:['מה היית עושה אם…','חברות ואמון','סודות והרגלים'];
    document.querySelectorAll('#topics [data-topic]').forEach(b=>b.classList.toggle('on',presets.includes(b.dataset.topic)));if(!createAdultRequired())spice=1;
@@ -61,6 +96,8 @@
  const originalPlayerLabel=window.playerLabel;window.playerLabel=p=>safe(p.name);
  const oldCopy=window.applyCopy;window.applyCopy=function(){oldCopy();labels()};
  const oldRender=window.render;window.render=function(d){oldRender(d);labels();const inLobby=d.status==='lobby';el('photoToggle').classList.toggle('hidden',!inLobby||!d.me||!!d.me.has_photo);el('photoBox').classList.toggle('hidden',!inLobby||(!photoExpanded&&el('photoBox').dataset.editing!=='1'));lobby.classList.toggle('hidden',!inLobby||!d.is_host||crazygamesMode);el('shareBtn').classList.toggle('hidden',!crazygamesMode||!d.is_host);el('howOverlay').classList.toggle('hidden',!inLobby||!d.adult_required||!!d.me?.adult_confirmed||sessionStorage.getItem('how_'+d.code)==='1');lobbyDetails.classList.toggle('hidden',!inLobby);if(!inLobby)lobbyDetails.open=false;
+  if(lobby.dataset.code!==d.code){lobby.dataset.code=d.code;lobby.querySelector('.inviteFallback').classList.add('hidden')}
+  const notice=lobby.querySelector('.inviteAiNotice');notice.textContent=C()[2];notice.classList.toggle('hidden',!s.ai_fallback_used||s.code!==d.code||d.ai_images_enabled===true);
   const role=el('questionRole')||document.createElement('div');role.id='questionRole';role.className='questionRole';el('question').before(role);role.textContent=d.reveal?'':d.me?.id===d.subject?.id?T()[26]:T()[25]+' '+(d.subject?.name||'');
   const context=el('revealContext')||document.createElement('p');context.id='revealContext';context.className='revealContext';el('answer').before(context);context.textContent=d.question||'';context.classList.toggle('hidden',!d.reveal);
   const prompt=el('revealTalk')||document.createElement('p');prompt.id='revealTalk';prompt.className='revealTalk';el('reaction').after(prompt);prompt.textContent=T()[24];prompt.classList.toggle('hidden',!d.reveal);
