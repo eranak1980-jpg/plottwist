@@ -885,6 +885,7 @@ class H(BaseHTTPRequestHandler):
    bearer=auth[7:] if auth.lower().startswith('bearer ') else ''
    with cn() as c:return self.J(commerce.refund(c,d.get('order_id'),bearer,d.get('amount_cents')))
   if p=='/api/create':
+   ai_fallback_used=False
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
    co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120];language=normalize_language(d.get('language','en'))
@@ -898,13 +899,22 @@ class H(BaseHTTPRequestHandler):
     if commerce.enabled(USE_PG):
      access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'));rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
-    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid)
+    if os.getenv('OPENAI_API_KEY','').strip():
+     c.execute('SAVEPOINT create_ai_admission')
+     try:budget.admit(c,gid)
+     except budget.BudgetLimit as exc:
+      c.execute('ROLLBACK TO SAVEPOINT create_ai_admission')
+      if str(exc)!='pilot_limit' or d.get('allow_ai_fallback') is not True:raise
+      ai_fallback_used=True
+      c.execute('UPDATE games SET ai_images_enabled=0 WHERE id=?',(gid,))
+      budget.release_local_game_hold(c,gid)
+     finally:c.execute('RELEASE SAVEPOINT create_ai_admission')
     c.execute('INSERT INTO players(game_id,name,token,joined,active,last_seen,client_id,gender) VALUES(?,?,?,?,1,?,?,?)',(gid,name,pt,now(),now(),client_id,normalize_gender(d.get('gender'))))
     analytics.record(c,'room_created',client_id,gid,{'language':language,'rounds':rounds,'photos_required':False})
    if adult:
     with cn() as c:c.execute('UPDATE players SET adult_confirmed=1 WHERE token=?',(pt,))
-   Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
-   return self.J({'code':co,'host':ht,'token':pt,'name':name,'language':language})
+   if not ai_fallback_used:Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
+   return self.J({'code':co,'host':ht,'token':pt,'name':name,'language':language,'ai_fallback_used':ai_fallback_used})
   if p=='/api/join':
    code=str(d.get('code','')).strip().upper();name=str(d.get('name','')).strip()[:40];client_id=str(d.get('client_id','')).strip()[:120]
    if not name:return self.J({'error':'name_required'},400)
@@ -980,7 +990,9 @@ class H(BaseHTTPRequestHandler):
   if act=='finalhero' and g['status']!='finished':return self.J({'error':'not_finished'},409)
   if act=='image-settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
-   with cn() as c:c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('enabled') is True),g['id']))
+   with cn() as c:
+    if d.get('enabled') is True and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'])
+    c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('enabled') is True),g['id']))
    return self.J({'ok':True})
   if act=='freshroom':
    old_code=g['code'];new_code=code5()

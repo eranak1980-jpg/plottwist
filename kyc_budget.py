@@ -130,6 +130,16 @@ def release_refund(c, order_id):
     c.execute('UPDATE budget_order_holds SET slots_remaining=0 WHERE order_id=?',(order_id,))
     _refresh(c)
 
+def release_local_game_hold(c, gid):
+    """A consumed game played without AI needs no prepaid AI reservation."""
+    _lock(c)
+    row = c.execute('SELECT e.order_id FROM games g JOIN commerce_entitlements e '
+                    'ON e.id=g.entitlement_id WHERE g.id=?', (gid,)).fetchone()
+    if row:
+        c.execute('UPDATE budget_order_holds SET slots_remaining=slots_remaining-1 '
+                  'WHERE order_id=? AND slots_remaining>0', (row['order_id'],))
+        _refresh(c)
+
 def admit(c, gid, fresh=False, access_kind=None, entitlement_id=None):
     _lock(c)
     old=c.execute('SELECT session_id FROM budget_active WHERE game_id=?',(gid,)).fetchone()

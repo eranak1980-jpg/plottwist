@@ -54,6 +54,41 @@ script(fs.readFileSync('static/playtest.js','utf8'));
  w.render({...final,relationships:[{guesser_id:2,subject_id:1,correct:0,attempts:3}],round_insights:[]});assert($('playtestHighlights').classList.contains('hidden'),'do not call zero correct guesses best');
  w.render({...final,players:[...final.players,{id:3,name:'שגית',score:2}],relationships:[{guesser_id:1,subject_id:2,correct:4,attempts:4},{guesser_id:2,subject_id:1,correct:2,attempts:3},{guesser_id:3,subject_id:1,correct:4,attempts:6}]});
  assert($('playtestHighlights').textContent.includes('Tied: '));assert($('playtestHighlights').textContent.includes('שגית'));assert(!$('playtestHighlights').textContent.includes('4/4'),'personal recap prioritizes who guessed about me');
+ // Exercise the real Create handlers and middleware with the capacity response seen in production.
+ const originalFetch=w.fetch,createBodies=[];
+ w.fetch=async(url,options={})=>{
+  if(url==='/api/create'){
+   const body=JSON.parse(options.body);createBodies.push(body);
+   return {ok:body.allow_ai_fallback===true,json:async()=>body.allow_ai_fallback===true?{code:'SAFE1',host:'host-secret',token:'player-secret',name:body.name,language:'en',ai_fallback_used:true}:{error:'pilot_limit'}};
+  }
+  if(String(url).includes('/api/state/SAFE1'))return {ok:true,json:async()=>({...data(),code:'SAFE1',status:'lobby',language:'en',photo_count:0,adult_required:false,ai_images_enabled:false})};
+  return originalFetch(url,options);
+ };
+ w.mode('create');$('cname').value='Host';$('quickImages').checked=true;
+ await w.createGame();
+ assert(!$('createError').classList.contains('hidden'),'capacity failure is visible next to Create');
+ assert($('createError').textContent.includes('AI'));
+ assert.equal(createBodies.length,1,'do not create a fallback room without an explicit choice');
+ await $('createError').querySelector('button').onclick();
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.equal(createBodies.length,2);assert.equal(createBodies[1].allow_ai_fallback,true);
+ assert.equal(w.eval('s.code'),'SAFE1');assert.equal($('lobbyImages').checked,false);
+ assert(!$('inviteCard').classList.contains('hidden'));assert(!$('inviteCard').querySelector('.inviteAiNotice').classList.contains('hidden'));
+ const invite=$('inviteCard'),shareButton=invite.querySelector('button'),fallback=invite.querySelector('.inviteFallback');
+ const shared=[];w.navigator.share=async payload=>{shared.push(payload)};
+ await shareButton.onclick();
+ assert.equal(shared.length,1);assert.equal(shared[0].url,'https://plot.test/?code=SAFE1');
+ assert(!JSON.stringify(shared[0]).includes('host-secret'),'invite never exposes host rights');
+ assert(fallback.classList.contains('hidden'),'native sharing is the first action');
+ w.navigator.share=async()=>{throw Object.assign(new Error('cancelled'),{name:'AbortError'})};
+ await shareButton.onclick();assert(fallback.classList.contains('hidden'),'cancellation does not force a second action');
+ w.navigator.share=async()=>{throw Object.assign(new Error('blocked'),{name:'NotAllowedError'})};
+ await shareButton.onclick();assert(!fallback.classList.contains('hidden'),'blocked native share offers another way to invite');
+ assert.equal(new URL(fallback.querySelector('a').href).searchParams.get('text').endsWith('https://plot.test/?code=SAFE1'),true);
+ let copied='';Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async value=>{copied=value}},configurable:true});
+ await fallback.querySelector('button').onclick();assert.equal(copied,'https://plot.test/?code=SAFE1');
+ delete w.navigator.share;fallback.classList.add('hidden');await shareButton.onclick();assert(!fallback.classList.contains('hidden'));
+ w.fetch=originalFetch;
  for(const language of ['en','he','es','pt-BR','fr','ja']){w.document.documentElement.lang=language;await new Promise(r=>setImmediate(r));assert($('createRoomBtn').textContent.length>0);assert($('photoHelp').textContent.length>0)}
  assert.equal(errors.length,0,errors.join('\n'));console.log('PLAYTEST_FAST_IMAGES_VISIBLE_ADULT_GATE_FAMILY_RESET_VOICE_OPT_IN_HIGHLIGHTS_LOCALES_OK');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>w.close());
