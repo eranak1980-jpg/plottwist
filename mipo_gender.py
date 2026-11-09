@@ -43,6 +43,43 @@ SUBJECT_QUESTION_PHRASES = {
  'מה הוא עושה':'מה {s} עושה', 'מה הוא מבקש':'מה {s} מבקש/ת', 'מה הוא מזמין':'מה {s} מזמין/ה',
 }
 
+# Reviewed exceptions preserve the role of the other friend, rather than applying
+# a blanket replacement to every masculine word in a sentence.
+OPTION_FEMALE = {
+ 'שואל למה לא הוזמן':'שואלת למה לא הוזמנה', 'מסביר למה איחר הפעם':'מסבירה למה איחרה הפעם',
+ 'צוחק ומעביר נושא':'צוחקת ומעבירה נושא', 'לא להראות שהוא יודע':'לא להראות שהיא יודעת',
+ 'מחזיר ביקורת משלו':'מחזירה ביקורת משלה', 'אומר שזה מפריע לו':'אומרת שזה מפריע לה',
+ 'מתבאס וממשיך הלאה':'מתבאסת וממשיכה הלאה', 'אומר שהרעיון שלו':'אומרת שהרעיון שלה',
+ 'אומר שנפגע מול כולם':'אומרת שנפגעה מול כולם', 'צוחק למרות שנפגע':'צוחקת למרות שנפגעה',
+ 'אומר שמעדיף לדבר בפרטי':'אומרת שמעדיפה לדבר בפרטי', 'אתה מצחיק אותי':'את מצחיקה אותי',
+ 'אתה מבין אותי':'את מבינה אותי', 'בודק שלא שכח כלום':'בודקת שלא שכחה כלום',
+ 'מחכה שמישהו יציע לו':'מחכה שמישהו יציע לה', 'אומר שזה לא מתאים לו':'אומרת שזה לא מתאים לה',
+ 'אומר שהוא לא מסכים':'אומרת שהיא לא מסכימה', 'תומך בו ומדבר איתו אחר כך':'תומכת בו ומדברת איתו אחר כך',
+ 'שלא סמכו עליו':'שלא סמכו עליה', 'שהאחרים ידעו לפניו':'שהאחרים ידעו לפניה',
+ 'שלא סיפרו לו ישירות':'שלא סיפרו לה ישירות', 'רק אם שואלים אותו':'רק אם שואלים אותה',
+ 'שישמע על זה מהחבר':'שתשמע על זה מהחבר', 'שלא ידברו איתו על הקשר':'שלא ידברו איתה על הקשר',
+}
+NEUTRAL_OPTIONS = {
+ 'מתקנים מול כולם':'לתקן מול כולם', 'מתקנים אותו אחר כך':'לדבר איתו אחר כך',
+ 'זורמים עם הסיפור':'לזרום עם הסיפור', 'מוסיפים בצחוק גרסה משלהם':'להוסיף בצחוק גרסה אחרת',
+ 'מלווים בלי לשאול':'להלוות בלי לשאול', 'קובעים מועד להחזרה':'לקבוע מועד להחזרה',
+ 'מלווים סכום קטן יותר':'להלוות סכום קטן יותר', 'מסרבים להלוות':'לסרב להלוות',
+ 'קובעים רק מקום ראשון':'לקבוע רק את המקום הראשון','בוחרים ברגע האחרון':'לבחור ברגע האחרון',
+ 'נותנים לחבר להחליט':'לתת לחבר להחליט','עוצרים ומסבירים':'לעצור ולהסביר',
+ 'מתחילים את הסיבוב מחדש':'להתחיל את הסיבוב מחדש','ממשיכים ומסבירים בסוף':'להמשיך ולהסביר בסוף',
+ 'נותנים לו הזדמנות נוספת':'לתת לו הזדמנות נוספת','אומרים ישר מה לא עובד':'לומר ישר מה לא עובד',
+ 'מתחילים במה שכן טוב':'להתחיל במה שכן טוב','שואלים כמה כנות הוא רוצה':'לשאול כמה כנות הוא רוצה',
+ 'מציעים שינוי אחד קטן':'להציע שינוי אחד קטן',
+}
+WORDS.update(dict(zip('מדבר מתווכח מעביר נותן מתחיל ממשיך מגיע מכיר נשאר מציג הולך רעב לוקח מזכיר מסכים מסדר מתעלם'.split(),
+                     'מדברת מתווכחת מעבירה נותנת מתחילה ממשיכה מגיעה מכירה נשארת מציגה הולכת רעבה לוקחת מזכירה מסכימה מסדרת מתעלמת'.split())))
+SUBJECT_QUESTION_PHRASES.update({
+ '{s} מקבל ביקורת':'{s} מקבל/ת ביקורת',
+ '{s} מגיע למסיבה ומכיר':'{s} מגיע/ה למסיבה ומכיר/ה',
+ 'ו־{s} עדיין רעב':'ו־{s} עדיין רעב/ה',
+ 'סיפור לא מדויק על ערב שהיה בו':'סיפור לא מדויק על ערב שבו שניהם היו',
+})
+
 def forms(text,gender):
  def slash(m):
   a,b=m.group(1),m.group(2)
@@ -68,6 +105,8 @@ def gender_card(text,options,typ,subject,players):
  for a,b in sorted(SUBJECT_QUESTION_PHRASES.items(),key=lambda x:len(x[0]),reverse=True):template=template.replace(a,b)
  template=template.replace('{s}',name)
  def render(value,inflect=False):
+  if value in NEUTRAL_OPTIONS:value=NEUTRAL_OPTIONS[value]
+  if gender=='female' and value in OPTION_FEMALE:return OPTION_FEMALE[value]
   for n,marker in sorted(protected.items(),key=lambda x:len(x[0]),reverse=True):
    value=re.sub(r'(?<!\w)'+re.escape(n)+r'(?!\w)',marker,value)
   value=forms(value,gender)
@@ -93,4 +132,4 @@ def gender_card(text,options,typ,subject,players):
   return value
  # Only subject-specific phrases have been marked in questions. Options describe
  # the subject except the explicit cards about another person's behavior.
- return render(template),[render(o,typ!='room' and subject_options and not known) for o in options]
+ return render(template),list(options) if typ=='room' else [render(o,subject_options and not known) for o in options]
