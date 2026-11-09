@@ -21,12 +21,13 @@ script(fs.readFileSync('static/first-game.js','utf8'));
  await new Promise(r=>setImmediate(r));
  w.mode('create');assert($('hostIntro').classList.contains('hidden'));assert(!$('create').classList.contains('hidden'));
  assert.equal($('advancedSetup').open,false);assert.equal(w.eval('rounds'),process.env.MIPO_TEST_PAID?18:8);assert.equal(w.eval('audienceType'),'friends');
- assert($('cname').closest('#quickSetup'));assert($('audienceTypes').closest('#quickSetup'));assert($('topics').closest('#advancedSetup'));
+ assert($('cgender').closest('#quickSetup'));assert($('jgender'));assert.equal($('cgender').value,'unspecified');assert($('cname').closest('#quickSetup'));assert($('audienceTypes').closest('#quickSetup'));assert($('topics').closest('#advancedSetup'));
  assert.equal(w.document.querySelectorAll('#cname').length,1);
  const before=requests.length;$('exampleRoundBtn').click();assert(w.document.querySelector('[role="dialog"]'));w.document.querySelector('[data-demo="1"]').click();assert(!w.document.querySelector('.demoAnswer').classList.contains('hidden'));assert.equal(requests.length,before,'demo has no network call or trial consumption');w.document.querySelector('.demoClose').click();
  const lobby={...data(),status:'lobby',photo_count:0,adult_required:false,adults_ready:true};w.render(lobby);assert(!$('start').disabled,'two players can start without photos');assert($('photoBox').classList.contains('hidden'));assert(!$('photoToggle').classList.contains('hidden'));$('photoToggle').click();assert(!$('photoBox').classList.contains('hidden'));assert.equal($('photoConsent').checked,false);
  w.render({...lobby,adult_required:true,adults_ready:false});assert($('start').disabled,'adult confirmation still required');
  w.render({...data(),reveal:true,hero_eligible:true,ai_images_ready:true,hero_status:'running'});assert(!$('next').disabled,'image never gates next');assert($('photoToggle').classList.contains('hidden'));
+ w.render({...data(),reveal:true,can_reopen:true});assert(!$('reopenBtn').classList.contains('hidden'));assert(!$('reopenBtn').closest('#questionCard'));
  const final={...data(7),status:'finished',reveal:true,final_image_eligible:false,relationships:[{guesser_id:2,subject_id:1,correct:2,attempts:3}]};w.render(final);assert(!$('relationshipCard').classList.contains('hidden'));assert($('relationshipCard').textContent.includes('2/3'));assert(!$('saveResultCard').classList.contains('hidden'));assert($('pilotCostReport').classList.contains('hidden'),'implementation costs not in player flow');
  for(const language of ['en','he','es','pt-BR','fr','ja']){w.document.documentElement.lang=language;await new Promise(r=>setImmediate(r));assert($('createRoomBtn').textContent.length>0);assert($('photoHelp').textContent.length>0)}
  assert.equal(errors.length,0,errors.join('\n'));console.log('FIRST_GAME_QUICK_SETUP_DEMO_OPTIONAL_PHOTOS_ADULT_GATE_IMAGES_RELATIONSHIPS_LOCALES_OK');

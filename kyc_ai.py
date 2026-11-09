@@ -154,6 +154,7 @@ or
 For room questions the answer will be one of the other players.
 
 Editorial standard:
+- For Hebrew, write gender-neutral questions where natural, or mark ONLY the spotlight player with explicit forms such as אוהב/ת and הוא/היא. Answer options should use infinitives (להציע מקום אחר), never plural verbs for one player. Do not change the gender of another friend in the setup.
 - One recognizable social moment per question, with one clear decision. Aim for 8–22 words and never exceed 28 words (Japanese: aim below 80 characters).
 - Every option must directly answer the exact question asked; never add a disconnected fourth answer to fill the list. Options should be 2–6 words, plausible, mutually distinct and at the same level of detail. Do not create an obviously foolish answer just for a joke.
 - Ask something a friend could infer from real habits. The reveal should invite a friendly disagreement. All answers must remain closed choices; never ask players to write an explanation.

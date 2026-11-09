@@ -114,7 +114,8 @@ try:
     request(f'/api/{code}/matchanswer', {'token': j1['token'], 'answer': 'legacy'}, expected=403)
     print('HTTP_IDEMPOTENT_SCORE_AND_SUBMIT_OK')
 
-    # Once the first reveal has happened, rollback to lobby is intentionally closed.
+    # After leaving round one, rollback is closed; it remains available during first Reveal.
+    request(f'/api/{code}/next', {'host': host_token})
     locked = request(f'/api/{code}/reopen', {'host': host_token}, expected=409)
     assert locked['error'] == 'too_late'
     print('HTTP_REOPEN_AFTER_REVEAL_BLOCKED_OK')
