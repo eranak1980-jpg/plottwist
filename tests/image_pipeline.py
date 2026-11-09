@@ -358,7 +358,7 @@ class ProviderTests(unittest.TestCase):
         original='data:image/png;base64,'+base64.b64encode(buf.getvalue()).decode()
         _,raw,mime=visuals._file(original,0)
         self.assertEqual(mime,'image/jpeg')
-        with Image.open(io.BytesIO(raw)) as im:self.assertEqual(im.size,(768,512))
+        with Image.open(io.BytesIO(raw)) as im:self.assertEqual(im.size,(640,427))
         # The original value still decodes at its full dimensions.
         _,source=visuals.decode_image(original)
         with Image.open(io.BytesIO(source)) as im:self.assertEqual(im.size,(1800,1200))

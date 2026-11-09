@@ -25,6 +25,7 @@ jobs:
           python tests/new_backend_contract.py
           python tests/invite_capacity.py
           python tests/idle_budget.py
+          python tests/continuity_gender.py
       - name: Ties, fair continuation and session recovery
         run: |
           python tests/ties_reconnect.py
@@ -90,6 +91,7 @@ jobs:
           python tests/launch_budget.py
           python tests/invite_capacity.py
           python tests/idle_budget.py
+          python tests/continuity_gender.py
       - name: Reveal image loading and fallback
         run: node tests/image_ui.js
 

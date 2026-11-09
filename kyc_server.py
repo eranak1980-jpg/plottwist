@@ -18,6 +18,7 @@ import kyc_instant as instant
 import mipo_commerce as commerce
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
+from mipo_gender import gender_card
 from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key, semantic_family, paced_candidates, PERSONAL_EN
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 LEGACY_INSTANT_IMAGES=os.getenv('PLOT_LEGACY_INSTANT_IMAGES','0').strip()=='1'
@@ -29,7 +30,7 @@ def retention_cleanup(c):
  analytics_cutoff=(datetime.now(timezone.utc)-timedelta(days=426)).isoformat()
  old=[r['id'] for r in c.execute('SELECT id FROM games WHERE created<?',(game_cutoff,)).fetchall()]
  for gid in old:
-  c.execute("UPDATE games SET answer='',memory='[]',custom_context='',custom_questions='[]',prize='' WHERE id=?",(gid,))
+  c.execute("UPDATE games SET answer='',round_card='',memory='[]',custom_context='',custom_questions='[]',prize='' WHERE id=?",(gid,))
   c.execute("UPDATE players SET photo_data='',name='Player ' || id WHERE game_id=?",(gid,))
   for table in ('guesses','hero_scenes','instant_scenes','image_jobs','chat_messages','match_answers','question_feedback'):
    c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
@@ -98,6 +99,8 @@ class request_connection:
    finally:
     raw.close();delattr(_DB_LOCAL,'connection')
 def init_feedback(c):
+ if getattr(c,'pg',False):c.execute("ALTER TABLE games ADD COLUMN IF NOT EXISTS round_card TEXT DEFAULT ''")
+ elif 'round_card' not in {r['name'] for r in c.execute('PRAGMA table_info(games)').fetchall()}:c.execute("ALTER TABLE games ADD COLUMN round_card TEXT DEFAULT ''")
  c.execute("""CREATE TABLE IF NOT EXISTS question_feedback(game_id BIGINT,image_run INTEGER,round_no INTEGER,reason TEXT,question_key TEXT,question TEXT,options TEXT,language TEXT,created TEXT,UNIQUE(game_id,image_run,round_no,reason))""")
 
 def feedback_text(text,ps):
@@ -484,6 +487,23 @@ def round_insights(g):
  return sorted(result,key=lambda x:(x['correct']/x['attempts'],-x['attempts'],x['round']))[:3]
 
 def qdata(g,ps):
+ # Membership changes must not change a card that players have already seen.
+ try:card=json.loads(g['round_card'] or '{}')
+ except (KeyError,IndexError,ValueError,TypeError):card={}
+ key=[int(g['image_run']),int(g['round_no']),str(g['memory']),str(g['custom_questions'])]
+ if card.get('key')==key:
+  sub=next((p for p in ps if p['id']==card['subject']),None)
+  if sub:return card['type'],card['text'],card['options'],sub
+ typ,text,opts,sub=build_qdata(g,ps)
+ if sub and game_language(g)=='he':text,opts=gender_card(text,opts,typ,sub,ps)
+ if sub and g['status']=='playing':
+  card=dict(key=key,subject=sub['id'],type=typ,text=text,options=opts)
+  with cn() as c:
+   # CAS: a slow poll must not overwrite a later round or a room reset.
+   c.execute("UPDATE games SET round_card=? WHERE id=? AND image_run=? AND round_no=? AND memory=?",(json.dumps(card,ensure_ascii=False),g['id'],g['image_run'],g['round_no'],g['memory']))
+ return typ,text,opts,sub
+
+def build_qdata(g,ps):
  # Removed/disconnected players stay in the room history, but must never be
  # selected as a future subject or answer option. Otherwise the room eventually
  # waits forever for a secret answer that the removed player cannot submit.
@@ -612,7 +632,17 @@ def prepare_hero_async(gid,rn,expected_run=None):
  if final:
   if g['status']!='finished':return 'not_ready'
  elif g['status']!='playing' or int(g['round_no'])!=int(rn) or not g['answer']:return 'not_ready'
- ps=players(gid,include_photos=True)
+ ps=[dict(p) for p in players(gid)]
+ if not final:
+  _,_,_,spotlight=qdata(g,ps)
+  if not spotlight:return 'not_ready'
+  answer=str(g['answer'])
+  import re
+  selected_ids={p['id'] for p in ps if p['id']==spotlight['id'] or re.search(r'(?<!\w)'+re.escape(p['name'])+r'(?!\w)',answer,re.I)}
+ else:selected_ids={p['id'] for p in ps if p['photo_data'] and p['photo_consent']}
+ with cn() as c:
+  for p in ps:
+   p['photo_data']=c.execute('SELECT photo_data FROM players WHERE id=?',(p['id'],)).fetchone()['photo_data'] if p['id'] in selected_ids and p['photo_consent'] else ''
  if not final:
   # Start generation as soon as the spotlight player's secret answer exists.
   # Image generation takes tens of seconds, so waiting for every prediction means
@@ -666,7 +696,7 @@ def ensure_round_score(g,ps,guessed,sub=None):
    if getattr(cur,'rowcount',0)!=1:return False
   actual=(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer'])
   for pid,guess in guessed.items():
-   if guess==actual:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
+   if pid in {p['id'] for p in active_guessers} and guess==actual:c.execute('UPDATE players SET score=score+1 WHERE id=?',(pid,))
  return True
 def decode_data_url(data):
  try:
@@ -814,6 +844,7 @@ class H(BaseHTTPRequestHandler):
     'me':{'adult_confirmed':bool(me['adult_confirmed']),'id':me['id'],'name':me['name'],'gender':me['gender'],'score':me['score'],'has_photo':bool(me['photo_data'])} if me else None,
     'players':[{'id':x['id'],'name':x['name'],'gender':x['gender'],'score':x['score'],'active':bool(int(x['active'] if x['active'] is not None else 1)),'connected':bool(presence.get(x['id'])),'can_continue_without':bool(is_host and g['status']=='playing' and int(x['active'] if x['active'] is not None else 1)==1 and (not me or x['id']!=me['id']) and not presence.get(x['id'])),'has_photo':bool(x['photo_data']),'photo_url':player_photo_url(g['code'],x)} for x in ps],
     'photo_count':sum(1 for x in ps if x['photo_data']),
+    'can_reopen':bool(is_host and g['status']=='playing' and int(g['round_no'])==0 and not mem(g)),
     'subject':{'id':sub['id'],'name':sub['name'],'gender':sub['gender'],'has_photo':bool(sub['photo_data']),'photo_url':player_photo_url(g['code'],sub)} if sub else None,
     'type':typ,'question':text,'options':opts,'answer':shown if reveal else None,'feedback_reasons':feedback_reasons,
     # Match Twist secret answers were removed: Reveal chat/reactions are non-blocking.
@@ -838,7 +869,7 @@ class H(BaseHTTPRequestHandler):
     'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
     'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
     'relationships':relationship_summary(g,ps),'round_insights':round_insights(g),
-    'can_reopen':bool(g['status']=='playing' and int(g['round_no'])==0 and not mem(g) and not reveal),'history':mem(g)[-4:]
+    'history':mem(g)[-4:]
    })
   return self.J({'error':'not_found'},404)
  def do_POST(self):
@@ -1016,40 +1047,50 @@ class H(BaseHTTPRequestHandler):
    Thread(target=prepare_pack_async,args=(g['id'],effective_topics(fresh),fresh['custom_context'],int(fresh['spice'] or 1),game_language(fresh)),daemon=True).start()
    return self.J({'ok':True,'code':new_code,'old_code':old_code,'preserved':True})
   if act=='reopen':
-   if g['status']!='playing' or int(g['round_no'])!=0 or mem(g):return self.J({'error':'too_late'},409)
    with cn() as c:
-    rgs=c.execute('SELECT player_id FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()
-   active_ids={x['id'] for x in ps if int(x['active'] if x['active'] is not None else 1)==1};need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids]);first_reveal=bool(g['answer']) and len([r for r in rgs if r['player_id'] in active_ids and (not sub or r['player_id']!=sub['id'])])>=need
-   if first_reveal:return self.J({'error':'too_late'},409)
-   with cn() as c:
-    c.execute("UPDATE games SET status='lobby',round_no=0,answer='' WHERE id=?",(g['id'],))
-    c.execute('DELETE FROM guesses WHERE game_id=?',(g['id'],));c.execute('DELETE FROM round_scores WHERE game_id=?',(g['id'],));c.execute('UPDATE games SET image_run=image_run+1 WHERE id=?',(g['id'],));c.execute('DELETE FROM image_jobs WHERE game_id=?',(g['id'],));c.execute('DELETE FROM hero_scenes WHERE game_id=?',(g['id'],));c.execute('DELETE FROM instant_scenes WHERE game_id=?',(g['id'],))
+    if not USE_PG:c.execute('BEGIN IMMEDIATE')
+    current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
+    if current['status']!='playing' or int(current['round_no'])!=0 or mem(current):return self.J({'error':'too_late'},409)
+    c.execute("UPDATE games SET status='lobby',round_no=0,answer='',round_card='',image_run=image_run+1 WHERE id=?",(g['id'],))
+    c.execute('UPDATE players SET score=0 WHERE game_id=?',(g['id'],))
+    for table in ('guesses','round_scores','image_jobs','hero_scenes','instant_scenes'):
+     c.execute('DELETE FROM '+table+' WHERE game_id=?',(g['id'],))
    return self.J({'ok':True})
   if act=='drop':
-   try:pid=int(d.get('player_id',0))
-   except:return self.J({'error':'invalid_player'},400)
-   target=next((x for x in ps if x['id']==pid),None)
-   if not target:return self.J({'error':'player_not_found'},404)
-   active=[x for x in ps if int(x['active'] if x['active'] is not None else 1)==1]
-   if g['status']=='lobby' and len(active)<=2:return self.J({'error':'need_2'},409)
-   if g['status']=='playing' and len(active)<=2:
-    with cn() as c:
-     c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
-     c.execute("UPDATE games SET status='finished',answer='' WHERE id=?",(g['id'],))
-     record_game_completion(c,g)
-    return self.J({'ok':True,'name':target['name'],'finished':True})
-   if g['status']=='playing' and sub and target['id']==sub['id'] and not g['answer']:
-    mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':'SKIPPED','type':'disconnect_skip'});rn=int(g['round_no'])+1;remember_question(ps,text)
-    with cn() as c:
-     c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']));c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
-     if rn>=total_rounds(g):
-      c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
-     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
-    return self.J({'ok':True,'name':target['name'],'advanced':True})
-   with cn() as c:
-    if g['status']=='lobby':c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']))
-    else:c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
-   return self.J({'ok':True,'name':target['name']})
+   with request_connection():
+    with cn() as locked:
+     if not USE_PG:locked.execute('BEGIN IMMEDIATE')
+     g=locked.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
+     if g['status'] not in ('lobby','playing'):return self.J({'error':'not_playing'},409)
+     ps=_players(locked,g['id']);typ,text,opts,sub=qdata(g,ps)
+     if d.get('image_run') is not None and str(d['image_run'])!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
+     if d.get('round') is not None and str(d['round'])!=str(g['round_no']):return self.J({'error':'stale_round'},409)
+     try:pid=int(d.get('player_id',0))
+     except:return self.J({'error':'invalid_player'},400)
+     target=next((x for x in ps if x['id']==pid),None)
+     if not target:return self.J({'error':'player_not_found'},404)
+     if target['id']==ps[0]['id'] or target['token']==d.get('token'):return self.J({'error':'forbidden'},403)
+     if not int(target['active'] if target['active'] is not None else 1):return self.J({'ok':True,'name':target['name']})
+     active=[x for x in ps if int(x['active'] if x['active'] is not None else 1)==1]
+     if g['status']=='lobby' and len(active)<=2:return self.J({'error':'need_2'},409)
+     if g['status']=='playing' and len(active)<=2:
+      with cn() as c:
+       c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
+       c.execute("UPDATE games SET status='finished',answer='' WHERE id=?",(g['id'],))
+       record_game_completion(c,g)
+      return self.J({'ok':True,'name':target['name'],'finished':True})
+     if g['status']=='playing' and sub and target['id']==sub['id'] and not g['answer']:
+      mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':'SKIPPED','type':'disconnect_skip'});rn=int(g['round_no'])+1;remember_question(ps,text)
+      with cn() as c:
+       c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']));c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
+       if rn>=total_rounds(g):
+        c.execute("UPDATE games SET status='finished',answer='',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
+       else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
+      return self.J({'ok':True,'name':target['name'],'advanced':True})
+     with cn() as c:
+      if g['status']=='lobby':c.execute('DELETE FROM players WHERE id=? AND game_id=?',(pid,g['id']))
+      else:c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']))
+     return self.J({'ok':True,'name':target['name']})
   if act=='tiebreak':
    # Serialize host retries and stale clicks. A complete subject cycle gives everyone
    # the same number of guesses; callbacks/bonus points are disabled for this cycle.
@@ -1170,10 +1211,12 @@ class H(BaseHTTPRequestHandler):
     ans='OTHER::'+custom[:120]
    elif ans not in opts:return self.J({'error':'invalid_answer'},400)
    with cn() as c:
-    cur=c.execute("UPDATE games SET answer=? WHERE id=? AND answer=''",(ans,g['id']))
+    cur=c.execute("UPDATE games SET answer=? WHERE id=? AND answer='' AND status='playing' AND image_run=? AND round_no=? AND EXISTS(SELECT 1 FROM players WHERE id=? AND active=1)",(ans,g['id'],g['image_run'],g['round_no'],me['id']))
     changed=getattr(cur,'rowcount',0)==1
     if not changed:
-     old=c.execute('SELECT answer FROM games WHERE id=?',(g['id'],)).fetchone();return self.J({'ok':True,'locked':True,'answer_saved':bool(old and old['answer'])})
+     old=c.execute('SELECT answer,image_run,round_no,status FROM games WHERE id=?',(g['id'],)).fetchone()
+     if not old or old['status']!='playing' or old['image_run']!=g['image_run'] or old['round_no']!=g['round_no']:return self.J({'error':'stale_round'},409)
+     return self.J({'ok':True,'locked':True,'answer_saved':bool(old['answer'])})
    schedule_image_after_action(g['id'])
    return self.J({'ok':True})
   if act=='guess':
@@ -1181,6 +1224,11 @@ class H(BaseHTTPRequestHandler):
    if not me or not sub or me['id']==sub['id']:return self.J({'error':'invalid_player'},403)
    if guess not in opts:return self.J({'error':'invalid_guess'},400)
    with cn() as c:
+    if not USE_PG:c.execute('BEGIN IMMEDIATE')
+    current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
+    if current['status']!='playing' or current['round_no']!=g['round_no'] or current['image_run']!=g['image_run']:return self.J({'error':'stale_round'},409)
+    ps=_players(c,g['id']);g=current
+    if not any(p['id']==me['id'] and p['active'] for p in ps):return self.J({'error':'invalid_player'},403)
     if USE_PG:c.execute('INSERT INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?) ON CONFLICT(game_id,round_no,player_id) DO NOTHING',(g['id'],g['round_no'],me['id'],guess))
     else:c.execute('INSERT OR IGNORE INTO guesses(game_id,round_no,player_id,guess) VALUES(?,?,?,?)',(g['id'],g['round_no'],me['id'],guess))
     rows=c.execute('SELECT player_id,guess FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no'])).fetchall()

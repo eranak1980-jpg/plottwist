@@ -14,6 +14,7 @@
  const quick=document.createElement('section');quick.id='quickSetup';quick.innerHTML='<label for="cname" id="quickName"></label><h3 id="quickAudience"></h3><div id="quickAudienceChoices"></div><p id="quickDefaults" class="tiny"></p>';
  const name=el('cname'),aud=el('audienceTypes'),create=el('createRoomBtn');form.insertBefore(quick,name);quick.querySelector('label').after(name);el('quickAudienceChoices').appendChild(aud);
  for(const child of [...form.children])if(![el('createTitle'),el('hostGuideLink'),quick,create].includes(child))advanced.querySelector('div').appendChild(child);
+ quick.querySelector('input').after(advanced.querySelector('#cgender').closest('.genderField'));
  form.insertBefore(advanced,create);advanced.ontoggle=()=>form.classList.toggle('advancedSetupOpen',advanced.open);
  audienceType=audienceType||'friends';rounds=8;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',b.dataset.r==='8'));renderAudience();
  // Keep the optional, consented photo picker collapsed instead of asking everyone to upload.
