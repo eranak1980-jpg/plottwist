@@ -194,14 +194,34 @@ def crew_key(ps):
  import hashlib
  names=sorted(_norm_name(p['name']) for p in ps if int(p['active'] if p['active'] is not None else 1)==1)
  return hashlib.sha256('|'.join(names).encode()).hexdigest()[:24] if names else ''
-def question_key(text,ps):
+_QUESTION_ALIASES=None
+def _question_normalize(text,ps):
  import re
  x=str(text or '').lower()
  for n in sorted({_norm_name(p['name']) for p in ps},key=len,reverse=True):
   if n:x=re.sub(r'(?<!\w)'+re.escape(n)+r'(?!\w)','{s}',x)
- x=re.sub(r'[^\w\u0590-\u05ff{}]+',' ',x,flags=re.UNICODE)
- x=' '.join(x.split())
- return canonical_key(x) or x
+ return ' '.join(re.sub(r'[^\w\u0590-\u05ff{}]+',' ',x,flags=re.UNICODE).split())
+def question_key(text,ps):
+ global _QUESTION_ALIASES
+ x=_question_normalize(text,ps)
+ if _QUESTION_ALIASES is None:
+  aliases={}
+  for typ,template,options in PERSONAL_HE:
+   raw=_question_normalize(template,[]);identity=canonical_key(raw) or raw
+   aliases[raw]=identity
+   for gender in ('male','female','unspecified'):
+    person={'id':1,'name':'__spotlight__','gender':gender}
+    rendered,_=gender_card(template.format(s=person['name']),options,typ,person,[person])
+    aliases[_question_normalize(rendered,[person])]=identity
+  _QUESTION_ALIASES=aliases
+ return _QUESTION_ALIASES.get(x) or canonical_key(x) or x
+
+def round_question_key(g,ps,text):
+ try:
+  card=json.loads(g['round_card'] or '{}')
+  if card.get('key',[None,None])[:2]==[int(g['image_run']),int(g['round_no'])] and card.get('identity'):return card['identity']
+ except (ValueError,TypeError,KeyError,IndexError):pass
+ return question_key(text,ps)
 def past_question_keys(ps):
  ck=crew_key(ps)
  if not ck:return set()
@@ -227,8 +247,8 @@ def too_similar(qk,used):
    if a and b and (len(a&b)>=5 and len(a&b)/max(1,min(len(a),len(b)))>=0.58):return True
   return False
  except:return qk in used
-def remember_question(ps,text):
- ck=crew_key(ps);qk=question_key(text,ps)
+def remember_question(ps,text,identity=None):
+ ck=crew_key(ps);qk=identity or question_key(text,ps)
  if not ck or not qk:return
  with cn() as c:
   if USE_PG:c.execute('INSERT INTO question_history(crew_key,question_key,question,used) VALUES(?,?,?,?) ON CONFLICT(crew_key,question_key) DO UPDATE SET used=EXCLUDED.used',(ck,qk,str(text)[:500],now()))
@@ -303,6 +323,34 @@ def record_game_completion(c,g):
  budget.complete(c,g['id'])
  analytics.record(c,'game_completed',g['owner_key'] or g['host'],g['id'],{'access':g['access_kind']})
  if g['access_kind']=='trial':analytics.record(c,'trial_completed',g['owner_key'],g['id'])
+def apply_purchase_to_room(gid,order_id,client_id):
+ # Applying a verified credit is atomic and idempotent. Redirect query strings
+ # never authorize a purchase, and the caller separately proves host access.
+ key=commerce.owner_key(client_id)
+ with cn() as c:
+  if not USE_PG:c.execute('BEGIN IMMEDIATE')
+  g=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(gid,)).fetchone()
+  order=c.execute('SELECT * FROM commerce_orders WHERE id=? AND owner_key=?',(str(order_id),key)).fetchone()
+  if not g or g['owner_key']!=key or not order:raise commerce.CommerceError('forbidden',403)
+  if order['status']!='paid':raise commerce.CommerceError('payment_not_verified',409)
+  if order['product']=='extension':return {'ok':True,'code':g['code'],'applied':False}
+  ent=c.execute('SELECT * FROM commerce_entitlements WHERE order_id=? AND owner_key=?',(order['id'],key)).fetchone()
+  if not ent:raise commerce.CommerceError('payment_not_verified',409)
+  if g['entitlement_id']==ent['id'] or (g['access_kind']=='paid' and g['status']!='finished'):
+   return {'ok':True,'code':g['code'],'applied':False}
+  if g['status'] not in ('lobby','playing','finished'):raise commerce.CommerceError('not_allowed',409)
+  changed=c.execute('UPDATE commerce_entitlements SET games_remaining=games_remaining-1 WHERE id=? AND games_remaining>0',(ent['id'],))
+  if changed.rowcount!=1:raise commerce.CommerceError('payment_required',402)
+  if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid,fresh=True,access_kind='paid',entitlement_id=ent['id'])
+  if g['status']=='finished':
+   c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',round_card='',tiebreak='{}',image_run=image_run+1 WHERE id=?",(gid,))
+   c.execute('DELETE FROM players WHERE game_id=? AND active=0',(gid,))
+   c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),gid))
+   for table in ('guesses','round_scores','match_answers','match_scores','image_jobs','hero_scenes','instant_scenes'):
+    c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
+  c.execute("UPDATE games SET access_kind='paid',entitlement_id=?,max_rounds=18,rounds=18 WHERE id=?",(ent['id'],gid))
+  return {'ok':True,'code':g['code'],'applied':True}
+
 def game_language(g):
  try:return normalize_language(g['language'])
  except:return 'en'
@@ -333,7 +381,7 @@ def novel_callback(cb,g,ps):
  # A callback deliberately reuses earlier context, so comparing it with every
  # ordinary question rejects the useful callback itself. Compare it only with
  # callbacks already shown to this crew, including earlier games.
- used={question_key(e.get('question',''),ps) for e in mem(g) if 'callback' in str(e.get('type',''))}
+ used={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g) if 'callback' in str(e.get('type',''))}
  used|={key for key in past_question_keys(ps) if 'plot twist' in key}
  return None if too_similar(question_key(cb[1],ps),used) else cb
 def _callback_source_text(entry):
@@ -495,9 +543,10 @@ def qdata(g,ps):
   sub=next((p for p in ps if p['id']==card['subject']),None)
   if sub:return card['type'],card['text'],card['options'],sub
  typ,text,opts,sub=build_qdata(g,ps)
+ identity=question_key(text,ps)
  if sub and game_language(g)=='he':text,opts=gender_card(text,opts,typ,sub,ps)
  if sub and g['status']=='playing':
-  card=dict(key=key,subject=sub['id'],type=typ,text=text,options=opts)
+  card=dict(key=key,subject=sub['id'],type=typ,text=text,options=opts,identity=identity)
   with cn() as c:
    # CAS: a slow poll must not overwrite a later round or a room reset.
    c.execute("UPDATE games SET round_card=? WHERE id=? AND image_run=? AND round_no=? AND memory=?",(json.dumps(card,ensure_ascii=False),g['id'],g['image_run'],g['round_no'],g['memory']))
@@ -547,9 +596,9 @@ def build_qdata(g,ps):
   if not base:base=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if q[0]=='know']
  if lang=='he' and int(g['spice'] or 1)==2 and comic:
   preferred=[q for q in tailored+comic+PERSONAL_HE if len(ps)!=2 or q[0]!='room']
-  used_now={question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
+  used_now={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
   if any(not too_similar(question_key(q[1].format(s=sub['name']),ps),used_now) for q in preferred):base=preferred
- used={question_key(e.get('question',''),ps) for e in mem(g)}
+ used={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}
  used|=past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
  if lang in ('he','en') and len(ps)>2 and not tb and rn%3==2:
@@ -1013,13 +1062,15 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':True,'code':g['code'],'message':{'id':row['id'],'player_id':row['player_id'],'name':row['name'],'kind':row['kind'],'body':row['body'],'created':row['created']}})
   needs_question=act in ('reopen','drop','tiebreak','answer','guess','hero','finalhero','skip','next')
   typ,text,opts,sub=qdata(g,ps) if needs_question else (None,'',[],None)
-  host_actions=('image-settings','start','next','hero','finalhero','skip','settings','reopen','drop','replay','freshroom','tiebreak')
+  host_actions=('applypurchase','image-settings','start','next','hero','finalhero','skip','settings','reopen','drop','replay','freshroom','tiebreak')
   if act in host_actions and not(d.get('host') and secrets.compare_digest(str(d['host']),g['host'])):return self.J({'error':'forbidden'},403)
   if act in ('answer','guess','skip','next','hero'):
    if g['status']!='playing':return self.J({'error':'not_playing'},409)
    if d.get('image_run') is not None and str(d['image_run'])!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
    if d.get('round') is not None and str(d['round'])!=str(g['round_no']):return self.J({'error':'stale_round'},409)
   if act=='finalhero' and g['status']!='finished':return self.J({'error':'not_finished'},409)
+  if act=='applypurchase':
+   return self.J(apply_purchase_to_room(g['id'],d.get('order_id'),d.get('client_id')))
   if act=='image-settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    with cn() as c:
@@ -1080,7 +1131,7 @@ class H(BaseHTTPRequestHandler):
        record_game_completion(c,g)
       return self.J({'ok':True,'name':target['name'],'finished':True})
      if g['status']=='playing' and sub and target['id']==sub['id'] and not g['answer']:
-      mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':'SKIPPED','type':'disconnect_skip'});rn=int(g['round_no'])+1;remember_question(ps,text)
+      mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'question_key':round_question_key(g,ps,text),'answer':'SKIPPED','type':'disconnect_skip'});rn=int(g['round_no'])+1;remember_question(ps,text,round_question_key(g,ps,text))
       with cn() as c:
        c.execute('UPDATE players SET active=0 WHERE id=? AND game_id=?',(pid,g['id']));c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_answers WHERE game_id=? AND round_no=?',(g['id'],g['round_no']));c.execute('DELETE FROM match_scores WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
        if rn>=total_rounds(g):
@@ -1255,8 +1306,8 @@ class H(BaseHTTPRequestHandler):
    result=prepare_hero_async(g['id'],rn,g['image_run'])
    return self.J({'ok':True,'status':result,'image':image_url(g,rn) if result=='ready' else None},202 if result in ('queued','running') else 200)
   if act=='skip':
-   mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
-   remember_question(ps,text)
+   mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'] if sub else '','question':text,'question_key':round_question_key(g,ps,text),'answer':'SKIPPED','type':'skip'});rn=int(g['round_no'])+1
+   remember_question(ps,text,round_question_key(g,ps,text))
    with cn() as c:
     c.execute('DELETE FROM guesses WHERE game_id=? AND round_no=?',(g['id'],g['round_no']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
@@ -1272,13 +1323,13 @@ class H(BaseHTTPRequestHandler):
     need=len([x for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids])
     if not g['answer'] or len([r for r in gs if r['player_id'] in active_ids])<need:return self.J({'error':'not_ready'},409)
     analytics.record(c,'round_completed',g['owner_key'] or g['host'],g['id'],{'round':int(g['round_no'])+1,'players':len(active_ids)})
-    clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'answer':clean_answer,'type':typ,'correct_guesser_ids':[r['player_id'] for r in gs if r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer'])]});rn=int(g['round_no'])+1
+    clean_answer=(str(g['answer'])[7:] if str(g['answer']).startswith('OTHER::') else g['answer']);mm=mem(g);mm.append({'round':g['round_no'],'subject':sub['name'],'question':text,'question_key':round_question_key(g,ps,text),'answer':clean_answer,'type':typ,'correct_guesser_ids':[r['player_id'] for r in gs if r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer'])]});rn=int(g['round_no'])+1
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
     remaining=c.execute('SELECT COUNT(*) AS n FROM players WHERE game_id=?',(g['id'],)).fetchone()['n']
     if rn>=total_rounds(g) or remaining<2:
      c.execute("UPDATE games SET status='finished',memory=? WHERE id=?",(json.dumps(mm,ensure_ascii=False),g['id']));record_game_completion(c,g)
     else:c.execute("UPDATE games SET round_no=?,answer='',memory=? WHERE id=?",(rn,json.dumps(mm,ensure_ascii=False),g['id']))
-   remember_question(ps,text)
+   remember_question(ps,text,round_question_key(g,ps,text))
    return self.J({'ok':True})
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass

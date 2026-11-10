@@ -26,6 +26,7 @@ jobs:
           python tests/invite_capacity.py
           python tests/idle_budget.py
           python tests/continuity_gender.py
+          python tests/repeat_purchase_room.py
       - name: Ties, fair continuation and session recovery
         run: |
           python tests/ties_reconnect.py
@@ -92,6 +93,7 @@ jobs:
           python tests/invite_capacity.py
           python tests/idle_budget.py
           python tests/continuity_gender.py
+          python tests/repeat_purchase_room.py
       - name: Reveal image loading and fallback
         run: node tests/image_ui.js
 
