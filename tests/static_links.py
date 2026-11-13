@@ -9,7 +9,7 @@ for key in ('PAYPLUS_API_KEY','PAYPLUS_PAYMENT_PAGE_UID'):os.environ.pop(key,Non
 for product,key in m.STATIC_LINK_KEYS.items():os.environ[key]='https://payments.payplus.co.il/l/test-'+product
 m._provider_post=lambda *args: (_ for _ in ()).throw(AssertionError('API call forbidden'))
 db=sqlite3.connect(':memory:');db.row_factory=sqlite3.Row
-db.execute('CREATE TABLE games(id INTEGER PRIMARY KEY,status TEXT,access_kind TEXT,max_rounds INTEGER,rounds INTEGER)')
+db.execute('CREATE TABLE games(id INTEGER PRIMARY KEY,status TEXT,access_kind TEXT,max_rounds INTEGER,rounds INTEGER,code TEXT,owner_key TEXT)')
 m.init(db)
 assert m.checkout_configured()
 def callback(order, cents, transaction, **changes):
@@ -39,7 +39,7 @@ assert m.available(db,'another-browser-id')['paid_games']==0
 duo=m.create_checkout(db,'two_games','duo-browser-identity')
 assert callback(duo,999,'tx-duo')['status']=='paid'
 assert m.available(db,'duo-browser-identity')['paid_games']==2
-db.execute("INSERT INTO games VALUES(9,'lobby','paid',18,18)")
+db.execute("INSERT INTO games VALUES(9,'lobby','paid',18,18,'TEST9',?)",(m.owner_key('duo-browser-identity'),))
 game=db.execute('SELECT * FROM games WHERE id=9').fetchone()
 extension=m.create_checkout(db,'extension','duo-browser-identity',game)
 assert callback(extension,299,'tx-extension')['status']=='paid'
@@ -80,5 +80,17 @@ try:
  sig=base64.b64encode(hmac.new(b'test-secret',raw,hashlib.sha256).digest()).decode()
  for _ in range(2):assert req('/api/payplus/callback',raw,{'User-Agent':'PayPlus','hash':sig})['status']=='paid'
  assert req('/api/access?client_id='+device)['paid_games']==1
+ # A verified purchase for a returning host unlocks the original lobby.
+ device='returning-static-browser-identity'
+ req('/api/create',{'client_id':device,'name':'First Host'})
+ pending=req('/api/create',{'client_id':device,'name':'Returning Host','rounds':13,'save_for_checkout':True})
+ assert pending['payment_required']
+ checkout=req('/api/checkout',{'client_id':device,'product':'one_game','code':pending['code'],'host':pending['host']})
+ assert req('/api/order/'+checkout['order_id']+'?client_id='+device)['room_code']==pending['code']
+ raw=json.dumps({'status':'approved','transaction_uid':'tx-room','payment_request_uid':'req-room','more_info':checkout['order_id'],'amount':5.99,'currency_code':'USD'},separators=(',',':')).encode()
+ sig=base64.b64encode(hmac.new(b'test-secret',raw,hashlib.sha256).digest()).decode()
+ assert req('/api/payplus/callback',raw,{'User-Agent':'PayPlus','hash':sig})['status']=='paid'
+ assert req('/api/'+pending['code']+'/applypurchase',{'host':pending['host'],'client_id':device,'order_id':checkout['order_id']})['applied']
+ assert req('/api/state/'+pending['code']+'?token='+pending['token'])['rounds']==13
  print('STATIC_HTTP_PASSED: checkout -> return remains locked -> signed callback -> one credit; no external calls')
 finally:srv.shutdown();tmp.cleanup()
