@@ -1,8 +1,8 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('static/checkout.html','utf8').split('<script>')[1].split('</script>')[0];
-async function page(path,search,stored,status='pending'){
+async function page(path,search,stored,status='pending',resume=null){
  const elements={};const data=new Map(Object.entries(stored||{}));let destination;const calls=[];
- const ctx={URLSearchParams,Intl,crypto:{randomUUID:()=> 'browser-identity-12345'},document:{getElementById:id=>elements[id]??=( {hidden:false,textContent:'',href:''})},localStorage:{getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)},sessionStorage:{getItem:()=>null},location:{pathname:path,search,replace:u=>destination=u,reload:()=>{}},setTimeout:f=>{f()},fetch:async url=>{calls.push(url);return {ok:true,json:async()=> url==='/api/pricing'?{currency:'USD',single_cents:599}:url==='/api/checkout'?{order_id:'saved-order',checkout_url:'https://payments.payplus.co.il/l/test'}:{status}}}};
+ const ctx={URLSearchParams,Intl,crypto:{randomUUID:()=> 'browser-identity-12345'},document:{getElementById:id=>elements[id]??=( {hidden:false,textContent:'',href:''})},localStorage:{getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)},sessionStorage:{getItem:()=>null},location:{pathname:path,search,replace:u=>destination=u,reload:()=>{}},setTimeout:f=>{f()},fetch:async url=>{calls.push(url);return {ok:url!=='/api/checkout/resume'||!!resume,json:async()=>url==='/api/checkout/resume'?resume:url==='/api/pricing'?{currency:'USD',single_cents:599}:url==='/api/checkout'?{order_id:'saved-order',checkout_url:'https://payments.payplus.co.il/l/test'}:{status}}}};
  await vm.runInNewContext(source,ctx);return {elements,data,destination,calls};
 }
 (async()=>{
@@ -11,15 +11,19 @@ async function page(path,search,stored,status='pending'){
  assert.equal(JSON.parse(p.data.get('mipo_checkout_pending')).order_id,'saved-order');
  const saved={mipo_checkout_pending:JSON.stringify({order_id:'saved-order',product:'one_game'})};
  p=await page('/checkout/success','?transaction_uid=untrusted',saved,'paid');
- assert(p.calls[0].startsWith('/api/order/saved-order?client_id='));assert.equal(p.elements.title.textContent,'Your MIPO game is ready');
+ assert(p.calls.some(url=>url.startsWith('/api/order/saved-order?client_id=')));assert.equal(p.elements.title.textContent,'Your MIPO game is ready');
  p=await page('/checkout/success','?status=approved',saved,'pending');
  assert.equal(p.elements.title.textContent,'Still confirming');assert.notEqual(p.elements.action.href,'/?new=1');
- p=await page('/checkout/success','?order=explicit-order',saved,'paid');assert(p.calls[0].startsWith('/api/order/explicit-order?'));
+ p=await page('/checkout/success','?order=explicit-order',saved,'paid');assert(p.calls.some(url=>url.startsWith('/api/order/explicit-order?')));
  const room={code:'CREW1',host:'host-secret',token:'player-secret'};
  p=await page('/checkout','?product=one_game&room=CREW1',{kyc:JSON.stringify(room)});assert.deepEqual(JSON.parse(p.data.get('mipo_checkout_pending')).room,room);
  p=await page('/checkout/success','?order=saved-order',{kyc:JSON.stringify(room),mipo_checkout_pending:JSON.stringify({order_id:'saved-order',room})},'paid');
  assert(p.calls.includes('/api/CREW1/applypurchase'));assert.equal(p.elements.action.href,'/?code=CREW1');assert.equal(p.elements.action.textContent,'Return to your room');assert.equal(JSON.parse(p.data.get('kyc')).host,'host-secret');
  p=await page('/checkout/success','?order=saved-order',{kyc:JSON.stringify(room),mipo_checkout_pending:JSON.stringify({order_id:'saved-order',room})},'pending');assert(!p.calls.includes('/api/CREW1/applypurchase'));
  p=await page('/checkout/success','',{mipo_checkout_pending:'broken-json'});assert.equal(p.elements.title.textContent,'Payment status unavailable');
+ p=await page('/checkout/success','',{},'paid',{status:'paid',room,client_id:'original-device-id'});
+ assert.equal(p.elements.action.href,'/?code=CREW1');
+ assert.equal(JSON.parse(p.data.get('kyc')).token,room.token);
+ assert.equal(JSON.parse(p.data.get('plot_device_id_safe')),'original-device-id');
  console.log('CHECKOUT_RETURN_PASSED: persist before redirect, recover omitted order, explicit order precedence, no unlock from redirect, corrupt storage; external requests=0');
 })().catch(e=>{console.error(e);process.exit(1)});

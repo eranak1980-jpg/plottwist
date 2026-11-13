@@ -14,7 +14,7 @@ import kyc_budget as budget
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 
@@ -106,6 +106,29 @@ def owner_key(client_id):
         raise CommerceError('device_identity_required', 400)
     salt = os.getenv('MIPO_OWNER_HASH_SECRET', os.getenv('PAYPLUS_SECRET_KEY', 'mipo-local-owner-key'))
     return hmac.new(salt.encode(), value.encode(), hashlib.sha256).hexdigest()
+
+
+RETURN_COOKIE = 'mipo_checkout_return'
+RETURN_AGE = timedelta(days=2)
+
+
+def checkout_return_token(order_id, client_id):
+    expires = int((datetime.now(timezone.utc) + RETURN_AGE).timestamp())
+    payload = base64.urlsafe_b64encode(json.dumps([order_id, client_id, expires]).encode()).decode()
+    signature = hmac.new(owner_key(client_id).encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return payload + '.' + signature
+
+
+def read_checkout_return(token):
+    try:
+        payload, signature = token.split('.', 1)
+        order_id, client_id, expires = json.loads(base64.urlsafe_b64decode(payload))
+        expected = hmac.new(owner_key(client_id).encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, signature) and expires > datetime.now(timezone.utc).timestamp():
+            return order_id, client_id
+    except (ValueError, TypeError, UnicodeError, CommerceError):
+        pass
+    raise CommerceError('checkout_session_unavailable', 404)
 
 
 def price(product):

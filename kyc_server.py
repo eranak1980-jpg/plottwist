@@ -8,6 +8,7 @@ from threading import Thread,Lock,local
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone,timedelta
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import urlparse,parse_qs
 from kyc_questions import GENERAL,EVERYDAY_CORE,TOPICS,SPICY,BOLD_COMEDY,SOCIAL_SPARK
@@ -755,8 +756,10 @@ def decode_data_url(data):
   return mime,base64.b64decode(payload)
  except:return None,None
 class H(BaseHTTPRequestHandler):
- def J(self,x,s=200):
-  b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+ def J(self,x,s=200,cookie=None):
+  b=json.dumps(x,ensure_ascii=False).encode();self.send_response(s);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)))
+  if cookie:self.send_header('Set-Cookie',cookie)
+  self.end_headers();self.wfile.write(b)
  def B(self):
   try:return json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
   except:return {}
@@ -960,7 +963,26 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     result=commerce.create_checkout(c,str(d.get('product','')),d.get('client_id'),target)
     analytics.record(c,'checkout_started',d.get('client_id'),target['id'] if target else None,{'product':d.get('product')})
-   return self.J(result,201)
+   cookie=None
+   if target:
+    token=commerce.checkout_return_token(result['order_id'],d.get('client_id'))
+    cookie=f'{commerce.RETURN_COOKIE}={token}; Path=/api/checkout/resume; HttpOnly; Secure; SameSite=Lax; Max-Age={int(commerce.RETURN_AGE.total_seconds())}'
+   return self.J(result,201,cookie)
+  if p=='/api/checkout/resume':
+   cookies=SimpleCookie(self.headers.get('Cookie',''))
+   cookie=cookies.get(commerce.RETURN_COOKIE)
+   order_id,client_id=commerce.read_checkout_return(cookie.value if cookie else '')
+   if d.get('order') and d['order']!=order_id:raise commerce.CommerceError('checkout_session_unavailable',404)
+   with cn() as c:
+    order=commerce.order_status(c,order_id,client_id)
+    if order['status']!='paid':return self.J({'status':order['status']})
+    g=c.execute('SELECT * FROM games WHERE code=?',(order['room_code'],)).fetchone()
+    if not g:raise commerce.CommerceError('checkout_session_unavailable',404)
+    host=c.execute('SELECT token,name FROM players WHERE game_id=? AND client_id=? ORDER BY id LIMIT 1',(g['id'],client_id)).fetchone()
+    if not host:raise commerce.CommerceError('checkout_session_unavailable',404)
+   apply_purchase_to_room(g['id'],order_id,client_id)
+   room={'code':g['code'],'host':g['host'],'token':host['token'],'name':host['name'],'language':g['language']}
+   return self.J({'status':'paid','room':room,'client_id':client_id})
   if p=='/api/refund':
    auth=str(self.headers.get('Authorization',''))
    bearer=auth[7:] if auth.lower().startswith('bearer ') else ''
@@ -1245,6 +1267,12 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:c.execute('UPDATE players SET adult_confirmed=1 WHERE id=?',(me['id'],))
    return self.J({'ok':True})
   if act=='start':
+   if g['access_kind']=='pending_payment':
+    with cn() as c:
+     order=c.execute("SELECT o.id FROM commerce_orders o JOIN commerce_entitlements e ON e.order_id=o.id WHERE o.target_game_id=? AND o.owner_key=? AND o.status='paid' AND e.games_remaining>0 ORDER BY o.created LIMIT 1",(g['id'],g['owner_key'])).fetchone()
+    if order:
+     host=min(ps,key=lambda player:player['id'],default=None)
+     if host:apply_purchase_to_room(g['id'],order['id'],host['client_id'])
    with cn() as c:
     if not USE_PG:c.execute('BEGIN IMMEDIATE')
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
