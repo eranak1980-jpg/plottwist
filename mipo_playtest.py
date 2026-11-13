@@ -21,9 +21,36 @@ ROOM_TRAITS = [
  ('organizer', 'הכי טוב בארגון תוכניות', 'the best at organizing plans'),
 ]
 
+def personality_pack(language, group):
+ if group and language=='he':
+  return [('room',f'לדעת {{s}}, מי בחבורה {he}?',[]) for _,he,_ in ROOM_TRAITS]
+ if group and language=='en':
+  return [('room',f'Who does {{s}} think is {en} in this group?',[]) for _,_,en in ROOM_TRAITS]
+ if language=='he':
+  return [
+   ('know','איזה הומור הכי אופייני ל־{s}?',['בדיחות יבשות','חיקויים','הומור עצמי','סיפורים מצחיקים']),
+   ('know','מה הכי מלחיץ את {s}?',['דיבור מול קהל','סרט מפחיד','מקום גבוה','להישאר לבד בחושך']),
+   ('know','מה החברים הכי מעריכים אצל {s}?',['חוש הומור','כנות','יכולת להקשיב','נאמנות']),
+   ('know','איזו תכונה הכי בולטת אצל {s} בתחרות?',['עקשנות','סבלנות','ביטחון','יכולת לצחוק על ההפסד']),
+   ('know','מה הכי אופייני ל־{s} כשיש תוכנית ספונטנית?',['התלהבות מיידית','בירור כל הפרטים','הצעה לתוכנית אחרת','בקשה לעוד זמן לחשוב']),
+   ('know','מה סגנון פתיחת השיחה של {s} עם אנשים חדשים?',['לשאול שאלה אישית','לספר בדיחה','לתת מחמאה','לחכות שמישהו יפתח בשיחה']),
+   ('know','איזו מחמאה הכי תשמח את {s}?',['כיף בחברתך','אפשר לסמוך עליך','הרעיונות שלך מקוריים','יש לך עין לפרטים']),
+  ]
+ if language=='en':
+  return [
+   ('know','What kind of humor is most typical of {s}?',['Dry jokes','Impressions','Self-deprecating jokes','Funny stories']),
+   ('know','What is most likely to scare {s}?',['Public speaking','A horror movie','Heights','Being alone in the dark']),
+   ('know','What do friends appreciate most about {s}?',['Sense of humor','Honesty','Listening well','Loyalty']),
+   ('know','Which trait stands out most when {s} competes?',['Stubbornness','Patience','Confidence','Ability to laugh at losing']),
+   ('know','What is most typical of {s} when a spontaneous plan comes up?',['Gets excited immediately','Asks for the details','Suggests a different plan','Asks for time to think']),
+   ('know','How does {s} tend to break the ice with new people?',['Asks a personal question','Makes a joke','Offers a compliment','Waits for someone to speak first']),
+   ('know','Which compliment would make {s} happiest?',['Fun to be around','Someone people can count on','Full of original ideas','Good at noticing details']),
+  ]
+ return []
+
 def room_pack(language='he', context=''):
  if language == 'he':
-  pack=[('room',f'לדעת {{s}}, מי בחבורה {he}?',[]) for _,he,_ in ROOM_TRAITS]
+  pack=personality_pack(language,True)
   pack += [
    ('room','למי בחבורה {s} היה נותן לנהל לו את החיים לשבוע?',[]),
    ('room','למי בחבורה {s} היה מתקשר ראשון כשהוא צריך עזרה?',[]),
@@ -36,7 +63,7 @@ def room_pack(language='he', context=''):
    ('room','מי לדעת {s} תמיד חייב להגיד את המילה האחרונה?',[]),
   ]
  elif language == 'en':
-  pack=[('room',f'Who does {{s}} think is {en} in this group?',[]) for _,_,en in ROOM_TRAITS]
+  pack=personality_pack(language,True)
   pack += [
    ('room','Who would {s} trust to manage their life for a week?',[]),
    ('room','Who would {s} call first when they need help?',[]),

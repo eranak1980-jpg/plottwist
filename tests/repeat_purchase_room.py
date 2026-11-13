@@ -92,4 +92,27 @@ try:
   assert allocation['kind']=='paid' and allocation['image_limit']==k.budget.IMAGE_LIMIT
  assert credit(paid)==0
  print('PREPAID_AI_ENVELOPE_TRANSFER_NO_DOUBLE_CREDIT_OR_RESERVATION_OK')
+ # A returning host can save a lobby before paying and unlock that exact lobby.
+ os.environ.pop('OPENAI_API_KEY',None)
+ _,_,returning=room()
+ setup={'client_id':returning,'name':'Returning Host','language':'he','gender':'female',
+        'topics':['משפחה'],'context':'משפחה','prize':'Pizza','rounds':13,'ai_images_enabled':True}
+ req('/api/create',setup,409)
+ pending=req('/api/create',dict(setup,save_for_checkout=True))
+ assert pending['payment_required']
+ req('/api/join',{'code':pending['code'],'name':'Guest','client_id':secrets.token_hex(12)})
+ req('/api/'+pending['code']+'/start',{'host':pending['host']},402)
+ paid=order(returning,True)
+ with k.cn() as c:
+  target=k.game(pending['code'])
+  c.execute('UPDATE commerce_orders SET target_game_id=? WHERE id=?',(target['id'],paid))
+ assert req('/api/order/'+paid+'?client_id='+returning)['room_code']==pending['code']
+ act(pending,'applypurchase',order_id=paid,client_id=returning)
+ act(pending,'applypurchase',order_id=paid,client_id=returning)
+ restored=state(pending)
+ assert restored['access_kind']=='paid' and restored['total']==13 and restored['prize']=='Pizza'
+ assert restored['language']=='he' and restored['ai_images_enabled'] and len(restored['players'])==2
+ assert restored['me']['gender']=='female' and credit(paid)==0
+ act(pending,'start')
+ print('UNPAID_LOBBY_LOCKS_START_AND_PRESERVES_SETUP_AFTER_VERIFIED_PAYMENT_OK')
 finally:server.shutdown();server.server_close();tmp.cleanup()

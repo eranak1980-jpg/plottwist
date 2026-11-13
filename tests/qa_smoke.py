@@ -106,7 +106,7 @@ g=k.game('QA123');ps=k.players(g['id'])
 with k.cn() as db:
  db.execute("UPDATE games SET round_no=2,memory='[]' WHERE id=?",(g['id'],))
 g=k.game('QA123');typ,text,opts,sub=k.qdata(g,ps)
-assert typ=='room' and len(opts)==2 and any(text==template.format(s=sub['name']) for _,template,_ in k.room_pack('he')),(typ,text,opts)
+assert typ=='room' and len(opts)==2 and any(text==template.format(s=sub['name']) for _,template,_ in k.personality_pack('he',True)),(typ,text,opts)
 with k.cn() as db:
  db.execute("UPDATE games SET round_no=4,memory=? WHERE id=?",(json.dumps([
   {'round':0,'subject':'Eran','question':'הודעה בקבוצה','answer':'עונה','type':'know'},
@@ -117,6 +117,23 @@ with k.cn() as db:
 g=k.game('QA123');cb=k.smart_callback(g,ps,4)
 assert cb is None, 'Short trait questions must not get an unrelated invented sequel'
 print('QA_SOCIAL_SPARK_CALLBACK_OK')
+
+for game_code, group in [('QA123',True),('DUO12',False)]:
+ with k.cn() as db:
+  db.execute("UPDATE games SET rounds=13,memory='[]',round_card='' WHERE code=?",(game_code,))
+ current=k.game(game_code);crew=k.players(current['id'])
+ variants={template for _,template,_ in k.personality_pack('he',group)}
+ seen=set()
+ for rn in (2,5,8,11):
+  with k.cn() as db:
+   db.execute('UPDATE games SET round_no=?,memory=? WHERE id=?',
+              (rn,json.dumps([{'question_key':key} for key in seen]),current['id']))
+  current=k.game(game_code);typ,text,options,subject=k.build_qdata(current,crew)
+  assert text in {template.format(s=subject['name']) for template in variants},text
+  assert (typ=='room' and len(options)==2) if group else (typ=='know' and len(options)==4)
+  seen.add(k.question_key(text,crew))
+ assert len(seen)==4
+print('QA_FOUR_DISTINCT_PERSONALITY_QUESTIONS_IN_13_ROUNDS_OK')
 
 # Scoring must be idempotent and survive a state/reveal race.
 with k.cn() as db:

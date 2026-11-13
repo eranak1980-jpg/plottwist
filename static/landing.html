@@ -140,6 +140,10 @@
   (()=>{
     function id(){try{let v=JSON.parse(localStorage.getItem('plot_device_id_safe')||'null');if(v)return v}catch(_){}let v=(crypto.randomUUID?crypto.randomUUID():'dev_'+Date.now()+'_'+Math.random().toString(36).slice(2));localStorage.setItem('plot_device_id_safe',JSON.stringify(v));return v}
     const client_id=id(),send=(event,metadata={})=>fetch('/api/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,client_id,metadata}),keepalive:true}).catch(()=>{});
+    const room=new URLSearchParams(location.search).get('room');
+    if(room&&/^[A-Z0-9]{5}$/.test(room)){
+      document.querySelectorAll('.buy-link').forEach(link=>{const url=new URL(link.href);url.searchParams.set('room',room);link.href=url.pathname+url.search});
+    }
     const freeLinks=[...document.querySelectorAll('[data-event="click_free_trial"]')];
     function disableLinks(links,href){links.forEach(a=>{a.href=href;a.setAttribute('aria-disabled','true');a.addEventListener('click',event=>{event.preventDefault();document.querySelector(href)?.scrollIntoView({behavior:'smooth',block:'center'})})})}
     function markTrialUsed(){document.getElementById('pricingStatus').textContent='Your free trial has already been used on this browser. Choose a game package to keep playing.';freeLinks.forEach(a=>{a.textContent='Free trial already used';a.href='#pricing';a.setAttribute('aria-disabled','true');a.addEventListener('click',event=>{event.preventDefault();document.getElementById('pricing')?.scrollIntoView({behavior:'smooth',block:'start'})})})}

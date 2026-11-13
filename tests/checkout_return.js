@@ -16,7 +16,7 @@ async function page(path,search,stored,status='pending'){
  assert.equal(p.elements.title.textContent,'Still confirming');assert.notEqual(p.elements.action.href,'/?new=1');
  p=await page('/checkout/success','?order=explicit-order',saved,'paid');assert(p.calls[0].startsWith('/api/order/explicit-order?'));
  const room={code:'CREW1',host:'host-secret',token:'player-secret'};
- p=await page('/checkout','?product=one_game',{kyc:JSON.stringify(room)});assert.deepEqual(JSON.parse(p.data.get('mipo_checkout_pending')).room,room);
+ p=await page('/checkout','?product=one_game&room=CREW1',{kyc:JSON.stringify(room)});assert.deepEqual(JSON.parse(p.data.get('mipo_checkout_pending')).room,room);
  p=await page('/checkout/success','?order=saved-order',{kyc:JSON.stringify(room),mipo_checkout_pending:JSON.stringify({order_id:'saved-order',room})},'paid');
  assert(p.calls.includes('/api/CREW1/applypurchase'));assert.equal(p.elements.action.href,'/?code=CREW1');assert.equal(p.elements.action.textContent,'Return to your room');assert.equal(JSON.parse(p.data.get('kyc')).host,'host-secret');
  p=await page('/checkout/success','?order=saved-order',{kyc:JSON.stringify(room),mipo_checkout_pending:JSON.stringify({order_id:'saved-order',room})},'pending');assert(!p.calls.includes('/api/CREW1/applypurchase'));
