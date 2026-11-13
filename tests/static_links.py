@@ -60,9 +60,11 @@ k.DB=Path(os.environ['DATABASE_PATH']);k.USE_PG=False;k.init()
 srv=k.ThreadingHTTPServer(('127.0.0.1',0),k.H)
 threading.Thread(target=srv.serve_forever,daemon=True).start()
 base='http://127.0.0.1:'+str(srv.server_port)
-def req(path,body=None,headers=None):
+def req(path,body=None,headers=None,include_headers=False):
  data=body if isinstance(body,bytes) else json.dumps(body).encode() if body is not None else None
- with urlopen(Request(base+path,data=data,headers={'Content-Type':'application/json',**(headers or {})}),timeout=5) as r:return json.load(r)
+ with urlopen(Request(base+path,data=data,headers={'Content-Type':'application/json',**(headers or {})}),timeout=5) as r:
+  result=json.load(r)
+  return (result,r.headers) if include_headers else result
 try:
  device='http-static-browser-identity'
  order=req('/api/checkout',{'client_id':device,'product':'one_game'})
@@ -85,12 +87,23 @@ try:
  req('/api/create',{'client_id':device,'name':'First Host'})
  pending=req('/api/create',{'client_id':device,'name':'Returning Host','rounds':13,'save_for_checkout':True})
  assert pending['payment_required']
- checkout=req('/api/checkout',{'client_id':device,'product':'one_game','code':pending['code'],'host':pending['host']})
+ checkout,headers=req('/api/checkout',{'client_id':device,'product':'one_game','code':pending['code'],'host':pending['host']},include_headers=True)
+ cookie=headers['Set-Cookie'].split(';',1)[0]
+ assert 'HttpOnly' in headers['Set-Cookie'] and 'Secure' in headers['Set-Cookie']
+ assert req('/api/checkout/resume',{}, {'Cookie':cookie})=={'status':'pending'}
+ for bad_order,bad_cookie in [(checkout['order_id']+'x',cookie),(checkout['order_id'],cookie+'x')]:
+  try:req('/api/checkout/resume',{'order':bad_order},{'Cookie':bad_cookie})
+  except HTTPError as e:assert e.code==404
+  else:raise AssertionError('Unauthorized checkout resume')
  assert req('/api/order/'+checkout['order_id']+'?client_id='+device)['room_code']==pending['code']
  raw=json.dumps({'status':'approved','transaction_uid':'tx-room','payment_request_uid':'req-room','more_info':checkout['order_id'],'amount':5.99,'currency_code':'USD'},separators=(',',':')).encode()
  sig=base64.b64encode(hmac.new(b'test-secret',raw,hashlib.sha256).digest()).decode()
  assert req('/api/payplus/callback',raw,{'User-Agent':'PayPlus','hash':sig})['status']=='paid'
- assert req('/api/'+pending['code']+'/applypurchase',{'host':pending['host'],'client_id':device,'order_id':checkout['order_id']})['applied']
+ for _ in range(2):
+  resumed=req('/api/checkout/resume',{}, {'Cookie':cookie})
+  assert resumed['status']=='paid' and resumed['room']['code']==pending['code']
+  assert resumed['room']['token']==pending['token'] and resumed['client_id']==device
+ assert req('/api/access?client_id='+device)['paid_games']==0
  assert req('/api/state/'+pending['code']+'?token='+pending['token'])['rounds']==13
  print('STATIC_HTTP_PASSED: checkout -> return remains locked -> signed callback -> one credit; no external calls')
 finally:srv.shutdown();tmp.cleanup()
