@@ -19,7 +19,7 @@ import mipo_commerce as commerce
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
 from mipo_gender import gender_card
-from mipo_playtest import PERSONAL_HE, room_pack, editorial_ok, canonical_key, semantic_family, paced_candidates, PERSONAL_EN
+from mipo_playtest import PERSONAL_HE, personality_pack, editorial_ok, canonical_key, semantic_family, paced_candidates, PERSONAL_EN
 from kyc_locales import normalize_language,direction,topic_labels,general_pack,spicy_pack,other_label,callback_copy,match_prompt,SUPPORTED_LANGUAGES,TOPIC_LABELS,ui_copy,last_resort
 LEGACY_INSTANT_IMAGES=os.getenv('PLOT_LEGACY_INSTANT_IMAGES','0').strip()=='1'
 BASE=Path(__file__).parent;DB=Path(os.getenv('DATABASE_PATH',BASE/('kyc-preview.db' if PREVIEW_MODE else 'kyc.db')));DATABASE_URL=os.getenv('DATABASE_URL','').strip();USE_PG=DATABASE_URL.startswith(('postgres://','postgresql://'));STATIC=BASE/'static';TOTAL=12;PRESENCE_TIMEOUT=40;ADULT_TOPICS={'אינטימיות למבוגרים','Adult / Intimacy (18+)','דייטים','Dating'};THEME_ONLY={'מה היית עושה אם…','דילמות','מביך אבל מצחיק','מי הכי…','סודות והרגלים','נוסטלגיה','טיולים וחופשות','חלומות ופנטזיות','כסף מטורף'};CHAT_REACTIONS=('❤️','😂','😭','😈');VISUAL_POOL=ThreadPoolExecutor(max_workers=1);VISUAL_TASKS=set();VISUAL_TASKS_LOCK=Lock();_DB_LOCAL=local()
@@ -332,6 +332,7 @@ def apply_purchase_to_room(gid,order_id,client_id):
   g=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(gid,)).fetchone()
   order=c.execute('SELECT * FROM commerce_orders WHERE id=? AND owner_key=?',(str(order_id),key)).fetchone()
   if not g or g['owner_key']!=key or not order:raise commerce.CommerceError('forbidden',403)
+  if order['target_game_id'] and order['target_game_id']!=gid:raise commerce.CommerceError('forbidden',403)
   if order['status']!='paid':raise commerce.CommerceError('payment_not_verified',409)
   if order['product']=='extension':return {'ok':True,'code':g['code'],'applied':False}
   ent=c.execute('SELECT * FROM commerce_entitlements WHERE order_id=? AND owner_key=?',(order['id'],key)).fetchone()
@@ -348,7 +349,8 @@ def apply_purchase_to_room(gid,order_id,client_id):
    c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),gid))
    for table in ('guesses','round_scores','match_answers','match_scores','image_jobs','hero_scenes','instant_scenes'):
     c.execute('DELETE FROM '+table+' WHERE game_id=?',(gid,))
-  c.execute("UPDATE games SET access_kind='paid',entitlement_id=?,max_rounds=18,rounds=18 WHERE id=?",(ent['id'],gid))
+  rounds=min(18,int(g['rounds'])) if g['access_kind']=='pending_payment' else 18
+  c.execute("UPDATE games SET access_kind='paid',entitlement_id=?,max_rounds=18,rounds=? WHERE id=?",(ent['id'],rounds,gid))
   return {'ok':True,'code':g['code'],'applied':True}
 
 def game_language(g):
@@ -561,6 +563,14 @@ def build_qdata(g,ps):
  sub=next((p for p in ps if p['id']==order[(rn-tb['start'])%len(order)]),None) if order else (ps[rn%len(ps)] if ps else None)
  if not sub:sub=ps[rn%len(ps)] if ps else None
  lang=game_language(g)
+ used={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
+ seed=sum(ord(ch) for ch in str(g['code']))+rn*7
+ if len(ps)>=2 and sub and not tb and rn%3==2:
+  traits=personality_pack(lang,len(ps)>2)
+  for typ,text,opts in paced_candidates(traits,rn,total_rounds(g),mem(g),seed//7):
+   formatted=text.format(s=sub['name'])
+   if not too_similar(question_key(formatted,ps),used):
+    return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']] if typ=='room' else opts,sub
  if lang=='he' and not tb:
   cb=duo_callback(g,ps,rn) if len(ps)==2 else smart_callback(g,ps,rn)
   if cb:return cb
@@ -596,17 +606,7 @@ def build_qdata(g,ps):
   if not base:base=[q for q in (GENERAL if lang=='he' else general_pack(lang)) if q[0]=='know']
  if lang=='he' and int(g['spice'] or 1)==2 and comic:
   preferred=[q for q in tailored+comic+PERSONAL_HE if len(ps)!=2 or q[0]!='room']
-  used_now={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
-  if any(not too_similar(question_key(q[1].format(s=sub['name']),ps),used_now) for q in preferred):base=preferred
- used={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}
- used|=past_question_keys(ps)
- seed=sum(ord(ch) for ch in str(g['code']))+rn*7
- if lang in ('he','en') and len(ps)>2 and not tb and rn%3==2:
-  spark=paced_candidates(room_pack(lang,g['custom_context']),rn,total_rounds(g),mem(g),seed//7)
-  for typ,text,opts in spark:
-   formatted=text.format(s=sub['name'])
-   if not too_similar(question_key(formatted,ps),used):
-    return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']],sub
+  if any(not too_similar(question_key(q[1].format(s=sub['name']),ps),used) for q in preferred):base=preferred
  base=[q for q in base if editorial_ok(q,lang)]
  chosen=None
  if opening:base=[q for q in opening if editorial_ok(q,lang)]+base
@@ -954,7 +954,7 @@ class H(BaseHTTPRequestHandler):
    return self.J({'ok':ok},200 if ok else 400)
   if p=='/api/checkout':
    target=None
-   if d.get('product')=='extension':
+   if d.get('product')=='extension' or d.get('code'):
     target=game(d.get('code'))
     if not target or not d.get('host') or not secrets.compare_digest(str(d.get('host')),str(target['host'])):raise commerce.CommerceError('forbidden',403)
    with cn() as c:
@@ -978,9 +978,17 @@ class H(BaseHTTPRequestHandler):
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
     c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('ai_images_enabled',False) is True),gid))
     if commerce.enabled(USE_PG):
-     access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'));rounds=min(rounds,access['max_rounds']) if access['access_kind']=='paid' else 8
+     c.execute('SAVEPOINT room_access')
+     try:access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'))
+     except commerce.CommerceError as exc:
+      c.execute('ROLLBACK TO SAVEPOINT room_access')
+      if d.get('save_for_checkout') is not True or exc.code not in ('payment_required','trial_already_used'):raise
+      access={'owner_key':commerce.owner_key(client_id),'access_kind':'pending_payment','max_rounds':18,'entitlement_id':''}
+     finally:c.execute('RELEASE SAVEPOINT room_access')
+     rounds=min(rounds,access['max_rounds']) if access['access_kind'] in ('paid','pending_payment') else 8
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
-    if os.getenv('OPENAI_API_KEY','').strip():
+    payment_required=commerce.enabled(USE_PG) and access['access_kind']=='pending_payment'
+    if os.getenv('OPENAI_API_KEY','').strip() and not payment_required:
      c.execute('SAVEPOINT create_ai_admission')
      try:budget.admit(c,gid)
      except budget.BudgetLimit as exc:
@@ -994,8 +1002,10 @@ class H(BaseHTTPRequestHandler):
     analytics.record(c,'room_created',client_id,gid,{'language':language,'rounds':rounds,'photos_required':False})
    if adult:
     with cn() as c:c.execute('UPDATE players SET adult_confirmed=1 WHERE token=?',(pt,))
-   if not ai_fallback_used:Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
-   return self.J({'code':co,'host':ht,'token':pt,'name':name,'language':language,'ai_fallback_used':ai_fallback_used})
+   if not ai_fallback_used and not payment_required:Thread(target=prepare_pack_async,args=(gid,effective_topics(game(co)),ctx,sp,language),daemon=True).start()
+   result={'code':co,'host':ht,'token':pt,'name':name,'language':language,'ai_fallback_used':ai_fallback_used}
+   if payment_required:result['payment_required']=True
+   return self.J(result)
   if p=='/api/join':
    code=str(d.get('code','')).strip().upper();name=str(d.get('name','')).strip()[:40];client_id=str(d.get('client_id','')).strip()[:120]
    if not name:return self.J({'error':'name_required'},400)
@@ -1074,7 +1084,7 @@ class H(BaseHTTPRequestHandler):
   if act=='image-settings':
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    with cn() as c:
-    if d.get('enabled') is True and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'])
+    if d.get('enabled') is True and g['access_kind']!='pending_payment' and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'])
     c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('enabled') is True),g['id']))
    return self.J({'ok':True})
   if act=='freshroom':
@@ -1239,6 +1249,7 @@ class H(BaseHTTPRequestHandler):
     if not USE_PG:c.execute('BEGIN IMMEDIATE')
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not current or current['status']!='lobby':return self.J({'error':'already_started'},409)
+    if current['access_kind']=='pending_payment':return self.J({'error':'payment_required'},402)
     active=[x for x in _players(c,g['id']) if int(x['active'] if x['active'] is not None else 1)==1]
     if len(active)<2:return self.J({'error':'need_2'},409)
     selected=topics(current);vote_rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall()

@@ -10,6 +10,9 @@
         body={...body,access:requestedAccess};
         if(requestedAccess==='qa')body.qa_key=params.get('qa')||bootAccess.qa||'';
       }
+      if(path==='/api/create'&&body&&!String(body.client_id||'').startsWith('cg:')){
+        body={...body,save_for_checkout:true};
+      }
       try{
         const result=await commerceReq(path,body);
         if(/^\/api\/state\//.test(path)&&result?.is_host&&result.status==='lobby'&&result.access_kind==='paid'&&Number(result.max_rounds||18)<30){
@@ -23,7 +26,8 @@
       }catch(error){
         if(error?.message==='payment_required'||error?.message==='trial_already_used'){
           try{sessionStorage.setItem('mipo_commerce_notice',error.message)}catch(_){}
-          location.href='/play-mipo#pricing';
+          const room=/^\/api\/([^/]+)\/(?:start|replay|freshroom)$/.exec(path)?.[1];
+          location.href=room?'/play-mipo?room='+encodeURIComponent(room)+'#pricing':'/play-mipo#pricing';
           return new Promise(()=>{});
         }
         throw error;

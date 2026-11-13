@@ -256,13 +256,14 @@ def create_checkout(c, product, client_id, target_game=None):
     if not enabled() or not checkout_configured():
         raise CommerceError('checkout_not_configured', 503)
     item, key = price(product), owner_key(client_id)
-    target_id = None
+    if target_game and target_game['owner_key'] != key:
+        raise CommerceError('forbidden', 403)
+    target_id = target_game['id'] if target_game else None
     if item['extension']:
         if not target_game or target_game['status'] not in ('lobby', 'playing') or target_game['access_kind'] != 'paid':
             raise CommerceError('extension_requires_paid_game', 409)
         if int(target_game['max_rounds'] or 18) >= 30:
             raise CommerceError('extension_already_active', 409)
-        target_id = target_game['id']
     # Serialize against admissions and reuse an uncompleted payable link for
     # this browser/product. Refresh must not consume another budget envelope.
     budget._lock(c)
@@ -430,7 +431,7 @@ def process_callback(c, raw, headers):
 
 def order_status(c, order_id, client_id):
     key = owner_key(client_id)
-    row = c.execute('SELECT id,product,amount_cents,currency,status,updated FROM commerce_orders WHERE id=? AND owner_key=?', (str(order_id), key)).fetchone()
+    row = c.execute('SELECT o.id,o.product,o.amount_cents,o.currency,o.status,o.updated,g.code AS room_code FROM commerce_orders o LEFT JOIN games g ON g.id=o.target_game_id WHERE o.id=? AND o.owner_key=?', (str(order_id), key)).fetchone()
     if not row:
         raise CommerceError('order_not_found', 404)
     return dict(row)
