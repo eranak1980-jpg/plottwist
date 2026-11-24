@@ -61,7 +61,7 @@ class PipelineTests(unittest.TestCase):
             def __enter__(self):return self
             def __exit__(self,*args):pass
             def execute(self,*args):return self
-            def fetchone(self):return {'id':1,'status':'finished','image_run':1,'ai_images_enabled':1}
+            def fetchone(self):return {'id':1,'status':'finished','access_kind':'paid','image_run':1,'ai_images_enabled':1}
         with patch.object(k,'LEGACY_INSTANT_IMAGES',True),patch.object(k,'cn',DB),patch.object(k,'players',return_value=[]),patch.object(k,'image_payload',return_value={'kind':'final'}),patch.object(k.image_jobs,'queue',side_effect=lambda *a:events.append('ai') or 'queued'),patch.object(k.instant,'prepare',side_effect=lambda *a:events.append('preview')):
             self.assertEqual(k.prepare_hero_async(1,99,1),'queued')
         self.assertEqual(events,['ai','preview'])

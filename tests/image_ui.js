@@ -6,7 +6,7 @@ const source=page.slice(page.indexOf('const visualCache='),page.indexOf('async f
 const elements={},images={},timers=[],frames=[];
 function element(id){return elements[id]||={dataset:{},style:{},classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,v){v?this.add(x):this.remove(x)}}}}
 class Image {set src(url){this.url=url;images[url]=this}get src(){return this.url}}
-const sandbox={copy:{image_loading:'Loading…',image_failed:'Failed',image_continue:'Continue without image',next:'Next',play_again:'Play again'},Image,performance:{now:()=>100},requestAnimationFrame:fn=>frames.push(fn),setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},imageView:'run1',heroAsked:-1,$:element,makeHero(){},makeFinalHero(){}};
+const sandbox={window:{MIPO_CONFIG:{freePlay:false}},crazygamesMode:false,copy:{image_loading:'Loading…',image_failed:'Failed',image_continue:'Continue without image',next:'Next',play_again:'Play again'},Image,performance:{now:()=>100},requestAnimationFrame:fn=>frames.push(fn),setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},imageView:'run1',heroAsked:-1,$:element,makeHero(){},makeFinalHero(){}};
 vm.createContext(sandbox);vm.runInContext(source,sandbox);
 function paint(){while(frames.length)frames.shift()()}
 const d={code:'TEST',image_run:1,round:0,total:12,hero_eligible:true,ai_images_ready:true,instant_visual:'/instant',subject:{photo_url:'/photo.jpg'},hero_status:'running'};

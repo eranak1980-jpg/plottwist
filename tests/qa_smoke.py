@@ -366,9 +366,9 @@ experience=(Path(__file__).resolve().parents[1]/'static'/'experience.js').read_t
 landing=(Path(__file__).resolve().parents[1]/'static'/'landing.html').read_text()
 assert "path==='/api/create'" in experience and "params.get('access')" in experience
 assert "body={...body,access:requestedAccess}" in experience
-assert "/api/access?client_id=" in landing
-assert 'Free trial already used' in landing
-assert "if(!a.trial_available)markTrialUsed()" in landing
+assert 'No card or payment required' in landing
+assert 'new game purchase' not in landing
+assert '/checkout?product=' not in landing
 print('QA_TRIAL_LOOP_GUARD_OK')
 
 # The private owner QA link carries a server-verified token and never consumes a public trial.
