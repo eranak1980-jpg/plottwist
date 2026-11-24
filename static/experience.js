@@ -15,7 +15,7 @@
       }
       try{
         const result=await commerceReq(path,body);
-        if(/^\/api\/state\//.test(path)&&result?.is_host&&result.status==='lobby'&&result.access_kind==='paid'&&Number(result.max_rounds||18)<30){
+        if(/^\/api\/state\//.test(path)&&result?.is_host&&result.status==='lobby'&&!window.MIPO_CONFIG?.freePlay&&!crazygamesMode&&result.access_kind==='paid'&&Number(result.max_rounds||18)<30){
           setTimeout(()=>{
             const host=document.getElementById('host');if(!host||document.getElementById('extendGameBtn'))return;
             const button=document.createElement('button');button.id='extendGameBtn';button.className='mini';button.textContent='✨ Extend to 30 questions · $2.99';
@@ -54,9 +54,10 @@
   try{enabled=localStorage.getItem('plot_sound')!=='off'}catch(_){}
   const nodes=new Set();
   function hush(){window.speechSynthesis?.cancel();audioEpoch++;busyUntil=0;clearTimeout(pendingSound);for(const n of nodes){try{n.stop()}catch(_){}}nodes.clear();if(context&&context.state==='running')context.suspend().catch(()=>{});}
-  function unlock(){activated=true;try{const A=window.AudioContext||window.webkitAudioContext;if(enabled&&A){context ||= new A();if(context.state!=='running')context.resume().catch(()=>{});}}catch(_){}}
+  window.addEventListener('mipo:platform-settings',event=>{window.mipoPlatformMuted=!!event.detail.muteAudio;if(window.mipoPlatformMuted)hush()});
+  function unlock(){if(window.mipoPlatformMuted)return;activated=true;try{const A=window.AudioContext||window.webkitAudioContext;if(enabled&&A){context ||= new A();if(context.state!=='running')context.resume().catch(()=>{});}}catch(_){}}
   function sound(kind){
-    if(!enabled||!activated||document.hidden)return;
+    if(window.mipoPlatformMuted||!enabled||!activated||document.hidden)return;
     if(Date.now()<busyUntil){
       // A fast save/reveal must not lose its voice just because the tap is still playing.
       if(kind!=='tap'){clearTimeout(pendingSound);const epoch=audioEpoch;pendingSound=setTimeout(()=>{if(epoch===audioEpoch)sound(kind)},busyUntil-Date.now()+20)}
@@ -403,7 +404,7 @@
   function setUnread(value){unread=Math.max(0,value);el('chatUnread').textContent=unread>99?'99+':String(unread);el('chatUnread').classList.toggle('hidden',!unread)}
   function renderChat(){const list=[...chatItems.values()].sort((a,b)=>Number(a.id)-Number(b.id)),box=el('chatMessages');if(!list.length){box.innerHTML='<p class="chatEmpty">'+safe(F().empty)+'</p>';return}box.innerHTML=list.map(m=>{const mine=Number(m.player_id)===Number(current?.me?.id),reaction=m.kind==='reaction';return '<div class="chatMessage '+(mine?'mine ':'')+(reaction?'reaction':'')+'"><span class="chatAuthor">'+safe(m.name||'')+'</span><span class="chatBody">'+safe(m.body||'')+'</span></div>'}).join('');box.scrollTop=box.scrollHeight}
   function setChatRoom(code){if(chatRoom===code)return;chatRoom=code||'';lastChatId=0;chatInitialLoaded=false;chatItems.clear();setUnread(0);renderChat()}
-  async function fetchChat(initial=false){if(chatLoading||!current?.me||!s.token||!current.code||current.code!==s.code||document.hidden)return;const requestedRoom=current.code;chatLoading=true;try{const result=await window.req('/api/chat/'+encodeURIComponent(requestedRoom)+'?token='+encodeURIComponent(s.token)+'&after='+(initial?0:lastChatId));if(chatRoom!==requestedRoom)return;const messages=Array.isArray(result.messages)?result.messages:[];let incoming=0;for(const m of messages){const id=Number(m.id)||0;lastChatId=Math.max(lastChatId,id);if(chatItems.has(id))continue;chatItems.set(id,m);if(!initial&&!chatOpen&&Number(m.player_id)!==Number(current.me.id))incoming++}chatInitialLoaded=true;while(chatItems.size>100)chatItems.delete(chatItems.keys().next().value);if(messages.length)renderChat();if(incoming){setUnread(unread+incoming);variedSound(['wink','peek'])}}catch(_){/* Chat retries quietly without blocking play. */}finally{chatLoading=false}}
+  async function fetchChat(initial=false){if(crazygamesMode)return;if(chatLoading||!current?.me||!s.token||!current.code||current.code!==s.code||document.hidden)return;const requestedRoom=current.code;chatLoading=true;try{const result=await window.req('/api/chat/'+encodeURIComponent(requestedRoom)+'?token='+encodeURIComponent(s.token)+'&after='+(initial?0:lastChatId));if(chatRoom!==requestedRoom)return;const messages=Array.isArray(result.messages)?result.messages:[];let incoming=0;for(const m of messages){const id=Number(m.id)||0;lastChatId=Math.max(lastChatId,id);if(chatItems.has(id))continue;chatItems.set(id,m);if(!initial&&!chatOpen&&Number(m.player_id)!==Number(current.me.id))incoming++}chatInitialLoaded=true;while(chatItems.size>100)chatItems.delete(chatItems.keys().next().value);if(messages.length)renderChat();if(incoming){setUnread(unread+incoming);variedSound(['wink','peek'])}}catch(_){/* Chat retries quietly without blocking play. */}finally{chatLoading=false}}
   async function sendChat(body,kind='text'){body=String(body||'').trim();if(!body||!current?.me)return;const room=current.code;const id=(window.crypto?.randomUUID?.()||String(Date.now())+'_'+Math.random().toString(36).slice(2));try{const result=await window.req('/api/'+encodeURIComponent(room)+'/chat',{token:s.token,kind,body,client_msg_id:id}),m=result.message;if(chatRoom!==room)return;if(m){chatItems.set(Number(m.id),m);renderChat()}else await fetchChat(false);if(kind==='reaction'&&!chatOpen)toast(phrase('התגובה נשלחה','Reaction sent')+' '+body)}catch(_){toast(F().chatFailed)}}
   function openChat(){chatOpen=true;setUnread(0);el('chatSheet').classList.remove('hidden');el('chatFab').setAttribute('aria-expanded','true');document.body.classList.add('chatOpen');fetchChat(true);setTimeout(()=>el('chatInput').focus({preventScroll:true}),80)}
   function closeChat(){chatOpen=false;el('chatSheet').classList.add('hidden');el('chatFab').setAttribute('aria-expanded','false');document.body.classList.remove('chatOpen')}

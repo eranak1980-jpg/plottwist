@@ -1,11 +1,13 @@
 name: PlotTwist V2 QA
 on:
   push:
-    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*', 'ai-images-*', 'fix-*']
+    branches: [main, 'plot-hardening-*', 'multilang-*', 'localization-polish-*', 'ai-images-*', 'fix-*', 'feat/free-*']
   workflow_dispatch:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    env:
+      MIPO_FREE_PLAY: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,6 +21,10 @@ jobs:
         run: |
           python tests/content_quality.py
           python tests/qa_smoke.py
+      - name: Free release and portal contract
+        run: python tests/free_portal.py
+        env:
+          MIPO_FREE_PLAY: "1"
       - name: HTTP flow smoke test
         run: |
           python tests/http_smoke.py
@@ -44,6 +50,8 @@ jobs:
           npm install --prefix /tmp/plot-ui jsdom@30.1.1 --ignore-scripts --no-audit --no-fund
           PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/experience_ui.js
           node tests/session_ui.js
+          node tests/crazygames_sdk.js
+          node --check static/free-play.js
           node tests/checkout_return.js
           PLOT_JSDOM=/tmp/plot-ui/node_modules/jsdom node tests/playtest_ui.js
           node --check static/experience.js
@@ -60,6 +68,8 @@ jobs:
 
   image-pipeline:
     runs-on: ubuntu-latest
+    env:
+      MIPO_FREE_PLAY: "0"
     services:
       postgres:
         image: postgres:16

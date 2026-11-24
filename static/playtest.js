@@ -47,7 +47,7 @@
  }
  el('quickAdult').onchange=()=>setAdult(el('quickAdult').checked);
  const oldAudience=window.renderAudience;window.renderAudience=function(){if(audienceType==='family'&&spice===3)setAdult(false);oldAudience();labels()};
- const oldReq=window.req;window.req=function(path,body){if(path==='/api/create'&&body)body={...body,ai_images_enabled:!crazygamesMode&&el('quickImages').checked};return oldReq(path,body)};
+ const oldReq=window.req;window.req=function(path,body){if(path==='/api/create'&&body)body={...body,ai_images_enabled:!window.MIPO_CONFIG?.freePlay&&!crazygamesMode&&el('quickImages').checked};return oldReq(path,body)};
  el('lobbyImages').onchange=async()=>{const cb=el('lobbyImages');cb.disabled=true;try{await req('/api/'+s.code+'/image-settings',{host:s.host,enabled:cb.checked});stateSig='';await load()}catch(_){cb.checked=!!last?.ai_images_enabled;toast(T()[9])}finally{cb.disabled=false}};
  const oldRender=window.render;function renderActual(d){
   oldRender(d);last=d;labels();lobbyImages.classList.toggle('hidden',d.status!=='lobby'||!d.is_host||crazygamesMode);el('lobbyImages').checked=d.ai_images_enabled!==false;
