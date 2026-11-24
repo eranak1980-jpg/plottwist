@@ -1,6 +1,6 @@
 /* CrazyGames v3 integration. The game remains playable if the SDK is unavailable. */
 (async () => {
- if(typeof crazygamesMode==='undefined'||!crazygamesMode)return;
+ if(typeof crazygamesMode==='undefined'||!crazygamesMode||new URLSearchParams(location.search).get('portal')==='1')return;
  const embedded=(()=>{try{return [document.referrer,...Array.from(location.ancestorOrigins||[])].some(v=>/(^|\.)crazygames\.com$/i.test(new URL(v).hostname))}catch(_){return false}})();
  const loadSdk=()=>new Promise((resolve,reject)=>{
   if(window.CrazyGames?.SDK)return resolve();

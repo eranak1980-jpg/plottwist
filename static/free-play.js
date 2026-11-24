@@ -24,5 +24,7 @@
   if(path==='/api/create'&&body)body={...body,ai_images_enabled:false,save_for_checkout:false};
   return priorReq(path,body);
  };
- labels();new MutationObserver(labels).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+ labels();
+ if(new URLSearchParams(location.search).get('portal')==='1'&&!s.code&&!new URLSearchParams(location.search).get('code')){window.mode('create');window.createGame()}
+ new MutationObserver(labels).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 })();

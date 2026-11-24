@@ -50,7 +50,7 @@
   if(!s.code)return;
   if(crazygamesMode&&window.mipoInviteUrl)return window.share();
   const fallback=lobby.querySelector('.inviteFallback'),input=fallback.querySelector('input');
-  input.value=window.mipoInviteUrl?window.mipoInviteUrl(s.code):location.origin+'/?code='+encodeURIComponent(s.code)+(crazygamesMode?'&cg=1':'');
+  input.value=window.mipoInviteUrl?window.mipoInviteUrl(s.code):location.origin+'/?code='+encodeURIComponent(s.code)+(crazygamesMode?(bootParams.get('portal')==='1'?'&portal=1':'&cg=1'):'');
   if(navigator.share){
    try{await navigator.share({title:'Play MIPO',text:copy.share_text||'Play MIPO',url:input.value});return}
    catch(error){if(error.name==='AbortError')return}
