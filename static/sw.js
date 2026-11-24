@@ -1,6 +1,6 @@
 /* Public app shell only. Never cache player tokens, API state, photos or answers. */
-const CACHE='plot-shell-v20';
-const SHELL=['/','/static/mascot.js?v=1','/static/mascot.css?v=1',...['smirk','surprise','suspicious','wink','celebrate'].map(p=>'/static/mascot/'+p+'.webp?v=1'),'/static/premium.css?v=cream-v3','/static/experience.css?v=11','/static/companion-copy.js?v=3','/static/experience.js?v=20','/static/first-game.js?v=10','/static/first-game.css?v=4','/static/free-play.js?v=1','/static/crazygames.js?v=7','/static/playtest.js?v=5','/static/playtest.css?v=3'];
+const CACHE='plot-shell-v21';
+const SHELL=['/','/static/mascot.js?v=1','/static/mascot.css?v=1',...['smirk','surprise','suspicious','wink','celebrate'].map(p=>'/static/mascot/'+p+'.webp?v=1'),'/static/premium.css?v=cream-v3','/static/experience.css?v=11','/static/companion-copy.js?v=3','/static/experience.js?v=20','/static/first-game.js?v=11','/static/first-game.css?v=4','/static/free-play.js?v=2','/static/crazygames.js?v=8','/static/playtest.js?v=5','/static/playtest.css?v=3'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('plot-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
