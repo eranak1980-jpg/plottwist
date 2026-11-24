@@ -13,6 +13,8 @@
   for(const id of ['quickImages','lobbyImages'])document.getElementById(id)?.closest('label')?.classList.add('hidden');
   const promise=document.getElementById('groupPromise');if(promise)promise.textContent=he?'אחד פותח חדר. כולם מצטרפים ומשחקים בחינם.':'One person hosts. Everyone joins and plays for free.';
   if(crazygamesMode){
+   document.title='MIPO Free — Party Game';
+   const heading=document.getElementById('homeTitle');if(heading)heading.textContent='MIPO Free';
    for(const id of ['cname','jname']){const e=document.getElementById(id);if(e&&!e.value)e.value=window.mipoPlatformUsername||'Player '+Math.random().toString(36).slice(2,6).toUpperCase()}
   }
  };

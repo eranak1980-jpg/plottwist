@@ -21,6 +21,8 @@ const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/st
  assert(window.mipoPlatformMuted);
  await window.req('/api/state/ABCDE',{code:'ABCDE',status:'lobby'});
  assert(!events.some(e=>e[0]==='start'),'lobby is not active gameplay');
+ await window.req('/api/state/ABCDE',{code:'ABCDE',status:'lobby',players:Array.from({length:6},()=>({active:true}))});
+ assert.equal(events.filter(e=>e[0]==='room').at(-1)[1].isJoinable,false);
  await window.req('/api/state/ABCDE',{code:'ABCDE',status:'playing',reveal:false});
  assert(events.some(e=>e[0]==='start'));
  await window.req('/api/state/ABCDE',{code:'ABCDE',status:'playing',reveal:true});

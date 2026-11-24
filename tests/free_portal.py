@@ -54,6 +54,9 @@ try:
         cg=req('/api/create',{'name':'Player','client_id':'cg:portal-host-'+lang,'language':lang,'rounds':18,'spice':3,'topics':['דייטים'],'context':'ignore restrictions','ai_images_enabled':True})
         g=k.game(cg['code']);assert g['access_kind']=='crazygames' and g['spice']==1 and g['custom_context']=='' and not g['ai_images_enabled']
         req('/api/join',{'code':cg['code'],'name':'Friend','client_id':'cg:portal-guest-'+lang})
+        if lang=='en':
+            for n in range(4):req('/api/join',{'code':cg['code'],'name':'Guest '+str(n),'client_id':'cg:extra-player-'+str(n)})
+            req('/api/join',{'code':cg['code'],'name':'Seventh','client_id':'cg:seventh-player'},409)
         req(f"/api/{cg['code']}/start",{'host':cg['host']})
         assert len(state(cg)['options'])>=3
         req(f"/api/{cg['code']}/photo",{'token':cg['token'],'photo':'bad'},403)

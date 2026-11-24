@@ -19,7 +19,7 @@
   settings();cg.addSettingsChangeListener?.(settings);
   function sync(state){
    if(!state?.code)return;
-   const room={roomId:String(state.code),isJoinable:state.status==='lobby',inviteParams:{code:String(state.code)}};
+   const room={roomId:String(state.code),isJoinable:state.status==='lobby'&&(state.players||[]).filter(p=>p.active!==false&&p.active!==0).length<6,inviteParams:{code:String(state.code)}};
    const signature=JSON.stringify(room);if(signature!==roomSignature){call('updateRoom',room);roomSignature=signature}
    const active=state.status==='playing'&&!state.reveal&&!document.hidden&&!adPending;
    if(active!==playing){playing=active;call(active?'gameplayStart':'gameplayStop')}

@@ -12,6 +12,7 @@ Compared with the October submission:
 - No payment, card, browser trial limit or paid replay in the free release; 8/18/30-question lengths.
 - Bundled MIPO artwork replaces live image generation. No metered image or question generation on free rooms.
 - Faster setup and automatic private lobby creation in the portal edition.
+- Private portal lobbies support 2–6 players; the SDK marks a full room unavailable for further joins.
 - CrazyGames v3 room updates, launch invites, live join listener and platform invite links.
 - Platform locale and username support; gameplay start/stop separate from lobby/reveal screens; SDK mute settings take priority over in-game audio.
 - Portal edition uses curated questions, has no 18+ settings, custom question text, photo uploads or free-text chat. Display names have a basic profanity filter.
