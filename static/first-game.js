@@ -16,7 +16,7 @@
  for(const child of [...form.children])if(![el('createTitle'),el('hostGuideLink'),quick,create].includes(child))advanced.querySelector('div').appendChild(child);
  quick.querySelector('input').after(advanced.querySelector('#cgender').closest('.genderField'));
  form.insertBefore(advanced,create);advanced.ontoggle=()=>form.classList.toggle('advancedSetupOpen',advanced.open);
- audienceType=audienceType||'friends';rounds=8;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',b.dataset.r==='8'));renderAudience();
+ audienceType=audienceType||'friends';rounds=(window.MIPO_CONFIG?.freePlay||crazygamesMode)?18:8;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',Number(b.dataset.r)===rounds));renderAudience();
  // Keep the optional, consented photo picker collapsed instead of asking everyone to upload.
  let photoExpanded=false;el('photoToggle').onclick=()=>{photoExpanded=!photoExpanded;el('photoBox').classList.toggle('hidden',!photoExpanded);el('photoBox').dataset.editing=photoExpanded?'1':''};
  const createMessages={
@@ -48,8 +48,9 @@
  const lobby=document.createElement('section');lobby.id='inviteCard';lobby.className='inviteCard hidden';lobby.innerHTML='<b></b><p></p><small class="inviteAiNotice hidden" role="status"></small><button type="button"></button><div class="inviteFallback hidden"><a class="mini" target="_blank" rel="noopener">WhatsApp</a><button type="button" class="mini"></button><input readonly aria-label="Invitation link"></div>';
  el('sharedSetup').before(lobby);lobby.querySelector('button').onclick=async()=>{
   if(!s.code)return;
+  if(crazygamesMode&&window.mipoInviteUrl)return window.share();
   const fallback=lobby.querySelector('.inviteFallback'),input=fallback.querySelector('input');
-  input.value=location.origin+'/?code='+encodeURIComponent(s.code)+(crazygamesMode?'&cg=1':'');
+  input.value=window.mipoInviteUrl?window.mipoInviteUrl(s.code):location.origin+'/?code='+encodeURIComponent(s.code)+(crazygamesMode?'&cg=1':'');
   if(navigator.share){
    try{await navigator.share({title:'Play MIPO',text:copy.share_text||'Play MIPO',url:input.value});return}
    catch(error){if(error.name==='AbortError')return}
@@ -104,7 +105,7 @@
   const prompt=el('revealTalk')||document.createElement('p');prompt.id='revealTalk';prompt.className='revealTalk';el('reaction').after(prompt);prompt.textContent=T()[24];prompt.classList.toggle('hidden',!d.reveal);
   const done=d.status==='finished';insight.classList.toggle('hidden',!done);shareResult.classList.toggle('hidden',!done);if(done){finalData=d;shareResult.textContent=T()[23];const byId=new Map(d.players.map(p=>[p.id,p]));const stats=(d.relationships||[]).filter(x=>x.attempts>0);insight.innerHTML='<h3>'+safe(T()[20])+'</h3>'+(stats.length?stats.slice(0,12).map(x=>'<div class="relationshipRow"><span>'+safe(byId.get(x.guesser_id)?.name)+' → '+safe(byId.get(x.subject_id)?.name)+'</span><b>'+x.correct+'/'+x.attempts+'</b><small>'+safe(T()[21])+'</small></div>').join(''):'<p>'+safe(T()[22])+'</p>');}
  };
- const accessReady=crazygamesMode?Promise.resolve():window.req('/api/access?client_id='+encodeURIComponent(deviceId)).then(access=>{if(Number(access.paid_games)>0&&!advanced.dataset.used&&rounds===8){rounds=18;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',b.dataset.r==='18'));labels()}}).catch(()=>{});
+ const accessReady=(window.MIPO_CONFIG?.freePlay||crazygamesMode)?Promise.resolve():window.req('/api/access?client_id='+encodeURIComponent(deviceId)).then(access=>{if(Number(access.paid_games)>0&&!advanced.dataset.used&&rounds===8){rounds=18;document.querySelectorAll('.lengths button').forEach(b=>b.classList.toggle('on',b.dataset.r==='18'));labels()}}).catch(()=>{});
  labels();new MutationObserver(labels).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});if(window.lastState)window.render(window.lastState);
  if(bootParams.get('new')==='1'&&bootParams.get('setup')==='1'){
   const url=new URL(location.href);url.searchParams.delete('setup');history.replaceState({},'',url);mode('create');

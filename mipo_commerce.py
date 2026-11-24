@@ -11,6 +11,7 @@ import json
 import os
 import secrets
 import kyc_budget as budget
+from mipo_release import free_play
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
@@ -39,6 +40,8 @@ def utcnow():
 
 
 def enabled(use_pg=False):
+    if free_play():
+        return False
     value = os.getenv('MIPO_COMMERCE_ENABLED', '').strip().lower()
     if value:
         return value in ('1', 'true', 'yes', 'on')
@@ -141,10 +144,11 @@ def price(product):
 def pricing_payload():
     active = enabled()
     return {
+        'free_play': free_play(), 'ai_images_enabled': not free_play(),
         'currency': 'USD', 'checkout_enabled': bool(active and checkout_configured()), 'commerce_enabled': active,
-        'stage': 'launch' if active and checkout_configured() else 'configuration_required',
-        'single_cents': price('one_game')['amount_cents'], 'duo_cents': price('two_games')['amount_cents'], 'extension_cents': price('extension')['amount_cents'],
-        'included_rounds': 18, 'free_rounds': 8, 'extended_rounds': 30,
+        'stage': 'free' if free_play() else 'launch' if active and checkout_configured() else 'configuration_required',
+        'single_cents': 0 if free_play() else price('one_game')['amount_cents'], 'duo_cents': 0 if free_play() else price('two_games')['amount_cents'], 'extension_cents': 0 if free_play() else price('extension')['amount_cents'],
+        'included_rounds': 30 if free_play() else 18, 'free_rounds': 30 if free_play() else 8, 'extended_rounds': 30,
         'max_players': 6, 'extension_applies_to': 'one_game',
     }
 
@@ -153,6 +157,8 @@ def quote(rounds=18, games=1):
     rounds, games = int(rounds), int(games)
     if games not in (1, 2) or rounds not in range(8, 31):
         raise ValueError('invalid_quote')
+    if free_play():
+        return dict(pricing_payload(), games=games, rounds=rounds, base_cents=0, extra_cents=0, total_cents=0)
     base = price('one_game' if games == 1 else 'two_games')['amount_cents']
     extension = price('extension')['amount_cents'] if rounds > 18 else 0
     return dict(pricing_payload(), games=games, rounds=rounds, base_cents=base,
@@ -183,7 +189,7 @@ def allocate_new_game(c, client_id, requested_access, game_id, qa_key=''):
     # CrazyGames Basic Launch games must remain playable without the website's
     # one-time browser trial or a PayPlus purchase.
     if str(client_id or '').strip().startswith('cg:'):
-        return {'owner_key': key, 'access_kind': 'crazygames', 'max_rounds': 8, 'entitlement_id': ''}
+        return {'owner_key': key, 'access_kind': 'crazygames', 'max_rounds': 30, 'entitlement_id': ''}
     if str(requested_access or '').lower() == 'qa':
         expected = os.getenv('MIPO_QA_TOKEN_HASH', DEFAULT_QA_TOKEN_HASH).strip().lower()
         supplied = hashlib.sha256(str(qa_key or '').encode()).hexdigest()
@@ -210,6 +216,8 @@ def allocate_replay(c, owner):
 
 
 def available(c, client_id):
+    if free_play():
+        return {'free_play': True, 'trial_available': True, 'paid_games': 0, 'max_rounds': 30}
     try:
         key = owner_key(client_id)
     except CommerceError:

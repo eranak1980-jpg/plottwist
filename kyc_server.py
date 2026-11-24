@@ -17,6 +17,7 @@ import kyc_image_jobs as image_jobs
 import kyc_budget as budget
 import kyc_instant as instant
 import mipo_commerce as commerce
+from mipo_release import free_play, portal_name, portal_card_ok
 import mipo_analytics as analytics
 from kyc_ai import generate_pack
 from mipo_gender import gender_card
@@ -38,6 +39,7 @@ def retention_cleanup(c):
  c.execute('DELETE FROM analytics_events WHERE created<?',(analytics_cutoff,))
 def adult_required(ts,spice=1):return int(spice or 1)>=3 or bool(ADULT_TOPICS.intersection(set(ts or [])))
 def crazygames_room(c,g):
+ if g['access_kind']=='crazygames':return True
  try:
   rows=c.execute('SELECT client_id FROM players WHERE game_id=?',(g['id'],)).fetchall()
   return any(str(row['client_id'] or '').startswith('cg:') for row in rows)
@@ -308,7 +310,7 @@ def winners(g,ps):
  top=max(p['score'] for p in eligible)
  return [p for p in eligible if p['score']==top]
 def final_image_eligible(g,ps):
- if not g['ai_images_enabled']:return False
+ if free_play() or g['access_kind']=='crazygames' or not g['ai_images_enabled']:return False
  ws=winners(g,ps)
  active=active_players(ps)
  return bool(ws and all(p['photo_data'] and p['photo_consent'] for p in ws) and sum(bool(p['photo_data'] and p['photo_consent']) for p in active)<=16)
@@ -335,6 +337,7 @@ def apply_purchase_to_room(gid,order_id,client_id):
   if not g or g['owner_key']!=key or not order:raise commerce.CommerceError('forbidden',403)
   if order['target_game_id'] and order['target_game_id']!=gid:raise commerce.CommerceError('forbidden',403)
   if order['status']!='paid':raise commerce.CommerceError('payment_not_verified',409)
+  if free_play():return {'ok':True,'code':g['code'],'applied':False,'free_play':True}
   if order['product']=='extension':return {'ok':True,'code':g['code'],'applied':False}
   ent=c.execute('SELECT * FROM commerce_entitlements WHERE order_id=? AND owner_key=?',(order['id'],key)).fetchone()
   if not ent:raise commerce.CommerceError('payment_not_verified',409)
@@ -343,7 +346,7 @@ def apply_purchase_to_room(gid,order_id,client_id):
   if g['status'] not in ('lobby','playing','finished'):raise commerce.CommerceError('not_allowed',409)
   changed=c.execute('UPDATE commerce_entitlements SET games_remaining=games_remaining-1 WHERE id=? AND games_remaining>0',(ent['id'],))
   if changed.rowcount!=1:raise commerce.CommerceError('payment_required',402)
-  if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid,fresh=True,access_kind='paid',entitlement_id=ent['id'])
+  if not free_play() and g['access_kind']!='crazygames' and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,gid,fresh=True,access_kind='paid',entitlement_id=ent['id'])
   if g['status']=='finished':
    c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',round_card='',tiebreak='{}',image_run=image_run+1 WHERE id=?",(gid,))
    c.execute('DELETE FROM players WHERE game_id=? AND active=0',(gid,))
@@ -566,13 +569,21 @@ def build_qdata(g,ps):
  lang=game_language(g)
  used={e.get('question_key') or question_key(e.get('question',''),ps) for e in mem(g)}|past_question_keys(ps)
  seed=sum(ord(ch) for ch in str(g['code']))+rn*7
+ if g['access_kind']=='crazygames':
+  pool=(EVERYDAY_CORE+PERSONAL_HE) if lang=='he' else (PERSONAL_EN+general_pack(lang) if lang=='en' else general_pack(lang))
+  safe=[q for q in pool if portal_card_ok(q) and editorial_ok(q,lang) and (len(ps)>2 or q[0]!='room')]
+  for typ,text,opts in paced_candidates(safe,rn,total_rounds(g),mem(g),seed//7):
+   formatted=text.format(s=sub['name'])
+   if not too_similar(question_key(formatted,ps),used):return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']] if typ=='room' else list(opts),sub
+  typ,text,opts=safe[seed%len(safe)]
+  return typ,text.format(s=sub['name']),[p['name'] for p in ps if p['id']!=sub['id']] if typ=='room' else list(opts),sub
  if len(ps)>=2 and sub and not tb and rn%3==2:
   traits=personality_pack(lang,len(ps)>2)
   for typ,text,opts in paced_candidates(traits,rn,total_rounds(g),mem(g),seed//7):
    formatted=text.format(s=sub['name'])
    if not too_similar(question_key(formatted,ps),used):
     return typ,formatted,[p['name'] for p in ps if p['id']!=sub['id']] if typ=='room' else opts,sub
- if lang=='he' and not tb:
+ if lang=='he' and not tb and g['access_kind']!='crazygames':
   cb=duo_callback(g,ps,rn) if len(ps)==2 else smart_callback(g,ps,rn)
   if cb:return cb
  selected=effective_topics(g);tailored=custom_questions(g)
@@ -636,6 +647,10 @@ def _clean_pack(pack,language='en'):
   if key and key not in seen:seen.add(key);clean.append(q)
  return clean
 def prepare_pack_async(gid,ts,ctx,spice,language='en'):
+ if free_play():return
+ with cn() as c:
+  g=c.execute('SELECT access_kind FROM games WHERE id=?',(gid,)).fetchone()
+  if g and g['access_kind']=='crazygames':return
  try:
   with budget.scope(cn,gid,'questions'):
    pack=_clean_pack(generate_pack(ts,ctx,spice,normalize_language(language)),normalize_language(language))
@@ -650,7 +665,7 @@ def hero_round(rn,total):
 def image_url(g,rn):
  return '/api/hero-image/'+g['code']+'/'+str(rn)+'?run='+str(g['image_run'])
 def image_payload(g,ps,final=False):
- if not g['ai_images_enabled']:return None
+ if free_play() or g['access_kind']=='crazygames' or not g['ai_images_enabled']:return None
  if final:
   ws=winners(g,ps)
   if not final_image_eligible(g,ps):return None
@@ -676,7 +691,7 @@ def image_payload(g,ps,final=False):
 def prepare_hero_async(gid,rn,expected_run=None):
  # Reserve and snapshot quickly; only the durable worker performs the slow API call.
  with cn() as c:g=c.execute('SELECT * FROM games WHERE id=?',(gid,)).fetchone()
- if g and not g['ai_images_enabled']:return 'disabled'
+ if free_play() or (g and (g['access_kind']=='crazygames' or not g['ai_images_enabled'])):return 'disabled'
  if not g or (expected_run is not None and int(g['image_run'])!=int(expected_run)):return 'stale'
  final=int(rn)==99
  if final:
@@ -716,6 +731,7 @@ def _visual_worker(gid,rn,run,key):
  finally:
   with VISUAL_TASKS_LOCK:VISUAL_TASKS.discard(key)
 def schedule_image_after_action(gid):
+ if free_play():return
  # Game actions must return immediately. Instant composition and Full AI queueing
  # run off the request thread so a slow image path can never block Join/Guess/State.
  try:
@@ -766,6 +782,7 @@ class H(BaseHTTPRequestHandler):
  def F(self,p):
   try:b=p.read_bytes()
   except:return self.send_error(404)
+  if p.name=='kyc.html':b=b.replace(b'<head>',('<head><script>window.MIPO_CONFIG='+json.dumps({'freePlay':free_play()})+';</script>').encode(),1)
   self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(p))[0] or 'text/plain');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
  def do_GET(self):
   if urlparse(self.path).path.startswith('/api/'):
@@ -773,7 +790,7 @@ class H(BaseHTTPRequestHandler):
   return self.get_impl()
  def get_impl(self):
   u=urlparse(self.path);p=u.path
-  if p=='/health':return self.J({'ok':True,'game':'know-your-crew-visuals','image_pipeline':'ai-prefetch-v2','release':'first-game-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(os.getenv('OPENAI_API_KEY','').strip())})
+  if p=='/health':return self.J({'free_play':free_play(),'release_version':'free-portal-v1','ok':True,'game':'know-your-crew-visuals','image_pipeline':'ai-prefetch-v2','release':'first-game-v1','image_model':MODEL,'storage':'postgres' if USE_PG else 'sqlite-ephemeral','ai_images':bool(not free_play() and os.getenv('OPENAI_API_KEY','').strip())})
   if p=='/api/pricing':
    try:return self.J(commerce.quote(int(parse_qs(u.query).get('rounds',['18'])[0]),int(parse_qs(u.query).get('games',['1'])[0])))
    except (ValueError,TypeError):return self.J({'error':'invalid_quote'},400)
@@ -787,6 +804,9 @@ class H(BaseHTTPRequestHandler):
    g=game(p.rsplit('/',1)[-1]);host=parse_qs(u.query).get('host',[''])[0]
    if not g or not host or not secrets.compare_digest(host,g['host']):return self.J({'error':'forbidden'},403)
    with cn() as c:return self.J(budget.report(c,g['id']))
+  if p=='/crazygames':
+   self.send_response(302);self.send_header('Location','/?cg=1');self.send_header('Content-Length','0');self.end_headers();return
+  if free_play() and (p=='/pricing' or p=='/checkout' or p.startswith('/checkout/')):return self.F(STATIC/'landing.html')
   if p=='/pricing':return self.F(STATIC/'pricing.html')
   if p=='/play-mipo':return self.F(STATIC/'landing.html')
   if p=='/checkout' or p.startswith('/checkout/'):return self.F(STATIC/'checkout.html')
@@ -905,7 +925,7 @@ class H(BaseHTTPRequestHandler):
     'all_guesses':[{'player_id':x['id'],'name':x['name'],'gender':x['gender'],'guess':guessed.get(x['id']),'correct':guessed.get(x['id'])==actual,'photo_url':player_photo_url(g['code'],x)} for x in ps if sub and x['id']!=sub['id'] and x['id'] in guessed] if reveal else [],
     'guessed':bool(me and me['id'] in guessed),'guess_count':len(guessed),'guess_need':need,
     'waiting_for':[x['name'] for x in ps if sub and x['id']!=sub['id'] and x['id'] in active_ids and x['id'] not in guessed],
-    'reveal':reveal,'image_run':g['image_run'],'ai_images_enabled':bool(g['ai_images_enabled']),'hero_eligible':bool(g['ai_images_enabled'] and sub and sub['photo_data'] and sub['photo_consent']),
+    'reveal':reveal,'image_run':g['image_run'],'ai_images_enabled':bool(not free_play() and g['access_kind']!='crazygames' and g['ai_images_enabled']),'hero_eligible':bool(not free_play() and g['access_kind']!='crazygames' and g['ai_images_enabled'] and sub and sub['photo_data'] and sub['photo_consent']),
     'final_image_eligible':final_image_eligible(g,ps),'winner_ids':[p['id'] for p in winners(g,ps)],
     'tiebreak':tie_data(g),'can_tiebreak':can_tiebreak(g,ps),'instant_visual':instant_url(g['round_no']),
     'instant_category':visuals.get(g['round_no']),'final_instant_visual':instant_url(99),
@@ -918,7 +938,7 @@ class H(BaseHTTPRequestHandler):
     'final_hero':image_url(g,99) if finalhero and g['status']=='finished' else None,
     'topics':state_topics,'topics_display':topic_labels(state_topics,game_language(g)),'direction':direction(game_language(g)),
     'topic_votes':state_votes,'my_topic_votes':my_votes,'mode':'duo' if len(active_ids)==2 else 'group',
-    'ai_images_ready':bool(os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
+    'ai_images_ready':bool(not free_play() and g['access_kind']!='crazygames' and os.getenv('OPENAI_API_KEY','').strip()),'spice':g['spice'],'context':g['custom_context'],
     'prize':g['prize'],'rounds':total_rounds(g),'language':game_language(g),'access_kind':g['access_kind'],'max_rounds':int(g['max_rounds'] or 30),
     'relationships':relationship_summary(g,ps),'round_insights':round_insights(g),
     'history':mem(g)[-4:]
@@ -992,14 +1012,18 @@ class H(BaseHTTPRequestHandler):
    name=str(d.get('name','')).strip()[:40]
    if not name:return self.J({'error':'name_required'},400)
    co=code5();ht=secrets.token_urlsafe(16);pt=secrets.token_urlsafe(16);ts=d.get('topics',[]);ts=ts if isinstance(ts,list) else [];ctx=str(d.get('context','')).strip()[:700];sp=max(1,min(3,int(d.get('spice',1) or 1)));prize=str(d.get('prize','')).strip()[:180];rounds=max(6,min(30,int(d.get('rounds',12) or 12)));client_id=str(d.get('client_id','')).strip()[:120];language=normalize_language(d.get('language','en'))
-   if client_id.startswith('cg:'):ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';sp=min(sp,2);prize=''
+   if client_id.startswith('cg:'):name=portal_name(name);ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';sp=1;prize=''
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:
     if USE_PG:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).fetchone()['id']
     else:gid=c.execute('INSERT INTO games(code,host,topics,custom_context,spice,prize,rounds,adults_confirmed,language,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(co,ht,json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,1 if adult else 0,language,now())).lastrowid
-    c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(d.get('ai_images_enabled',False) is True),gid))
-    if commerce.enabled(USE_PG):
+    c.execute('UPDATE games SET ai_images_enabled=? WHERE id=?',(int(not free_play() and not client_id.startswith('cg:') and d.get('ai_images_enabled',False) is True),gid))
+    access={'access_kind':'free','max_rounds':30}
+    if free_play() or client_id.startswith('cg:'):
+     access={'owner_key':commerce.owner_key(('free:'+client_id).ljust(12,'_')),'access_kind':'crazygames' if client_id.startswith('cg:') else 'free','entitlement_id':'','max_rounds':30}
+     c.execute('UPDATE games SET owner_key=?,access_kind=?,max_rounds=30 WHERE id=?',(access['owner_key'],access['access_kind'],gid))
+    elif commerce.enabled(USE_PG):
      c.execute('SAVEPOINT room_access')
      try:access=commerce.allocate_new_game(c,client_id,d.get('access'),gid,d.get('qa_key'))
      except commerce.CommerceError as exc:
@@ -1007,10 +1031,10 @@ class H(BaseHTTPRequestHandler):
       if d.get('save_for_checkout') is not True or exc.code not in ('payment_required','trial_already_used'):raise
       access={'owner_key':commerce.owner_key(client_id),'access_kind':'pending_payment','max_rounds':18,'entitlement_id':''}
      finally:c.execute('RELEASE SAVEPOINT room_access')
-     rounds=min(rounds,access['max_rounds']) if access['access_kind'] in ('paid','pending_payment') else 8
+     rounds=min(rounds,access['max_rounds']) if access['access_kind'] in ('paid','pending_payment','crazygames','free') else 8
      c.execute('UPDATE games SET owner_key=?,access_kind=?,entitlement_id=?,max_rounds=?,rounds=? WHERE id=?',(access['owner_key'],access['access_kind'],access['entitlement_id'],access['max_rounds'],rounds,gid))
     payment_required=commerce.enabled(USE_PG) and access['access_kind']=='pending_payment'
-    if os.getenv('OPENAI_API_KEY','').strip() and not payment_required:
+    if not free_play() and not client_id.startswith('cg:') and os.getenv('OPENAI_API_KEY','').strip() and not payment_required:
      c.execute('SAVEPOINT create_ai_admission')
      try:budget.admit(c,gid)
      except budget.BudgetLimit as exc:
@@ -1035,10 +1059,12 @@ class H(BaseHTTPRequestHandler):
    with cn() as c:
     if not USE_PG:c.execute('BEGIN IMMEDIATE')
     g=c.execute('SELECT * FROM games WHERE code=?'+(' FOR UPDATE' if USE_PG else ''),(code,)).fetchone()
+    if g and crazygames_room(c,g):name=portal_name(name)
     if not g:payload,status={'error':'not_found'},404
     else:
      room_players=_players(c,g['id']);existing=next((x for x in room_players if client_id and (x['client_id'] or '')==client_id),None) or next((x for x in room_players if _norm_name(x['name'])==_norm_name(name)),None)
-     if client_id.startswith('cg:') and any(x['photo_data'] and x['photo_consent'] for x in room_players):payload,status={'error':'photos_disabled_on_crazygames'},403
+     if client_id.startswith('cg:') and g['access_kind']!='crazygames':payload,status={'error':'room_not_available_on_crazygames'},403
+     elif client_id.startswith('cg:') and any(x['photo_data'] and x['photo_consent'] for x in room_players):payload,status={'error':'photos_disabled_on_crazygames'},403
      elif existing:
       if g['status']!='lobby' and int(existing['active'] if existing['active'] is not None else 1)==0:payload,status={'error':'removed_from_game'},409
       else:
@@ -1104,6 +1130,7 @@ class H(BaseHTTPRequestHandler):
   if act=='applypurchase':
    return self.J(apply_purchase_to_room(g['id'],d.get('order_id'),d.get('client_id')))
   if act=='image-settings':
+   if free_play() or g['access_kind']=='crazygames':return self.J({'error':'ai_images_disabled_in_free_game'},403)
    if g['status']!='lobby':return self.J({'error':'already_started'},409)
    with cn() as c:
     if d.get('enabled') is True and g['access_kind']!='pending_payment' and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'])
@@ -1118,7 +1145,7 @@ class H(BaseHTTPRequestHandler):
     if not secrets.compare_digest(str(d.get('host','')),current['host']):return self.J({'error':'forbidden'},403)
     entitlement=''
     if commerce.enabled(USE_PG) and current['access_kind']!='crazygames':entitlement=commerce.allocate_replay(c,current['owner_key'])
-    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
+    if not free_play() and g['access_kind']!='crazygames' and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     # A preserved room means the currently active crew. Players already removed
     # from the run stay removed; photos, tokens, profiles and consents remain.
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],))
@@ -1182,7 +1209,7 @@ class H(BaseHTTPRequestHandler):
     g=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not can_tiebreak(g,ps):return self.J({'error':'tiebreak_unavailable'},409)
     if str(d.get('image_run'))!=str(g['image_run']):return self.J({'error':'stale_image_run'},409)
-    if os.getenv('OPENAI_API_KEY','').strip():budget.resume(c,g['id'])
+    if not free_play() and g['access_kind']!='crazygames' and os.getenv('OPENAI_API_KEY','').strip():budget.resume(c,g['id'])
     active=[p for p in ps if p['active']];start=total_rounds(g)
     tb={'sets':tie_data(g).get('sets',0)+1,'start':start,'end':start+len(active),
         'order':[p['id'] for p in active],'contenders':[p['id'] for p in winners(g,ps)]}
@@ -1198,7 +1225,7 @@ class H(BaseHTTPRequestHandler):
     if not current or current['status']!='finished':return self.J({'error':'not_finished'},409)
     entitlement=''
     if commerce.enabled(USE_PG) and current['access_kind']!='crazygames':entitlement=commerce.allocate_replay(c,current['owner_key'])
-    if os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
+    if not free_play() and g['access_kind']!='crazygames' and os.getenv('OPENAI_API_KEY','').strip():budget.admit(c,g['id'],fresh=True,access_kind='paid' if entitlement else current['access_kind'],entitlement_id=entitlement)
     c.execute("UPDATE games SET status='lobby',round_no=0,answer='',memory='[]',custom_questions='[]',tiebreak='{}',image_run=image_run+1,access_kind=CASE WHEN ?<>'' THEN 'paid' ELSE access_kind END,entitlement_id=CASE WHEN ?<>'' THEN ? ELSE entitlement_id END,max_rounds=CASE WHEN ?<>'' THEN 18 ELSE max_rounds END,rounds=CASE WHEN ?<>'' AND rounds>18 THEN 18 ELSE rounds END WHERE id=? AND status='finished'",(entitlement,entitlement,entitlement,entitlement,entitlement,g['id']))
     c.execute('DELETE FROM players WHERE game_id=? AND active=0',(g['id'],));c.execute('UPDATE players SET score=0,last_seen=? WHERE game_id=?',(now(),g['id']))
     for table in ('guesses','image_jobs','hero_scenes','instant_scenes','round_scores','match_answers','match_scores','chat_messages'):
@@ -1215,7 +1242,7 @@ class H(BaseHTTPRequestHandler):
    try:sp=max(1,min(3,int(d.get('spice',g['spice']) or 1)))
    except:sp=int(g['spice'] or 1)
    with cn() as c:cg_room=crazygames_room(c,g)
-   if cg_room:ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';prize='';sp=min(sp,2)
+   if cg_room:ts=[t for t in ts if t not in ADULT_TOPICS];ctx='';prize='';sp=1
    adult=adult_required(ts,sp)
    if adult and not d.get('adults_confirmed'):return self.J({'error':'adults_confirmation_required'},400)
    with cn() as c:c.execute('UPDATE games SET topics=?,custom_context=?,spice=?,prize=?,rounds=?,custom_questions=?,adults_confirmed=?,language=? WHERE id=?',(json.dumps(ts,ensure_ascii=False),ctx,sp,prize,rounds,'[]',1 if adult else 0,language,g['id']))
@@ -1277,7 +1304,9 @@ class H(BaseHTTPRequestHandler):
     if not USE_PG:c.execute('BEGIN IMMEDIATE')
     current=c.execute('SELECT * FROM games WHERE id=?'+(' FOR UPDATE' if USE_PG else ''),(g['id'],)).fetchone()
     if not current or current['status']!='lobby':return self.J({'error':'already_started'},409)
-    if current['access_kind']=='pending_payment':return self.J({'error':'payment_required'},402)
+    if free_play() and current['access_kind'] in ('pending_payment','trial'):
+     c.execute("UPDATE games SET access_kind='free',max_rounds=30,ai_images_enabled=0 WHERE id=?",(g['id'],))
+    elif current['access_kind']=='pending_payment':return self.J({'error':'payment_required'},402)
     active=[x for x in _players(c,g['id']) if int(x['active'] if x['active'] is not None else 1)==1]
     if len(active)<2:return self.J({'error':'need_2'},409)
     selected=topics(current);vote_rows=c.execute('SELECT topic,COUNT(*) AS n FROM topic_votes WHERE game_id=? GROUP BY topic ORDER BY n DESC,topic',(g['id'],)).fetchall()
@@ -1295,6 +1324,7 @@ class H(BaseHTTPRequestHandler):
   if act=='answer':
    me=next((x for x in ps if x['token']==d.get('token')),None);ans=str(d.get('answer',''))[:160]
    if not me or not sub or me['id']!=sub['id']:return self.J({'error':'subject_only'},403)
+   if g['access_kind']=='crazygames' and ans.startswith('OTHER::'):return self.J({'error':'custom_answers_disabled_on_crazygames'},403)
    if ans.startswith('OTHER::'):
     custom=ans[7:].strip()
     if other_label(game_language(g)) not in opts or len(custom)<1:return self.J({'error':'invalid_answer'},400)
@@ -1333,6 +1363,7 @@ class H(BaseHTTPRequestHandler):
        if r['player_id'] in active_ids and r['guess']==(other_label(game_language(g)) if str(g['answer']).startswith('OTHER::') else g['answer']):c.execute('UPDATE players SET score=score+1 WHERE id=?',(r['player_id'],))
    fresh=players(g['id'])
    return self.J({'ok':True,'scores':{x['name']:x['score'] for x in fresh}})
+  if act=='matchanswer' and g['access_kind']=='crazygames':return self.J({'error':'custom_answers_disabled_on_crazygames'},403)
   if act=='matchanswer':
    return self.J({'error':'not_allowed'},403)
   if act in ('hero','finalhero'):
@@ -1373,6 +1404,7 @@ class H(BaseHTTPRequestHandler):
   return self.J({'error':'not_found'},404)
  def log_message(self,*a):pass
 def _background_startup():
+ if free_play():return
  try:
   if LEGACY_INSTANT_IMAGES:instant.warm()
   warm_image_runtime();image_jobs.recover(cn,generate_many)
